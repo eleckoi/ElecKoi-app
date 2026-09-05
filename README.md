@@ -107,10 +107,6 @@
 
 如果你也想让 AI 角色卡设计成为一种更完整、更合规、也更能持续发展的创作工作，欢迎通过 Issue、Discussion 或 Pull Request 参与电子爱。
 
-## 贡献者
-
-- **[CoreForgeLab](https://github.com/CoreForgeLab) — 架构与数据库设计**：参与 ElecKoi 数据库与持久化架构的审计、长期演进设计和重构规划；重点参与 Character Card、Character Instance、Agent 与 Group Chat 的数据边界、权限隔离、生命周期、资源索引及备份恢复模型设计，并协助整理相关架构文档与公开讨论。详见[贡献者记录](CONTRIBUTORS.md#coreforgelab--架构与数据库设计)。
-
 ## 项目方向与贡献约定
 
 电子爱官方 Android 客户端和未来的 PC 客户端将持续免费开源。项目未来可能与独立的 AI 角色创作资源与服务平台有联系，平台将通过服务、赞助或捐赠支持长期开发和支付协作者报酬，这是必须履行的义务与职责。

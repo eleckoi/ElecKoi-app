@@ -107,10 +107,6 @@ I welcome developers, AI roleplay designers, visual and interaction designers, d
 
 If you also want AI character-card design to become a fuller, more compliant, and more sustainable form of creative work, you are welcome to participate through Issues, Discussions, or Pull Requests.
 
-## Contributors
-
-- **[CoreForgeLab](https://github.com/CoreForgeLab) — Architecture & Database Design**: contributed to the audit, long-term evolution, and refactoring plans for ElecKoi's database and persistence architecture, with particular focus on data boundaries, permission isolation, lifecycles, resource indexing, and backup and recovery models for Character Cards, Character Instances, Agents, and Group Chats, while also helping organize related architecture documentation and public discussions. See the [contributor record](CONTRIBUTORS.en.md#coreforgelab--architecture--database-design).
-
 ## Project Direction and Contribution Terms
 
 ElecKoi's official Android client and future PC client will remain free and open source. The project may eventually be connected to an independent resource and services platform for AI character creation. That platform would support long-term development and fair compensation for collaborators through services, sponsorships, or donations; fulfilling those commitments is an obligation and responsibility.
