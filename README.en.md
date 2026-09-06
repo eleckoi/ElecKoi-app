@@ -51,10 +51,9 @@ ElecKoi aims to build a continuously improving creative flywheel: turn the commu
 
 Open problems that require focused attention will be collected in [Open Problems in AI Roleplay Development](docs/open-problems/README.en.md).
 
-## Community and QQ Group
+## QQ Group
 
-- GitHub: participate through Issues, Discussions, or Pull Requests.
-- QQ group: `1041463229`; search this group number in QQ to join.
+`1041463229`
 
 ## Why ElecKoi
 

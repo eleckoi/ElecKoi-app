@@ -51,10 +51,9 @@
 
 项目当前需要着重思考的公开课题，将持续整理在 [AI 角色扮演开发难题](docs/open-problems/README.md)。
 
-## 社区与 QQ 群
+## QQ 群
 
-- GitHub：通过 Issue、Discussion 或 Pull Request 参与项目。
-- QQ 群：`1041463229`，可在 QQ 中搜索群号加入。
+`1041463229`
 
 ## 为什么做电子爱
 
