@@ -156,5 +156,3 @@ internal fun VariableConfigVersion.summaryJson() = buildJsonObject {
     put("initialStateLength", initialStateJson.length); put("schemaCodeLength", schemaCode.length)
     put("createdAt", createdAt); put("updatedAt", updatedAt)
 }
-
-internal fun VariableConfig.revision(): String = creatorVariableRevision()

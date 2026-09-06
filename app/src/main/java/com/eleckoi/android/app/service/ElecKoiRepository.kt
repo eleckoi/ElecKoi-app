@@ -59,6 +59,8 @@ class ElecKoiRepository private constructor(
         toolModelConfigId: (scopeId: String, groupId: String) -> String,
         initializeCharacterTools: (characterId: String) -> Unit,
         deleteCharacterTools: (Collection<String>) -> Unit,
+        exportToolConfig: () -> String,
+        restoreToolConfig: (String) -> Unit,
     ) : this(
         ElecKoiServiceGraph(
             context = context,
@@ -66,6 +68,8 @@ class ElecKoiRepository private constructor(
             toolModelConfigId = toolModelConfigId,
             initializeCharacterTools = initializeCharacterTools,
             deleteCharacterTools = deleteCharacterTools,
+            exportToolConfig = exportToolConfig,
+            restoreToolConfig = restoreToolConfig,
         ),
     )
 
@@ -89,6 +93,10 @@ class ElecKoiRepository private constructor(
 
     internal fun recoverAbandonedRoleGenerations() {
         graph.recoverAbandonedRoleGenerations()
+    }
+
+    internal suspend fun resumePendingCleanup() {
+        graph.resumePendingCleanup()
     }
 
     fun userProfile() = graph.userProfile()

@@ -62,7 +62,21 @@ internal fun creationAgentPrompt(
     text: String,
     inputImages: List<ChatUserImageAttachment>,
 ): AgentPrompt = AgentPrompt(
-    text = text,
+    text = buildString {
+        append(text)
+        val referenced = inputImages.filter { it.creatorMediaReference.isNotBlank() }
+        if (referenced.isNotEmpty()) {
+            if (isNotBlank()) append("\n\n")
+            appendLine("[ElecKoi 本条消息的对话附件引用：")
+            referenced.forEach { image ->
+                append("- ")
+                append(image.displayName.ifBlank { "上传图片" })
+                append(" -> asset_id=")
+                appendLine(image.creatorMediaReference)
+            }
+            append("这些引用不是工作区永久资产。用户要求把其中一张用于角色头像或立绘时，只把选中的 asset_id 交给角色图片预览和提交能力；不要登记或复制未选图片。]")
+        }
+    },
     images = inputImages.map { image ->
         AgentInputImage(
             localPath = image.localPath,

@@ -10,6 +10,7 @@ import com.eleckoi.android.engine.story.variables.model.VariableConfig
 import com.eleckoi.android.engine.story.variables.model.VariableConfigVersion
 import com.eleckoi.android.engine.story.variables.model.VariableItemConfig
 import com.eleckoi.android.engine.story.variables.model.VariableObjectConfig
+import com.eleckoi.android.engine.story.variables.config.VersionedVariableConfig
 import com.eleckoi.android.engine.story.variables.runtime.VariableRuntimeCheckResult
 import com.eleckoi.android.engine.workspace.model.CreatorWorkspace
 import com.eleckoi.android.engine.workspace.model.CreatorWorkspaceCharacterRoot
@@ -17,12 +18,12 @@ import com.eleckoi.android.engine.workspace.model.CreatorWorkspaceRootAccess
 import com.eleckoi.android.feature.characters.modes.story.regex.model.RegexRule
 import com.eleckoi.android.feature.characters.modes.story.regex.model.RegexRuleCollection
 import com.eleckoi.android.feature.characters.modes.story.regex.model.RegexRuleScope
+import com.eleckoi.android.feature.characters.modes.story.regex.data.VersionedRegexRuleCollection
 import com.eleckoi.android.feature.studio.authoring.CreatorAuthoringContext
 import com.eleckoi.android.feature.studio.authoring.CreatorAuthoringException
 import com.eleckoi.android.feature.studio.authoring.CreatorAuthoringToolCatalog
 import com.eleckoi.android.feature.studio.authoring.capability.RegexRuleCreatorCapabilities
 import com.eleckoi.android.feature.studio.authoring.capability.VariableCreatorCapabilities
-import com.eleckoi.android.feature.studio.authoring.capability.creatorVariableRevision
 import com.eleckoi.android.feature.studio.api.CreatorAssistantService
 import java.lang.reflect.Proxy
 import kotlinx.coroutines.runBlocking
@@ -33,7 +34,6 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -119,16 +119,18 @@ class CreatorStructuredCapabilitiesTest {
     }
 
     @Test
-    fun `variable revision ignores volatile persistence timestamps`() {
-        val first = timestampedVariableConfig("2026-01-01T00:00:00Z")
-        val reloaded = timestampedVariableConfig("2026-08-29T00:00:00Z")
-
-        assertEquals(first.creatorVariableRevision(), reloaded.creatorVariableRevision())
-        assertNotEquals(
-            first.creatorVariableRevision(),
-            reloaded.copy(schemaCode = "z.object({ hp: z.number().max(200) })")
-                .creatorVariableRevision(),
+    fun `variable revision comes from the storage counter without hashing content`() = runBlocking {
+        val context = context(
+            variables = timestampedVariableConfig("2026-01-01T00:00:00Z"),
+            regex = RegexRuleCollection(),
+            variableRevisionProvider = { 41L },
         )
+
+        val inspect = VariableCreatorCapabilities.capabilities()
+            .single { it.definition.capabilityId == "variables.inspect" }
+            .handler(context, buildJsonObject {}) as JsonObject
+
+        assertEquals("41", inspect.getValue("revision").jsonPrimitive.content)
     }
 
     @Test
@@ -158,6 +160,42 @@ class CreatorStructuredCapabilitiesTest {
             }) as JsonObject
 
         assertTrue(preview.getValue("valid").jsonPrimitive.content.toBoolean())
+    }
+
+    @Test
+    fun `variable apply delegates revision check to the atomic save`() = runBlocking {
+        var expectedRevision = -1L
+        val context = context(
+            variables = timestampedVariableConfig("2026-01-01T00:00:00Z"),
+            regex = RegexRuleCollection(),
+            variableRevisionProvider = { 7L },
+            variableSaveProvider = { _, expected ->
+                expectedRevision = expected
+                null
+            },
+        )
+        val preview = VariableCreatorCapabilities.capabilities()
+            .single { it.definition.capabilityId == "variables.preview_changes" }
+            .handler(context, buildJsonObject {
+                put("operations", buildJsonArray {
+                    add(buildJsonObject {
+                        put("op", "set_config")
+                        put("name", "并发修改")
+                    })
+                })
+            }) as JsonObject
+
+        val failure = runCatching {
+            VariableCreatorCapabilities.capabilities()
+                .single { it.definition.capabilityId == "variables.apply_changes" }
+                .handler(context, buildJsonObject {
+                    put("change_set_id", preview.getValue("changeSetId").jsonPrimitive.content)
+                })
+        }.exceptionOrNull()
+
+        assertEquals(7L, expectedRevision)
+        assertTrue(failure is CreatorAuthoringException)
+        assertTrue(failure?.message.orEmpty().contains("已经变化"))
     }
 
     @Test
@@ -292,6 +330,14 @@ class CreatorStructuredCapabilitiesTest {
         variables: VariableConfig,
         regex: RegexRuleCollection,
         variablesProvider: () -> VariableConfig = { variables },
+        variableRevisionProvider: () -> Long = { 1L },
+        regexRevisionProvider: () -> Long = { 1L },
+        variableSaveProvider: (VariableConfig, Long) -> VersionedVariableConfig? = { config, expected ->
+            VersionedVariableConfig(config, expected + 1L)
+        },
+        regexSaveProvider: (RegexRuleCollection, Long) -> VersionedRegexRuleCollection? = { collection, expected ->
+            VersionedRegexRuleCollection(collection, expected + 1L)
+        },
     ): CreatorAuthoringContext {
         val workspace = CreatorWorkspace(
             id = WorkspaceId,
@@ -313,11 +359,27 @@ class CreatorStructuredCapabilitiesTest {
         val service = Proxy.newProxyInstance(
             CreatorAssistantService::class.java.classLoader,
             arrayOf(CreatorAssistantService::class.java),
-        ) { _, method, _ ->
+        ) { _, method, arguments ->
             when (method.name) {
                 "creatorWorkspace" -> workspace
                 "loadCreatorVariableConfig" -> variablesProvider()
+                "loadVersionedCreatorVariableConfig" -> VersionedVariableConfig(
+                    variablesProvider(),
+                    variableRevisionProvider(),
+                )
                 "loadCreatorRegexRules" -> regex
+                "loadVersionedCreatorRegexRules" -> VersionedRegexRuleCollection(
+                    regex,
+                    regexRevisionProvider(),
+                )
+                "saveCreatorVariableConfigIfRevision" -> variableSaveProvider(
+                    arguments!![2] as VariableConfig,
+                    arguments[3] as Long,
+                )
+                "saveCreatorRegexRulesIfRevision" -> regexSaveProvider(
+                    arguments!![2] as RegexRuleCollection,
+                    arguments[3] as Long,
+                )
                 "validateCreatorVariableSchema" -> VariableRuntimeCheckResult(ok = true)
                 "validateCreatorVariableState" -> VariableRuntimeCheckResult(ok = true)
                 else -> error("Unexpected service call: ${method.name}")

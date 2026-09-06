@@ -58,7 +58,7 @@ internal object CharacterMediaCreatorCapabilities {
     val toolset = CreatorToolsetDefinition(
         id = "creator.character_media",
         title = "角色图片",
-        description = "使用创作助手的图片生成工具制作候选图，并查看、预览、修改角色的圆形头像、方形头像和 3:4 立绘；图片只能通过工作区 asset_id 引用。",
+        description = "制作和管理角色的圆形头像、方形头像与 3:4 立绘；可使用工作区永久图片的 asset_id，也可使用当前对话附件提供的临时 asset_id。",
     )
 
     fun capabilities(): List<CreatorCapability<CreatorAuthoringContext, CreatorOperationDefinition>> = listOf(
@@ -140,7 +140,7 @@ internal object CharacterMediaCreatorCapabilities {
         capability(
             id = "character_media.list_assets",
             title = "列出创作图片资产",
-            description = "分页列出用户上传或图片生成流程登记到当前工作区的图片；返回稳定 asset_id。",
+            description = "分页列出已登记到当前工作区的永久图片；返回稳定 asset_id。对话上传附件不会进入这里。",
             schema = creatorObjectSchema {
                 put("cursor", creatorStringSchema("上一页 nextCursor；首页留空。"))
                 put("limit", buildJsonObject {
@@ -171,7 +171,7 @@ internal object CharacterMediaCreatorCapabilities {
                 put("root_id", creatorStringSchema("可写角色根 id；留空使用主角色。"))
                 put("base_revision", creatorStringSchema("可选的读取版本提示；预览始终自动基于最新角色图片状态，不会因该值过期而失败。"))
                 put("action", creatorStringSchema("修改动作。", listOf("assign", "clear")))
-                put("asset_id", creatorStringSchema("assign 时必填；来自 list_assets。"))
+                put("asset_id", creatorStringSchema("assign 时必填；来自 list_assets，或当前用户消息提供的临时附件引用。"))
                 put(
                     "slots",
                     creatorArraySchema(

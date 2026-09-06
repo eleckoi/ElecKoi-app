@@ -10,7 +10,6 @@ import java.nio.file.attribute.BasicFileAttributes
 /** App-private filesystem layout for the DSH-only runtime. */
 class RuntimePaths(context: Context) {
     val runtimeRoot: File = File(context.noBackupFilesDir, "local_runtime")
-    val agentToolCatalog: File = File(runtimeRoot, "state/agent_tool_catalog.json")
     val deepSeekFileUploadIndex: File = File(runtimeRoot, "state/deepseek_file_uploads.json")
     val activeRuntimeManifest: File = File(runtimeRoot, "active/manifest.json")
     val downloadsRoot: File = File(runtimeRoot, "downloads")

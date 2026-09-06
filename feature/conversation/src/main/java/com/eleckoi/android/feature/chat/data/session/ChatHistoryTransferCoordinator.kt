@@ -20,7 +20,7 @@ internal class ChatHistoryTransferCoordinator(
         val idSet = sessionIds.filter(String::isNotBlank).toSet()
         if (idSet.isEmpty()) throw ElecKoiDataException("没有可导出的聊天记录")
         val exported = room.dao.sessionsForCharacter(character.id)
-            .filter { it.id in idSet }
+            .filter { it.session.id in idSet }
             .map { room.sessionFromEntity(it, includeAllMessages = true) }
             .sortedByDescending(ChatSession::updatedAt)
         if (exported.isEmpty()) throw ElecKoiDataException("没有找到要导出的聊天记录")

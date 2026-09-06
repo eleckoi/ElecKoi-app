@@ -114,6 +114,6 @@ internal class CreatorMediaAssetStore(
     internal companion object {
         const val MaxAssetBytes = 32L * 1024L * 1024L
         private const val DirectoryName = "media_assets"
-        private val Extensions = setOf("png", "jpg", "webp")
+        private val Extensions = setOf("png", "jpg", "webp", "gif")
     }
 }

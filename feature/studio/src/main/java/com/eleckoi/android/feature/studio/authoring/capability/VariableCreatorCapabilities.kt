@@ -15,7 +15,6 @@ import com.eleckoi.android.feature.studio.authoring.creatorInt
 import com.eleckoi.android.feature.studio.authoring.creatorObjectSchema
 import com.eleckoi.android.feature.studio.authoring.creatorString
 import com.eleckoi.android.feature.studio.authoring.creatorStringSchema
-import java.security.MessageDigest
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.serialization.json.JsonElement
@@ -78,7 +77,8 @@ internal object VariableCreatorCapabilities {
             },
         ) { context, arguments ->
             val rootId = context.resolveCreatorRootId(arguments.creatorString("root_id"))
-            val config = context.service.loadCreatorVariableConfig(context.workspaceId, rootId)
+            val versioned = context.service.loadVersionedCreatorVariableConfig(context.workspaceId, rootId)
+            val config = versioned.config
             val limit = arguments.creatorInt("limit", 20).coerceIn(1, MaxVariablePageSize)
             val objects = page(config.objects, arguments.creatorString("object_cursor"), limit)
             val variables = page(config.variables, arguments.creatorString("variable_cursor"), limit)
@@ -87,7 +87,7 @@ internal object VariableCreatorCapabilities {
                 put("rootId", rootId)
                 put("targetName", context.creatorRootDisplayName(rootId))
                 put("name", config.name)
-                put("revision", config.revision())
+                put("revision", versioned.revision.toString())
                 put("activeVersionId", config.activeVersionId)
                 put("initialStateLength", config.initialStateJson.length)
                 put("schemaCodeLength", config.schemaCode.length)
@@ -116,7 +116,8 @@ internal object VariableCreatorCapabilities {
             val query = arguments.creatorString("query").takeIf(String::isNotBlank)
                 ?: throw CreatorAuthoringException("INVALID_ARGUMENTS", "query 不能为空")
             val rootId = context.resolveCreatorRootId(arguments.creatorString("root_id"))
-            val config = context.service.loadCreatorVariableConfig(context.workspaceId, rootId)
+            val versioned = context.service.loadVersionedCreatorVariableConfig(context.workspaceId, rootId)
+            val config = versioned.config
             val matches = buildList<VariableSearchResult> {
                 config.objects.filter { item ->
                     listOf(item.name, item.description, item.updateRule).any { it.contains(query, ignoreCase = true) }
@@ -157,7 +158,8 @@ internal object VariableCreatorCapabilities {
             },
         ) { context, arguments ->
             val rootId = context.resolveCreatorRootId(arguments.creatorString("root_id"))
-            val config = context.service.loadCreatorVariableConfig(context.workspaceId, rootId)
+            val versioned = context.service.loadVersionedCreatorVariableConfig(context.workspaceId, rootId)
+            val config = versioned.config
             val kind = arguments.creatorString("kind")
             val payload = when (kind) {
                 "object" -> config.objects.firstOrNull { it.id == arguments.creatorString("id") }?.fullJson()
@@ -218,7 +220,7 @@ internal object VariableCreatorCapabilities {
             buildJsonObject {
                 put("rootId", rootId)
                 put("targetName", context.creatorRootDisplayName(rootId))
-                put("revision", config.revision())
+                put("revision", versioned.revision.toString())
                 put("result", payload)
             }
         },
@@ -242,8 +244,9 @@ internal object VariableCreatorCapabilities {
         ) { context, arguments ->
             val rootId = context.resolveCreatorRootId(arguments.creatorString("root_id"))
             context.requireCreatorWritableRoot(rootId)
-            val current = context.service.loadCreatorVariableConfig(context.workspaceId, rootId)
-            val currentRevision = current.revision()
+            val versioned = context.service.loadVersionedCreatorVariableConfig(context.workspaceId, rootId)
+            val current = versioned.config
+            val currentRevision = versioned.revision.toString()
             val operations = arguments.creatorArray("operations")?.mapIndexed { index, element ->
                 element as? JsonObject
                     ?: throw CreatorAuthoringException("INVALID_ARGUMENTS", "operations[$index] 必须是 object")
@@ -318,23 +321,28 @@ internal object VariableCreatorCapabilities {
             val change = context.variableChanges.get(changeSetId)
                 ?: throw CreatorAuthoringException("CHANGE_SET_NOT_FOUND", "变更集不存在或当前会话已经重建")
             context.requireCreatorWritableRoot(change.rootId)
-            val current = context.service.loadCreatorVariableConfig(context.workspaceId, change.rootId)
-            val currentRevision = current.revision()
-            if (currentRevision != change.baseRevision) {
+            val expectedRevision = change.baseRevision.toLongOrNull()
+                ?: throw CreatorAuthoringException("INVALID_CHANGE_SET", "变量变更集 revision 无效")
+            val saved = context.service.saveCreatorVariableConfigIfRevision(
+                context.workspaceId,
+                change.rootId,
+                change.nextConfig,
+                expectedRevision,
+            )
+            if (saved == null) {
                 context.variableChanges.remove(changeSetId)
                 throw CreatorAuthoringException(
                     "REVISION_CONFLICT",
-                    "变量配置已经变化，旧变更集没有提交；current_revision=$currentRevision。请重新预览后提交。",
+                    "变量配置已经变化，旧变更集没有提交。请重新预览后提交。",
                 )
             }
-            val saved = context.service.saveCreatorVariableConfig(context.workspaceId, change.rootId, change.nextConfig)
             context.variableChanges.remove(changeSetId)
             buildJsonObject {
                 put("status", "applied")
                 put("changeSetId", changeSetId)
                 put("rootId", change.rootId)
                 put("targetName", context.creatorRootDisplayName(change.rootId))
-                put("revision", saved.revision())
+                put("revision", saved.revision.toString())
                 put("summary", change.summary)
             }
         },
@@ -352,73 +360,4 @@ internal object VariableCreatorCapabilities {
         handler = handler,
     )
 
-}
-
-/** Revision of author-controlled content only; persistence timestamps are deliberately excluded. */
-internal fun VariableConfig.creatorVariableRevision(): String {
-    val canonical = buildString {
-        revisionValue(characterId)
-        revisionValue(name)
-        revisionValue(initialStateJson)
-        revisionValue(schemaCode)
-        revisionValue(activeVersionId)
-        revisionStrings(expandedObjectIds)
-        revisionObjects(objects)
-        revisionVariables(variables)
-        revisionValue(versions.size.toString())
-        versions.forEach { version ->
-            revisionValue(version.id)
-            revisionValue(version.name)
-            revisionValue(version.initialStateJson)
-            revisionValue(version.schemaCode)
-            revisionStrings(version.expandedObjectIds)
-            revisionObjects(version.objects)
-            revisionVariables(version.variables)
-        }
-    }
-    return MessageDigest.getInstance("SHA-256")
-        .digest(canonical.toByteArray(Charsets.UTF_8))
-        .joinToString("") { "%02x".format(it) }
-        .take(24)
-}
-
-private fun StringBuilder.revisionObjects(items: List<VariableObjectConfig>) {
-    revisionValue(items.size.toString())
-    items.forEach { item ->
-        revisionValue(item.id)
-        revisionValue(item.name)
-        revisionValue(item.parentId)
-        revisionValue(item.enabled.toString())
-        revisionValue(item.description)
-        revisionValue(item.updateRule)
-        revisionValue(item.dynamicKey.toString())
-        revisionValue(item.order.toString())
-        revisionValue(item.treeViewOrder.toString())
-    }
-}
-
-private fun StringBuilder.revisionVariables(items: List<VariableItemConfig>) {
-    revisionValue(items.size.toString())
-    items.forEach { item ->
-        revisionValue(item.id)
-        revisionValue(item.title)
-        revisionValue(item.objectId)
-        revisionValue(item.enabled.toString())
-        revisionValue(item.type)
-        revisionValue(item.defaultValue)
-        revisionValue(item.description)
-        revisionValue(item.updateRule)
-        revisionValue(item.readMode.storageValue)
-        revisionValue(item.order.toString())
-        revisionValue(item.treeViewOrder.toString())
-    }
-}
-
-private fun StringBuilder.revisionStrings(items: List<String>) {
-    revisionValue(items.size.toString())
-    items.forEach { item -> revisionValue(item) }
-}
-
-private fun StringBuilder.revisionValue(value: String) {
-    append(value.length).append(':').append(value)
 }

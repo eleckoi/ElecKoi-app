@@ -167,6 +167,7 @@ data class CreatorConversationInputImage(
     @SerialName("local_path") val localPath: String = "",
     @SerialName("media_type") val mediaType: String = "image/jpeg",
     @SerialName("display_name") val displayName: String = "",
+    @SerialName("creator_media_reference") val creatorMediaReference: String = "",
     val bytes: Long = 0L,
     @SerialName("image_width") val imageWidth: Int = 0,
     @SerialName("image_height") val imageHeight: Int = 0,

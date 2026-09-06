@@ -9,6 +9,7 @@ import com.eleckoi.android.feature.studio.api.CreatorMediaAssetSource
 import com.eleckoi.android.feature.studio.api.CreatorSettingEntryPage
 import com.eleckoi.android.feature.studio.api.CreatorSettingGroupPage
 import com.eleckoi.android.feature.studio.api.CreatorSettingLibraryMetadata
+import com.eleckoi.android.feature.studio.api.creatorConversationAttachmentId
 
 import com.eleckoi.android.engine.agent.api.AgentPermissionMode
 import com.eleckoi.android.engine.agent.api.AgentHistoryItem
@@ -242,14 +243,29 @@ internal class CreatorAssistantServiceImpl(
     override suspend fun creatorMediaAsset(
         workspaceId: String,
         assetId: String,
-    ): CreatorMediaAsset? = creatorMedia.creatorMediaAsset(workspaceId, assetId)
+    ): CreatorMediaAsset? {
+        val attachmentId = creatorConversationAttachmentId(assetId)
+        if (attachmentId != null) {
+            val sourceFile = inputImages.findById(attachmentId) ?: return null
+            return creatorMedia.creatorInputAttachment(workspaceId, assetId, sourceFile)
+        }
+        return creatorMedia.creatorMediaAsset(workspaceId, assetId)
+    }
 
     override suspend fun applyCreatorMediaAsset(
         workspaceId: String,
         rootId: String,
         assetId: String,
         slots: Set<AvatarSlot>,
-    ): CharacterSlot = creatorMedia.applyCreatorMediaAsset(workspaceId, rootId, assetId, slots)
+    ): CharacterSlot {
+        val attachmentId = creatorConversationAttachmentId(assetId)
+        if (attachmentId != null) {
+            val sourceFile = inputImages.findById(attachmentId)
+                ?: error("对话中的原始图片已经被删除")
+            return creatorMedia.applyCreatorInputAttachment(workspaceId, rootId, sourceFile, slots)
+        }
+        return creatorMedia.applyCreatorMediaAsset(workspaceId, rootId, assetId, slots)
+    }
 
     override suspend fun clearCreatorCharacterMedia(
         workspaceId: String,
@@ -302,11 +318,28 @@ internal class CreatorAssistantServiceImpl(
         rootId: String,
     ): VariableConfig = characterContent.loadCreatorVariableConfig(workspaceId, rootId)
 
+    override suspend fun loadVersionedCreatorVariableConfig(
+        workspaceId: String,
+        rootId: String,
+    ) = characterContent.loadVersionedCreatorVariableConfig(workspaceId, rootId)
+
     override suspend fun saveCreatorVariableConfig(
         workspaceId: String,
         rootId: String,
         config: VariableConfig,
     ): VariableConfig = characterContent.saveCreatorVariableConfig(workspaceId, rootId, config)
+
+    override suspend fun saveCreatorVariableConfigIfRevision(
+        workspaceId: String,
+        rootId: String,
+        config: VariableConfig,
+        expectedRevision: Long,
+    ) = characterContent.saveCreatorVariableConfigIfRevision(
+        workspaceId,
+        rootId,
+        config,
+        expectedRevision,
+    )
 
     override suspend fun validateCreatorVariableSchema(
         schemaCode: String,
@@ -322,11 +355,28 @@ internal class CreatorAssistantServiceImpl(
         rootId: String,
     ): RegexRuleCollection = characterContent.loadCreatorRegexRules(workspaceId, rootId)
 
+    override suspend fun loadVersionedCreatorRegexRules(
+        workspaceId: String,
+        rootId: String,
+    ) = characterContent.loadVersionedCreatorRegexRules(workspaceId, rootId)
+
     override suspend fun saveCreatorRegexRules(
         workspaceId: String,
         rootId: String,
         collection: RegexRuleCollection,
     ): RegexRuleCollection = characterContent.saveCreatorRegexRules(workspaceId, rootId, collection)
+
+    override suspend fun saveCreatorRegexRulesIfRevision(
+        workspaceId: String,
+        rootId: String,
+        collection: RegexRuleCollection,
+        expectedRevision: Long,
+    ) = characterContent.saveCreatorRegexRulesIfRevision(
+        workspaceId,
+        rootId,
+        collection,
+        expectedRevision,
+    )
 
     override suspend fun deleteCreatorWorkspace(workspaceId: String) {
         creatorLedger.deleteWorkspace(workspaceId)

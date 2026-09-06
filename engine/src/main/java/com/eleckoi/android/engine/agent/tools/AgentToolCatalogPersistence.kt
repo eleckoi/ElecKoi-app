@@ -21,9 +21,15 @@ internal fun readAgentToolCatalogState(file: File): AgentToolCatalogState {
     if (!file.isFile) {
         throw ElecKoiDataException("工具配置路径不是文件：${file.absolutePath}")
     }
+    return decodeAgentToolCatalogState(file.readText(Charsets.UTF_8), file.absolutePath)
+}
 
+internal fun decodeAgentToolCatalogState(
+    json: String,
+    sourceDescription: String = "Room",
+): AgentToolCatalogState {
     return try {
-        val root = ElecKoiJson.parseToJsonElement(file.readText(Charsets.UTF_8)).jsonObject
+        val root = ElecKoiJson.parseToJsonElement(json).jsonObject
         val version = (root["version"] as? JsonPrimitive)?.intOrNull
             ?: throw ElecKoiDataException("工具配置文件缺少版本")
         require(version == CurrentStateVersion) {
@@ -121,7 +127,7 @@ internal fun readAgentToolCatalogState(file: File): AgentToolCatalogState {
             contextOrder = contextOrder,
         )
     } catch (error: Exception) {
-        throw ElecKoiDataException("无法读取工具配置文件：${file.absolutePath}", error)
+        throw ElecKoiDataException("无法读取工具配置：$sourceDescription", error)
     }
 }
 

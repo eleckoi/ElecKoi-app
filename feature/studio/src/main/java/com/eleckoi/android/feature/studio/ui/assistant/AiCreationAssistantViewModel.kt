@@ -18,6 +18,7 @@ import com.eleckoi.android.feature.conversation.timeline.model.CreationTimelineK
 import com.eleckoi.android.feature.conversation.timeline.ui.prewarmCreationTimelineItems
 import com.eleckoi.android.feature.modelconfig.api.ModelService
 import com.eleckoi.android.feature.studio.api.CreatorAssistantService
+import com.eleckoi.android.feature.studio.api.creatorConversationAttachmentAssetId
 import com.eleckoi.android.feature.studio.ui.assistant.runtime.CreationRuntimeController
 import com.eleckoi.android.feature.studio.ui.assistant.session.CreationAgentSessionCoordinator
 import com.eleckoi.android.feature.studio.ui.assistant.timeline.CreationHistoryController
@@ -251,6 +252,7 @@ class AiCreationAssistantViewModel(
 
     private fun addInputImages(uriValues: List<String>) {
         val snapshot = _uiState.value
+        val workspaceId = snapshot.workspace?.id ?: return
         if (snapshot.isRunning || snapshot.isPreparingInputImages || uriValues.isEmpty()) return
         val selectedConfig = snapshot.modelConfigs.firstOrNull {
             it.id == snapshot.selectedModelConfigId
@@ -281,7 +283,7 @@ class AiCreationAssistantViewModel(
             }
             val current = _uiState.value
             val stillOwnsSelection =
-                current.workspace?.id == snapshot.workspace?.id &&
+                current.workspace?.id == workspaceId &&
                     current.conversation?.id == snapshot.conversation?.id &&
                     !current.isRunning
             if (!stillOwnsSelection) {
@@ -302,14 +304,28 @@ class AiCreationAssistantViewModel(
                         errorMessage = "每条消息的图片总大小不能超过 20 MiB",
                     )
                 }
-            } else {
-                _uiState.update {
-                    it.copy(
-                        inputImages = combined,
-                        isPreparingInputImages = false,
-                        errorMessage = "",
-                    )
+                return@launch
+            }
+            val referenced = prepared.map { image ->
+                image.copy(creatorMediaReference = creatorConversationAttachmentAssetId(image.id))
+            }
+            val latest = _uiState.value
+            val stillCurrent = latest.workspace?.id == workspaceId &&
+                latest.conversation?.id == snapshot.conversation?.id &&
+                !latest.isRunning
+            if (!stillCurrent) {
+                withContext(Dispatchers.IO) {
+                    prepared.forEach(creatorService::discardCreatorInputImage)
                 }
+                _uiState.update { it.copy(isPreparingInputImages = false) }
+                return@launch
+            }
+            _uiState.update {
+                it.copy(
+                    inputImages = it.inputImages + referenced,
+                    isPreparingInputImages = false,
+                    errorMessage = "",
+                )
             }
         }
     }

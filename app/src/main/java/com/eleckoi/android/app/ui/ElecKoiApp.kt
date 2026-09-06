@@ -52,7 +52,13 @@ fun ElecKoiApp() {
     )
     val initialAppearance = uiPreferences.appearanceTheme
     val chatViewModel: ChatViewModel = viewModel(
-        factory = ChatViewModel.factory(repository, repository, initialAppearance),
+        factory = ChatViewModel.factory(
+            chatService = repository,
+            frontendProjectService = repository,
+            initialAppearance = initialAppearance,
+            isSettingLibraryToolEnabled = container::isCharacterSettingLibraryToolEnabled,
+            enableSettingLibraryTool = container::enableCharacterSettingLibraryTool,
+        ),
     )
     val shellViewModel: ShellViewModel = viewModel(
         factory = ShellViewModel.factory(repository),

@@ -1,24 +1,27 @@
 package com.eleckoi.android.foundation.storage.room
 
 import androidx.room.Dao
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface CharacterDao {
+    @Transaction
     @Query("SELECT * FROM characters ORDER BY orderIndex ASC")
-    fun characters(): List<CharacterEntity>
+    fun characters(): List<CharacterRecord>
 
+    @Transaction
     @Query("SELECT * FROM characters ORDER BY orderIndex ASC")
-    fun charactersFlow(): Flow<List<CharacterEntity>>
+    fun charactersFlow(): Flow<List<CharacterRecord>>
 
+    @Transaction
     @Query("SELECT * FROM characters WHERE id = :characterId LIMIT 1")
-    fun characterById(characterId: String): CharacterEntity?
+    fun characterById(characterId: String): CharacterRecord?
 
     /** Keyset page for Agent directory searches; never materializes the full character table. */
+    @Transaction
     @Query(
         """
         SELECT * FROM characters
@@ -33,7 +36,7 @@ interface CharacterDao {
         afterOrder: Int,
         afterId: String,
         limit: Int,
-    ): List<CharacterEntity>
+    ): List<CharacterRecord>
 
     @Query("SELECT * FROM character_meta WHERE id = 'default' LIMIT 1")
     fun meta(): CharacterMetaEntity?
@@ -46,14 +49,14 @@ interface CharacterDao {
     @Upsert
     fun upsertCharacters(characters: List<CharacterEntity>)
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
+    fun upsertTextContents(contents: List<CharacterTextContentEntity>)
+
+    @Upsert
     fun upsertMeta(meta: CharacterMetaEntity)
 
-    @Query("DELETE FROM characters WHERE id NOT IN (:ids)")
-    fun deleteCharactersExcept(ids: List<String>)
-
-    @Query("DELETE FROM characters")
-    fun deleteAllCharacters()
+    @Query("DELETE FROM characters WHERE id IN (:ids)")
+    fun deleteCharacters(ids: List<String>)
 
     @Query("DELETE FROM character_meta")
     fun deleteMeta()

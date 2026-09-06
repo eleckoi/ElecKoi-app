@@ -14,6 +14,7 @@ import com.eleckoi.android.engine.workspace.model.withNormalizedCharacterRoots
 import com.eleckoi.android.engine.workspace.storage.conversation.WorkspaceConversationStore
 import com.eleckoi.android.engine.workspace.storage.media.CreatorMediaAssetStore
 import com.eleckoi.android.foundation.serialization.ElecKoiPrettyJson
+import com.eleckoi.android.foundation.storage.room.ElecKoiDatabase
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.LinkOption
@@ -37,17 +38,24 @@ class CreatorWorkspaceRepository constructor(
     private val now: () -> Instant,
     private val newId: () -> String,
     moveDirectory: (source: File, destination: File) -> Unit = ::moveWorkspaceDirectoryAtomically,
+    database: ElecKoiDatabase? = null,
 ) {
-    constructor(context: Context) : this(
+    constructor(context: Context, database: ElecKoiDatabase) : this(
         root = File(context.filesDir, WorkspacePathGuard.RootDirectoryName),
         now = Instant::now,
         newId = { UUID.randomUUID().toString() },
+        database = database,
     )
 
     private val paths = WorkspacePathGuard(root)
     private val atomicFiles = AtomicWorkspaceFileStore()
     private val projects = WorkspaceProjectStore(paths, atomicFiles)
-    private val catalog = WorkspaceCatalogStore(paths, atomicFiles)
+    private val catalog = WorkspaceCatalogStore(
+        paths = paths,
+        atomicFiles = atomicFiles,
+        persistence = database?.let(::RoomWorkspaceCatalogPersistence)
+            ?: JsonWorkspaceCatalogPersistence(paths.catalogFile, atomicFiles::writeJson),
+    )
     private val checkpoints = WorkspaceCheckpointStore(
         paths = paths,
         projects = projects,
@@ -350,10 +358,15 @@ class CreatorWorkspaceRepository constructor(
 
     suspend fun delete(workspaceId: String) = withContext(Dispatchers.IO) {
         mutex.withLock {
-            val workspace = catalog.requireWorkspace(workspaceId)
+            require(paths.isSafeStorageId(workspaceId)) { "工作区编号无效" }
+            val discarded = File(paths.stagingRoot, "delete-$workspaceId")
+            val workspace = catalog.find(workspaceId)
+            if (workspace == null) {
+                paths.deleteTreeNoFollow(discarded)
+                return@withLock
+            }
             val source = paths.workspaceDirectory(workspace)
             require(paths.isSafeWorkspaceDirectory(workspace)) { "工作区目录不存在或不安全" }
-            val discarded = File(paths.stagingRoot, "delete-${workspace.id}")
             paths.deleteTreeNoFollow(discarded)
             require(source.renameTo(discarded)) { "无法暂存待删除的工作区" }
             val originalCatalog = catalog.catalog()
@@ -435,7 +448,7 @@ class CreatorWorkspaceRepository constructor(
     ): CreatorWorkspace = withContext(Dispatchers.IO) {
         mutex.withLock {
             val workspace = catalog.requireWorkspace(workspaceId)
-            val state = projects.writeText(workspace, path, content)
+            val state = projects.writeText(workspace, path, content) ?: return@withLock workspace
             commitProjectState(workspace, state)
         }
     }
@@ -447,10 +460,8 @@ class CreatorWorkspaceRepository constructor(
     ): CreatorWorkspace = withContext(Dispatchers.IO) {
         mutex.withLock {
             val workspace = catalog.requireWorkspace(workspaceId)
-            commitProjectState(
-                workspace.copy(schemaVersion = CurrentWorkspaceSchemaVersion),
-                projects.ensureDirectory(workspace, path),
-            )
+            val state = projects.ensureDirectory(workspace, path) ?: return@withLock workspace
+            commitProjectState(workspace.copy(schemaVersion = CurrentWorkspaceSchemaVersion), state)
         }
     }
 

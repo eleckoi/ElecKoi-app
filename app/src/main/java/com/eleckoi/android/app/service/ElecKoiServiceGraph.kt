@@ -43,6 +43,7 @@ import com.eleckoi.android.feature.settings.data.appearance.AppearanceRepository
 import com.eleckoi.android.feature.preferences.UiPreferencesRepository
 import com.eleckoi.android.feature.appfont.data.AppFontRepository
 import com.eleckoi.android.app.service.backup.DataBackupService
+import com.eleckoi.android.app.service.cleanup.PersistentCleanupQueue
 import com.eleckoi.android.foundation.storage.JsonFileStore
 import com.eleckoi.android.foundation.storage.room.ElecKoiDatabase
 import java.io.File
@@ -59,6 +60,8 @@ internal class ElecKoiServiceGraph(
     toolModelConfigId: (scopeId: String, groupId: String) -> String,
     initializeCharacterTools: (characterId: String) -> Unit,
     deleteCharacterTools: (Collection<String>) -> Unit,
+    exportToolConfig: () -> String,
+    restoreToolConfig: (String) -> Unit,
 ) {
     private var agentRuns: AgentRunManager? = null
     private val captureProviderRequestsByDefault = (
@@ -71,13 +74,14 @@ internal class ElecKoiServiceGraph(
 
     private val store = JsonFileStore(context)
     private val database = ElecKoiDatabase.get(context)
+    private val cleanupQueue = PersistentCleanupQueue(database)
     private val characters = CharacterRepository(store, database)
-    private val creatorWorkspaces = CreatorWorkspaceRepository(context.applicationContext)
+    private val creatorWorkspaces = CreatorWorkspaceRepository(context.applicationContext, database)
     private val settingLibrary = SettingLibraryRepository(
         database = database,
         characters = characters,
     )
-    private val regexRules = RegexRuleRepository(store, characters, database.storyPresetDao())
+    private val regexRules = RegexRuleRepository(database, characters)
     internal val storyPresets = StoryPresetRepository(
         dao = database.storyPresetDao(),
         store = store,
@@ -86,7 +90,11 @@ internal class ElecKoiServiceGraph(
     private val variableConfig = VariableConfigRepository(database) { characterId ->
         characters.characterById(characterId) != null
     }
-    private val frontendProjects = FrontendProjectRepository(context.applicationContext)
+    private val frontendProjects = FrontendProjectRepository(
+        context.applicationContext,
+        database,
+        cleanupQueue,
+    )
     private val variableRuntime = VariableRuntimeService(context.applicationContext)
     private val settings = ModelConfigRepository(
         database = database,
@@ -108,6 +116,7 @@ internal class ElecKoiServiceGraph(
         historySaveModeProvider = { uiPreferences.read().historySaveMode },
         replyImageGenerator = replyImageGenerator,
         inputImageStore = chatInputImages,
+        cleanupRunner = cleanupQueue,
         onSessionsDeleted = { ids ->
             requireConversationsIdle(ids)
             uiPreferences.removeChatSessionIds(ids)
@@ -122,6 +131,7 @@ internal class ElecKoiServiceGraph(
         attachmentCleanup = ConversationAttachmentCleanup(database, chatInputImages::deletePath, replyImageGenerator),
         onWorkspacesDeleted = { uiPreferences.removeCreatorWorkspaceIds(it) },
         beforeDeletion = ::requireConversationsIdle,
+        cleanupRunner = cleanupQueue,
     )
     val dataBackupService = DataBackupService(
         context = context.applicationContext,
@@ -135,6 +145,9 @@ internal class ElecKoiServiceGraph(
         uiPreferences = uiPreferences,
         appFont = appFont,
         modelConfigs = settings,
+        frontendProjects = frontendProjects,
+        exportToolConfig = exportToolConfig,
+        restoreToolConfig = restoreToolConfig,
         database = database,
         creatorWorkspaces = creatorWorkspaces,
     )
@@ -165,7 +178,9 @@ internal class ElecKoiServiceGraph(
         beforeDeleteCharacters = { ids ->
             val active = agentRuns?.activeRun?.value?.descriptor
             if (active != null) {
-                val activeCharacter = database.chatDao().sessionById(active.conversationId)?.characterId
+                val activeCharacter = database.chatDao().sessionById(active.conversationId)
+                    ?.session
+                    ?.characterId
                 val workspace = creatorWorkspaces.get(active.workspaceId)
                 check(activeCharacter !in ids &&
                     !(workspace?.linkedCharacterMode != null && workspace.linkedCharacterId in ids)
@@ -181,6 +196,7 @@ internal class ElecKoiServiceGraph(
         frontendProjects = frontendProjects,
         creatorWorkspaces = creatorWorkspaces,
         initializeCharacterTools = initializeCharacterTools,
+        cleanupRunner = cleanupQueue,
     )
     val characterTransferService = CharacterTransferServiceImpl(
         transfers = characterTransfers,
@@ -262,6 +278,19 @@ internal class ElecKoiServiceGraph(
 
     fun recoverAbandonedRoleGenerations() {
         sessions.settleAllOrphanedGenerations()
+    }
+
+    suspend fun resumePendingCleanup() {
+        cleanupQueue.resume { operation ->
+            when (operation.kind) {
+                "character" -> characterService.deleteCharacterNow(operation.targetId)
+                "chat_session" -> sessions.resumeDelete(operation.targetId)
+                "creator_workspace" -> creatorLedger.deleteWorkspaceNow(operation.targetId)
+                "creator_conversation" -> creatorLedger.resumeConversationDeletion(operation.targetId)
+                "frontend_project" -> frontendProjects.resumeProjectDeletion(operation.targetId)
+                else -> error("未知清理任务：${operation.kind}")
+            }
+        }
     }
 
     fun userProfile(): UserProfile = profile.load()

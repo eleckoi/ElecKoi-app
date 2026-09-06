@@ -99,7 +99,14 @@ internal fun applySettingLibrarySessionMutations(
                         ?: current.agentSelectionHint,
                     updatedAt = nowIso(),
                 )
-                stage(EntryTarget, updated.id, UpsertOperation, SettingLibraryJsonCodec.entryToJson(updated).toString())
+                if (updated.copy(updatedAt = current.updatedAt) != current) {
+                    stage(
+                        EntryTarget,
+                        updated.id,
+                        UpsertOperation,
+                        SettingLibraryJsonCodec.entryToJson(updated).toString(),
+                    )
+                }
                 applied += SettingLibraryAppliedMutation(
                     operation = "update_entry",
                     targetType = EntryTarget,
@@ -152,7 +159,14 @@ internal fun applySettingLibrarySessionMutations(
                     parentId = nextParentId,
                     updatedAt = nowIso(),
                 )
-                stage(GroupTarget, updated.id, UpsertOperation, SettingLibraryJsonCodec.groupToJson(updated).toString())
+                if (updated.copy(updatedAt = current.updatedAt) != current) {
+                    stage(
+                        GroupTarget,
+                        updated.id,
+                        UpsertOperation,
+                        SettingLibraryJsonCodec.groupToJson(updated).toString(),
+                    )
+                }
                 applied += SettingLibraryAppliedMutation(
                     operation = "update_group",
                     targetType = GroupTarget,

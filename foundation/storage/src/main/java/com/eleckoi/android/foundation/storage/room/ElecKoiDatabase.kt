@@ -12,53 +12,74 @@ import com.eleckoi.android.foundation.storage.room.agent.entity.AgentBranchTurnE
 import com.eleckoi.android.foundation.storage.room.agent.entity.AgentContentPartEntity
 import com.eleckoi.android.foundation.storage.room.agent.entity.AgentConversationDisplayCacheEntity
 import com.eleckoi.android.foundation.storage.room.agent.entity.AgentConversationEntity
+import com.eleckoi.android.foundation.storage.room.agent.entity.ConversationSpeakerEntity
 import com.eleckoi.android.foundation.storage.room.agent.entity.AgentResponseEntity
 import com.eleckoi.android.foundation.storage.room.agent.entity.AgentTurnEntity
 import com.eleckoi.android.foundation.storage.room.agent.entity.GenerationAttemptEntity
 
-/**
- * Current clean-install Room baseline.
- *
- * This development line does not upgrade an older on-device database in place. Users moving
- * between baselines export the portable backup package, uninstall the old app, and import it into
- * the new clean database.
- */
+/** Current clean-install Room schema authority. */
 @Database(
     entities = [
         ChatSessionEntity::class,
+        ChatSessionCharacterSnapshotEntity::class,
+        ChatSessionModelSettingsEntity::class,
+        ChatSessionVariableStateEntity::class,
         CharacterEntity::class,
+        CharacterTextContentEntity::class,
         CharacterMetaEntity::class,
         UserProfileEntity::class,
         ModelConfigEntity::class,
         ModelConfigMetaEntity::class,
         VariableConfigEntity::class,
+        VariableConfigVersionEntity::class,
+        VariableConfigVersionContentEntity::class,
+        VariableConfigObjectEntity::class,
+        VariableConfigVariableEntity::class,
+        GlobalRegexRuleEntity::class,
+        CharacterRegexRuleEntity::class,
+        RegexEnablementVersionEntity::class,
+        RegexStateEntity::class,
+        GlobalToolConfigEntity::class,
+        CharacterToolConfigEntity::class,
+        FrontendProjectEntity::class,
+        CharacterFrontendSettingsEntity::class,
+        CreatorWorkspaceEntity::class,
+        CreatorWorkspaceFileEntity::class,
+        CreatorWorkspaceCharacterRootEntity::class,
+        CreatorWorkspaceConversationEntity::class,
+        CleanupOperationEntity::class,
         AgentConversationEntity::class,
         AgentConversationDisplayCacheEntity::class,
         AgentBranchEntity::class,
+        ConversationSpeakerEntity::class,
         AgentTurnEntity::class,
         AgentResponseEntity::class,
         AgentBranchTurnEntity::class,
         AgentContentPartEntity::class,
         GenerationAttemptEntity::class,
         SettingLibraryEntity::class,
-        SettingLibraryEntryEntity::class,
+        SettingEntryContentEntity::class,
+        SettingLibraryEntryLinkEntity::class,
         SettingLibraryGroupEntity::class,
         SettingLibraryVersionEntity::class,
-        SettingLibraryVersionEntryEntity::class,
+        SettingLibraryVersionEntryLinkEntity::class,
         SettingLibraryVersionGroupEntity::class,
         ConversationSettingChangeEntity::class,
         RoleplayRichHeightEntity::class,
         StoryPresetStateEntity::class,
         StoryPresetLibraryGroupEntity::class,
         StoryPresetEntity::class,
+        StoryPresetContentEntity::class,
         StoryPresetEntryEntity::class,
         StoryPresetGroupEntity::class,
         StoryPresetRuntimeEntryEntity::class,
         StoryPresetVersionEntity::class,
+        StoryPresetVersionContentEntity::class,
         StoryPresetVersionEntryEntity::class,
         StoryPresetVersionGroupEntity::class,
         StoryPresetVersionRuntimeEntryEntity::class,
     ],
+    views = [SettingLibraryEntryEntity::class, SettingLibraryVersionEntryEntity::class],
     version = 1,
     exportSchema = true,
 )
@@ -68,6 +89,11 @@ abstract class ElecKoiDatabase : RoomDatabase() {
     abstract fun userProfileDao(): UserProfileDao
     abstract fun modelConfigDao(): ModelConfigDao
     abstract fun variableConfigDao(): VariableConfigDao
+    abstract fun regexRuleDao(): RegexRuleDao
+    abstract fun agentToolConfigDao(): AgentToolConfigDao
+    abstract fun authorFrontendDao(): AuthorFrontendDao
+    abstract fun creatorWorkspaceDao(): CreatorWorkspaceDao
+    abstract fun cleanupOperationDao(): CleanupOperationDao
     abstract fun agentLedgerDao(): AgentLedgerDao
     abstract fun generationAttemptDao(): GenerationAttemptDao
     abstract fun settingLibraryDao(): SettingLibraryDao
@@ -87,7 +113,8 @@ abstract class ElecKoiDatabase : RoomDatabase() {
             )
                 .addCallback(object : Callback() {
                     override fun onOpen(db: SupportSQLiteDatabase) {
-                        db.query("PRAGMA secure_delete = ON").use { cursor -> cursor.moveToFirst() }
+                        // Scrub deleted b-tree cells without adding extra disk I/O for freelist pages.
+                        db.query("PRAGMA secure_delete = FAST").use { cursor -> cursor.moveToFirst() }
                     }
                 })
                 .build()

@@ -4,6 +4,7 @@ import com.eleckoi.android.engine.generation.image.ReplyImageGenerator
 import com.eleckoi.android.engine.agent.eleckoi.conversation.ConversationAttachmentCleanup
 import com.eleckoi.android.feature.chat.data.ChatInputImageStore
 import com.eleckoi.android.foundation.storage.room.ElecKoiDatabase
+import com.eleckoi.android.foundation.storage.PersistentCleanupRunner
 
 /** Keeps Room rows, generated images, and copied input images in one deletion lifecycle. */
 internal class ChatSessionCleanupCoordinator(
@@ -12,6 +13,7 @@ internal class ChatSessionCleanupCoordinator(
     private val historySaveModeProvider: suspend () -> String,
     replyImageGenerator: ReplyImageGenerator?,
     inputImageStore: ChatInputImageStore?,
+    private val cleanupRunner: PersistentCleanupRunner,
     private val onSessionsDeleted: suspend (List<String>) -> Unit,
 ) {
     private val attachments = ConversationAttachmentCleanup(
@@ -44,9 +46,15 @@ internal class ChatSessionCleanupCoordinator(
         val ids = sessionIds.filter(String::isNotBlank).distinct()
         if (ids.isEmpty()) return
         // A pointer-cleanup failure leaves the source rows available for retry.
-        onSessionsDeleted(ids)
-        attachments.deleteConversations(ids) {
-            ids.forEach { id ->
+        ids.forEach { id ->
+            cleanupRunner.run(CleanupKind, id) { deleteNow(id) }
+        }
+    }
+
+    internal suspend fun deleteNow(sessionId: String) {
+        onSessionsDeleted(listOf(sessionId))
+        attachments.deleteConversations(listOf(sessionId)) {
+            listOf(sessionId).forEach { id ->
                 room.ledger.deleteConversationInTransaction(id)
                 room.dao.deleteSession(id)
             }
@@ -55,5 +63,6 @@ internal class ChatSessionCleanupCoordinator(
 
     private companion object {
         const val RecentHistoryLimit = 10
+        const val CleanupKind = "chat_session"
     }
 }

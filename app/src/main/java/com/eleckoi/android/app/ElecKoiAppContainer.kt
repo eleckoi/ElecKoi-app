@@ -36,6 +36,7 @@ import com.eleckoi.android.engine.agent.remotedsh.RemoteDshConnectionState
 import com.eleckoi.android.engine.agent.remotedsh.remoteDshTaskTool
 import com.eleckoi.android.engine.agent.remotedsh.RemoteDshTurnImageRegistry
 import com.eleckoi.android.feature.settings.data.remotedsh.RemoteDshSettingsRepository
+import com.eleckoi.android.foundation.storage.room.ElecKoiDatabase
 import kotlinx.coroutines.flow.first
 
 /** Application-scoped composition root. Data repositories and executable runtimes stay separate. */
@@ -43,7 +44,8 @@ class ElecKoiAppContainer(context: Context) : AutoCloseable {
     private val applicationContext = context.applicationContext
 
     private val runtimePaths = RuntimePaths(applicationContext)
-    private val agentToolCatalogStore = AgentToolCatalogStore(runtimePaths.agentToolCatalog)
+    private val database = ElecKoiDatabase.get(applicationContext)
+    private val agentToolCatalogStore = AgentToolCatalogStore(database)
     val repository = ElecKoiRepository(
         context = applicationContext,
         isCreatorCapabilityEnabled = {
@@ -54,6 +56,8 @@ class ElecKoiAppContainer(context: Context) : AutoCloseable {
         },
         toolModelConfigId = agentToolCatalogStore::toolModelConfigId,
         deleteCharacterTools = agentToolCatalogStore::deleteForCharacters,
+        exportToolConfig = agentToolCatalogStore::exportBackupJson,
+        restoreToolConfig = agentToolCatalogStore::restoreBackupJson,
         initializeCharacterTools = { characterId ->
             initializeCharacterToolDefaults(
                 characterId = characterId,
@@ -203,9 +207,30 @@ class ElecKoiAppContainer(context: Context) : AutoCloseable {
     internal fun agentToolContextSnapshot(scopeId: String): AgentToolContextSnapshot =
         agentToolCatalogStore.toolContextSnapshot(scopeId)
 
+    internal fun isCharacterSettingLibraryToolEnabled(characterId: String): Boolean =
+        agentToolCatalogStore.isEnabled(
+            AgentToolScopes.character(characterId),
+            AgentToolRequestPolicy.BuiltInSettingLibrary,
+        )
+
+    internal suspend fun enableCharacterSettingLibraryTool(characterId: String) {
+        agentToolsRepository.setGroupEnabled(
+            scopeId = AgentToolScopes.character(characterId),
+            groupId = AgentToolRequestPolicy.BuiltInSettingLibrary,
+            enabled = true,
+        )
+    }
+
     suspend fun prewarmAgentRuntime() {
         // This is deliberately process-scoped: it connects the local runtime service only and
         // never creates a DSH conversation/session for an arbitrary workspace or model.
+        repository.characterCollection().items.forEach { character ->
+            val scopeId = AgentToolScopes.character(character.id)
+            if (!agentToolCatalogStore.hasExplicitConfiguration(scopeId)) {
+                initializeCharacterToolDefaults(character.id, agentToolCatalogStore::setEnabled)
+            }
+        }
+        repository.resumePendingCleanup()
         repository.recoverAbandonedRoleGenerations()
         localRuntime.connect()
         localRuntime.state.first { state ->
@@ -238,4 +263,14 @@ internal fun initializeCharacterToolDefaults(
     ).forEach { groupId ->
         setGroupEnabled(scopeId, groupId, true)
     }
+}
+
+/** Imported characters have no switch section in older user-visible backups. */
+internal fun initializeMissingCharacterToolDefaults(
+    existingCharacterIds: Collection<String>,
+    savedCharacterIds: Collection<String>,
+    initializeCharacterTools: (characterId: String) -> Unit,
+) {
+    val existing = existingCharacterIds.toSet()
+    savedCharacterIds.distinct().filterNot { it in existing }.forEach(initializeCharacterTools)
 }

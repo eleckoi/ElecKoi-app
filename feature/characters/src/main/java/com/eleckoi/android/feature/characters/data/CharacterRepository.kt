@@ -100,20 +100,31 @@ class CharacterRepository(
     }
 
     fun saveCharacters(payload: CharactersPayload): CharactersPayload {
+        val previous = loadCharacters()
         val saved = prepareCharacters(payload)
         val normalizedItems = saved.items
         val retainedFolders = normalizedItems.map { it.folder }.toSet()
-        loadCharacters().items.map { it.folder }.distinct()
+        previous.items.map { it.folder }.distinct()
             .filterNot { it in retainedFolders }
             .forEach(characterMedia::deleteCharacterFolder)
+        val previousRows = previous.items.associate { it.id to it.toEntity() }
+        val incomingRows = normalizedItems.map { it.toEntity() }
+        val previousContents = previous.items
+            .flatMap { it.toTextContentEntities() }
+            .associateBy { it.characterId to it.kind }
+        val incomingContents = normalizedItems.flatMap { it.toTextContentEntities() }
+        val incomingIds = incomingRows.mapTo(mutableSetOf()) { it.id }
+        val changedRows = incomingRows.filter { it != previousRows[it.id] }
+        val changedContents = incomingContents.filter {
+            it != previousContents[it.characterId to it.kind]
+        }
+        val removedIds = previousRows.keys.filterNot(incomingIds::contains)
+        val metadata = saved.toMetaEntity()
         database.runInTransaction {
-            if (normalizedItems.isEmpty()) {
-                dao.deleteAllCharacters()
-            } else {
-                dao.upsertCharacters(normalizedItems.map { it.toEntity() })
-                dao.deleteCharactersExcept(normalizedItems.map { it.id })
-            }
-            dao.upsertMeta(saved.toMetaEntity())
+            removedIds.chunked(900).forEach(dao::deleteCharacters)
+            if (changedRows.isNotEmpty()) dao.upsertCharacters(changedRows)
+            if (changedContents.isNotEmpty()) dao.upsertTextContents(changedContents)
+            if (dao.meta() != metadata) dao.upsertMeta(metadata)
         }
         return saved
     }

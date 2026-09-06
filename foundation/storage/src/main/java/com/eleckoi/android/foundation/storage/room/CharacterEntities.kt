@@ -1,6 +1,8 @@
 package com.eleckoi.android.foundation.storage.room
 
 import androidx.room.Entity
+import androidx.room.ForeignKey
+import androidx.room.Index
 
 @Entity(
     tableName = "characters",
@@ -20,19 +22,45 @@ data class CharacterEntity(
     val frontendBeautyEnabled: Boolean,
     val assistantName: String,
     val assistantAvatar: String,
-    val assistantPrompt: String,
     val profileAge: String = "",
     val profileSex: String = "",
     val profileHeight: String = "",
     val profileBirthday: String = "",
     val profileLike: String = "",
-    val imagePrompt: String = "",
-    val opening: String,
     val showOpening: Boolean,
     val chatBackground: String,
     val chatBackgroundOpacity: Float,
     val chatBackgroundBlur: Float,
     val chatBackgroundScrim: Float,
+)
+
+/**
+ * Potentially large author text is kept out of the frequently reordered/renamed character row.
+ * One field per row also prevents editing an opening from rewriting an unrelated system prompt.
+ */
+@Entity(
+    tableName = "character_text_contents",
+    primaryKeys = ["characterId", "kind"],
+    foreignKeys = [
+        ForeignKey(
+            entity = CharacterEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["characterId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [Index("characterId")],
+)
+data class CharacterTextContentEntity(
+    val characterId: String,
+    val kind: String,
+    val content: String,
+)
+
+data class CharacterRecord(
+    @androidx.room.Embedded val character: CharacterEntity,
+    @androidx.room.Relation(parentColumn = "id", entityColumn = "characterId")
+    val textContents: List<CharacterTextContentEntity>,
 )
 
 @Entity(

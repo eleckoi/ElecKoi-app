@@ -12,6 +12,11 @@ import org.junit.Test
 
 class RoomConversationLedgerTest {
     @Test
+    fun `stable ledger ids encode identity components without hashing message content`() {
+        assertEquals("turn.Y2hhdA.bWFpbg", stableLedgerId("turn", "chat", "main"))
+    }
+
+    @Test
     fun `user and assistant become one branch turn with one selected response`() {
         val entries = ledgerEntries(
             conversationId = "chat-1",
@@ -57,6 +62,73 @@ class RoomConversationLedgerTest {
 
         assertEquals(first.turn.id, second.turn.id)
         assertEquals(first.response?.id, second.response?.id)
+    }
+
+    @Test
+    fun `one user turn preserves ordered replies and their speaker identities`() {
+        val entries = ledgerEntries(
+            conversationId = "chat-1",
+            messages = listOf(
+                LedgerMessage(id = "user-1", role = "user", content = "你们怎么看？"),
+                LedgerMessage(
+                    id = "reply-a",
+                    role = "assistant",
+                    content = "甲的回答",
+                    speakerId = "member-a",
+                    speakerKind = "card_character",
+                    speakerName = "甲",
+                ),
+                LedgerMessage(
+                    id = "reply-b",
+                    role = "assistant",
+                    content = "乙的回答",
+                    speakerId = "member-b",
+                    speakerKind = "card_character",
+                    speakerName = "乙",
+                ),
+            ),
+        )
+
+        val entry = entries.single()
+        assertEquals(listOf(0, 1), entry.responses.map { it.responseIndex })
+        assertEquals(2, entry.responses.map { it.speakerId }.distinct().size)
+        assertEquals(listOf("member-a", "member-b"), entry.speakers.drop(1).map { it.sourceSpeakerId })
+        assertEquals(
+            listOf("user_text", "assistant_text", "assistant_text"),
+            entry.parts.map { it.kind },
+        )
+    }
+
+    @Test
+    fun `long multi speaker history keeps stable identities when processed twice`() {
+        val messages = (0 until 300).flatMap { turn ->
+            listOf(
+                LedgerMessage(id = "user-$turn", role = "user", content = "问题 $turn"),
+                LedgerMessage(
+                    id = "member-a-$turn",
+                    role = "assistant",
+                    content = "甲 $turn",
+                    speakerId = "member-a",
+                ),
+                LedgerMessage(
+                    id = "member-b-$turn",
+                    role = "assistant",
+                    content = "乙 $turn",
+                    speakerId = "member-b",
+                ),
+            )
+        }
+
+        val first = ledgerEntries("long-chat", messages)
+        val second = ledgerEntries("long-chat", messages)
+
+        assertEquals(300, first.size)
+        assertTrue(first.all { it.responses.map { response -> response.responseIndex } == listOf(0, 1) })
+        assertEquals(600, first.flatMap(LedgerEntry::responses).map { it.id }.distinct().size)
+        assertEquals(
+            first.flatMap(LedgerEntry::responses).map { it.id },
+            second.flatMap(LedgerEntry::responses).map { it.id },
+        )
     }
 
     @Test
@@ -139,6 +211,51 @@ class RoomConversationLedgerTest {
 
         assertTrue(chunks.size > 1)
         assertEquals(part, chunks.mergeStorageChunks().single())
+    }
+
+    @Test
+    fun `long streaming checkpoint rewrites only the growing tail chunk`() {
+        val full = "a".repeat(CursorWindowChunkCharacters)
+        fun rows(tail: String) = listOf(
+            AgentContentPartEntity(
+                conversationId = "chat-1",
+                ownerType = "response",
+                ownerId = "response-1",
+                partIndex = 0,
+                kind = "assistant_text",
+                text = full + tail,
+                payloadJson = "",
+            ),
+        ).toStorageChunks()
+
+        val current = rows("b".repeat(8_000))
+        val incoming = rows("b".repeat(8_000) + "新增内容")
+        val plan = contentPartWritePlan(current, incoming)
+
+        assertEquals(listOf(1), plan.upserts.map(AgentContentPartEntity::chunkIndex))
+        assertTrue(plan.deletes.isEmpty())
+    }
+
+    @Test
+    fun `shortened checkpoint removes only obsolete response chunks`() {
+        fun rows(text: String) = listOf(
+            AgentContentPartEntity(
+                conversationId = "chat-1",
+                ownerType = "response",
+                ownerId = "response-1",
+                partIndex = 0,
+                kind = "assistant_text",
+                text = text,
+                payloadJson = "",
+            ),
+        ).toStorageChunks()
+
+        val current = rows("a".repeat(CursorWindowChunkCharacters * 2 + 20))
+        val incoming = rows("a".repeat(CursorWindowChunkCharacters + 10))
+        val plan = contentPartWritePlan(current, incoming)
+
+        assertEquals(listOf(1), plan.upserts.map(AgentContentPartEntity::chunkIndex))
+        assertEquals(listOf(2), plan.deletes.map(AgentContentPartEntity::chunkIndex))
     }
 
     @Test

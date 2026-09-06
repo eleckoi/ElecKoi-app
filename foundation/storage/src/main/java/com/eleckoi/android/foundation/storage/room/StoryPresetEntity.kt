@@ -42,14 +42,26 @@ data class StoryPresetEntity(
     val authorTagsJson: String,
     @ColumnInfo(defaultValue = "''")
     val description: String,
-    @ColumnInfo(defaultValue = "'[]'")
-    val timelineJson: String,
-    @ColumnInfo(defaultValue = "'[]'")
-    val regexRulesJson: String,
     val sortIndex: Int,
     val expandedGroupIdsJson: String,
-    @ColumnInfo(defaultValue = "'[]'")
-    val promptPositionsJson: String,
+)
+
+/** Independently writable preset documents kept out of the frequently renamed metadata row. */
+@Entity(
+    tableName = "story_preset_contents",
+    primaryKeys = ["presetId", "kind"],
+    foreignKeys = [ForeignKey(
+        entity = StoryPresetEntity::class,
+        parentColumns = ["id"],
+        childColumns = ["presetId"],
+        onDelete = ForeignKey.CASCADE,
+    )],
+    indices = [Index("presetId")],
+)
+data class StoryPresetContentEntity(
+    val presetId: String,
+    val kind: String,
+    val content: String,
 )
 
 @Entity(
@@ -134,10 +146,24 @@ data class StoryPresetVersionEntity(
     val name: String,
     val createdAtEpochMs: Long,
     val expandedGroupIdsJson: String,
-    @ColumnInfo(defaultValue = "'[]'")
-    val promptPositionsJson: String,
-    @ColumnInfo(defaultValue = "'[]'")
-    val regexRulesJson: String,
+)
+
+@Entity(
+    tableName = "story_preset_version_contents",
+    primaryKeys = ["presetId", "versionId", "kind"],
+    foreignKeys = [ForeignKey(
+        entity = StoryPresetVersionEntity::class,
+        parentColumns = ["presetId", "versionId"],
+        childColumns = ["presetId", "versionId"],
+        onDelete = ForeignKey.CASCADE,
+    )],
+    indices = [Index(value = ["presetId", "versionId"])],
+)
+data class StoryPresetVersionContentEntity(
+    val presetId: String,
+    val versionId: String,
+    val kind: String,
+    val content: String,
 )
 
 @Entity(
@@ -206,6 +232,8 @@ data class StoryPresetVersionRuntimeEntryEntity(
 data class StoryPresetVersionRecord(
     @Embedded
     val version: StoryPresetVersionEntity,
+    @Relation(parentColumn = "versionId", entityColumn = "versionId")
+    val contents: List<StoryPresetVersionContentEntity>,
     @Relation(
         parentColumn = "versionId",
         entityColumn = "versionId",
@@ -227,6 +255,8 @@ data class StoryPresetVersionRecord(
 data class StoryPresetRecord(
     @Embedded
     val preset: StoryPresetEntity,
+    @Relation(parentColumn = "id", entityColumn = "presetId")
+    val contents: List<StoryPresetContentEntity>,
     @Relation(parentColumn = "id", entityColumn = "presetId")
     val entries: List<StoryPresetEntryEntity>,
     @Relation(parentColumn = "id", entityColumn = "presetId")

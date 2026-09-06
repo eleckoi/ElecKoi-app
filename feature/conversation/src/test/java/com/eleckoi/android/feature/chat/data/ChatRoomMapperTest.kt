@@ -3,6 +3,10 @@ package com.eleckoi.android.feature.chat.data
 import com.eleckoi.android.engine.agent.api.AgentPermissionMode
 import com.eleckoi.android.engine.agent.api.AgentWorkItemType
 import com.eleckoi.android.foundation.storage.room.ChatSessionEntity
+import com.eleckoi.android.foundation.storage.room.ChatSessionCharacterSnapshotEntity
+import com.eleckoi.android.foundation.storage.room.ChatSessionModelSettingsEntity
+import com.eleckoi.android.foundation.storage.room.ChatSessionRecord
+import com.eleckoi.android.foundation.storage.room.ChatSessionVariableStateEntity
 import com.eleckoi.android.feature.chat.model.ChatImageAttachment
 import com.eleckoi.android.feature.chat.model.ChatImageStatus
 import com.eleckoi.android.feature.chat.model.ChatMessage
@@ -31,7 +35,7 @@ class ChatRoomMapperTest {
             runtimeTurnId = "turn-2",
         )
         val restored = chatSessionFromRoom(
-            session = sessionEntity(),
+            record = sessionEntity(),
             messages = listOf(first, second),
         )
 
@@ -120,23 +124,49 @@ class ChatRoomMapperTest {
         assertEquals(42L, action.completedAtMillis)
     }
 
-    private fun sessionEntity(): ChatSessionEntity = ChatSessionEntity(
-        id = "session-1",
-        workspaceId = "workspace-1",
-        title = "test",
-        characterId = "character-1",
-        characterName = "character",
-        characterAvatar = "",
-        characterMode = "agent",
-        characterPersonaJson = "{}",
-        modelSettingsJson = "{}",
-        initialVariableStateJson = "{}",
-        variableStateJson = "{}",
-        historySummary = "next text",
-        historyMessageCount = 2,
-        historyUserMessageCount = 0,
-        createdAt = "2026-07-15T00:00:00Z",
-        updatedAt = "2026-07-15T00:00:00Z",
+    @Test
+    fun `role reply stores card speaker separately from its model`() {
+        val stored = ChatMessage(
+            id = "assistant-speaker",
+            role = MessageRole.Assistant,
+            content = "你好",
+            provider = "provider-a",
+            model = "model-a",
+        ).toLedgerMessage(
+            characterId = "card-a",
+            characterName = "甲",
+            characterAvatar = "images/card-a.png",
+        )
+
+        assertEquals("card-a", stored.speakerId)
+        assertEquals("card_character", stored.speakerKind)
+        assertEquals("甲", stored.speakerName)
+        assertEquals("provider-a", stored.provider)
+        assertEquals("model-a", stored.model)
+        assertEquals("card-a", stored.toChatMessage().speakerId)
+    }
+
+    private fun sessionEntity(): ChatSessionRecord = ChatSessionRecord(
+        session = ChatSessionEntity(
+            id = "session-1",
+            workspaceId = "workspace-1",
+            title = "test",
+            characterId = "character-1",
+            characterName = "character",
+            characterAvatar = "",
+            characterMode = "agent",
+            historySummary = "next text",
+            historyMessageCount = 2,
+            historyUserMessageCount = 0,
+            createdAt = "2026-07-15T00:00:00Z",
+            updatedAt = "2026-07-15T00:00:00Z",
+        ),
+        characterSnapshot = ChatSessionCharacterSnapshotEntity("session-1", "{}"),
+        modelSettings = ChatSessionModelSettingsEntity("session-1", "{}"),
+        variableStates = listOf(
+            ChatSessionVariableStateEntity("session-1", ChatVariableStateInitial, "{}"),
+            ChatSessionVariableStateEntity("session-1", ChatVariableStateCurrent, "{}"),
+        ),
     )
 
 }

@@ -2,6 +2,8 @@ package com.eleckoi.android.feature.characters.data
 
 import com.eleckoi.android.foundation.storage.room.CharacterEntity
 import com.eleckoi.android.foundation.storage.room.CharacterMetaEntity
+import com.eleckoi.android.foundation.storage.room.CharacterRecord
+import com.eleckoi.android.foundation.storage.room.CharacterTextContentEntity
 import com.eleckoi.android.feature.characters.model.CharacterCard
 import com.eleckoi.android.feature.characters.model.CharacterSlot
 import com.eleckoi.android.feature.characters.model.CharactersPayload
@@ -25,14 +27,11 @@ internal fun CharacterSlot.toEntity(): CharacterEntity {
         frontendBeautyEnabled = storyTools.frontendBeautyEnabled,
         assistantName = persona.assistantName,
         assistantAvatar = persona.assistantAvatar,
-        assistantPrompt = persona.assistantPrompt,
         profileAge = persona.profileAge,
         profileSex = persona.profileSex,
         profileHeight = persona.profileHeight,
         profileBirthday = persona.profileBirthday,
         profileLike = persona.profileLike,
-        imagePrompt = persona.imagePrompt,
-        opening = persona.opening,
         showOpening = persona.showOpening,
         chatBackground = persona.chatBackground,
         chatBackgroundOpacity = persona.chatBackgroundOpacity,
@@ -41,7 +40,29 @@ internal fun CharacterSlot.toEntity(): CharacterEntity {
     )
 }
 
-internal fun CharacterEntity.toSlot(user: UserProfile): CharacterSlot {
+internal fun CharacterSlot.toTextContentEntities(): List<CharacterTextContentEntity> = listOf(
+    CharacterTextContentEntity(id, AssistantPromptContentKind, persona.assistantPrompt),
+    CharacterTextContentEntity(id, ImagePromptContentKind, persona.imagePrompt),
+    CharacterTextContentEntity(id, OpeningContentKind, persona.opening),
+)
+
+internal fun CharacterRecord.toSlot(user: UserProfile): CharacterSlot {
+    val entity = character
+    val contentByKind = textContents.associate { it.kind to it.content }
+    return entity.toSlot(
+        user = user,
+        assistantPrompt = contentByKind[AssistantPromptContentKind].orEmpty(),
+        imagePrompt = contentByKind[ImagePromptContentKind].orEmpty(),
+        opening = contentByKind[OpeningContentKind].orEmpty(),
+    )
+}
+
+private fun CharacterEntity.toSlot(
+    user: UserProfile,
+    assistantPrompt: String,
+    imagePrompt: String,
+    opening: String,
+): CharacterSlot {
     val characterName = name.ifBlank { assistantName }.ifBlank { "未命名角色" }
     val characterAvatar = avatar.ifBlank { assistantAvatar }
     return CharacterSlot(
@@ -82,6 +103,10 @@ internal fun CharacterEntity.toSlot(user: UserProfile): CharacterSlot {
         ).withUser(user),
     )
 }
+
+private const val AssistantPromptContentKind = "assistant_prompt"
+private const val ImagePromptContentKind = "image_prompt"
+private const val OpeningContentKind = "opening"
 
 internal fun payloadFromRoom(
     items: List<CharacterSlot>,

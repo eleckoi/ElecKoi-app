@@ -22,6 +22,8 @@ import com.eleckoi.android.feature.chat.model.ChatSession
 import com.eleckoi.android.feature.chat.model.MessageRole
 import com.eleckoi.android.feature.chat.model.settleAbortedGeneration
 import com.eleckoi.android.foundation.storage.ElecKoiDataException
+import com.eleckoi.android.foundation.storage.ImmediateCleanupRunner
+import com.eleckoi.android.foundation.storage.PersistentCleanupRunner
 import com.eleckoi.android.foundation.storage.nowIso
 import com.eleckoi.android.foundation.storage.room.ChatListRoomRow
 import com.eleckoi.android.foundation.storage.room.ElecKoiDatabase
@@ -42,6 +44,7 @@ class ChatSessionStore(
     private val historySaveModeProvider: suspend () -> String = { "all" },
     private val replyImageGenerator: ReplyImageGenerator? = null,
     private val inputImageStore: ChatInputImageStore? = null,
+    cleanupRunner: PersistentCleanupRunner = ImmediateCleanupRunner,
     onSessionsDeleted: suspend (List<String>) -> Unit = {},
 ) {
     private val room = ChatSessionRoomStorage(database)
@@ -59,6 +62,7 @@ class ChatSessionStore(
         historySaveModeProvider = historySaveModeProvider,
         replyImageGenerator = replyImageGenerator,
         inputImageStore = inputImageStore,
+        cleanupRunner = cleanupRunner,
         onSessionsDeleted = onSessionsDeleted,
     )
 
@@ -102,13 +106,7 @@ class ChatSessionStore(
         val refreshed = refreshCharacterPersona(original)
         val session = if (touch) refreshed.copy(updatedAt = nowIso()) else refreshed
         if (session != original) {
-            dao.updateSession(
-                session.toEntity().copy(
-                    historySummary = entity.historySummary,
-                    historyMessageCount = entity.historyMessageCount,
-                    historyUserMessageCount = entity.historyUserMessageCount,
-                ),
-            )
+            database.runInTransaction { room.upsertMetadataInTransaction(session) }
         }
         return session
     }
@@ -154,9 +152,13 @@ class ChatSessionStore(
             settled.forEach { (userMessageId, response) ->
                 ledger.upsertResponseInTransaction(
                     conversationId = sessionId,
-                    updatedAt = entity.updatedAt,
+                    updatedAt = entity.session.updatedAt,
                     turnSourceMessageId = userMessageId,
-                    response = response.toLedgerMessage(),
+                    response = response.toLedgerMessage(
+                        entity.session.characterId,
+                        entity.session.characterName,
+                        entity.session.characterAvatar,
+                    ),
                 )
             }
         }
@@ -177,27 +179,25 @@ class ChatSessionStore(
     /** Normal send path: append exactly one user turn without rewriting the loaded window. */
     fun appendUserTurn(session: ChatSession, message: ChatMessage) {
         database.runInTransaction {
-            room.upsertMetadataInTransaction(session)
             ledger.upsertTurnInTransaction(
                 conversationId = session.id,
                 createdAt = session.createdAt,
                 updatedAt = session.updatedAt,
-                turn = message.toLedgerMessage(),
+                turn = message.toLedgerMessage(session),
             )
-            room.refreshHistoryMetadataInTransaction(session, message.content)
+            room.upsertMetadataWithHistoryInTransaction(session, message.content)
         }
     }
 
     /** Destructive regeneration path: retain the selected user turn and remove everything below. */
     fun truncateForRegeneration(session: ChatSession, retainedMessage: ChatMessage) {
         attachmentCleanup.discardMessages(session.id) {
-            room.upsertMetadataInTransaction(session)
             ledger.truncateAfterTurnInTransaction(
                 conversationId = session.id,
                 updatedAt = session.updatedAt,
-                retainedTurn = retainedMessage.toLedgerMessage(),
+                retainedTurn = retainedMessage.toLedgerMessage(session),
             )
-            room.refreshHistoryMetadataInTransaction(session, retainedMessage.content)
+            room.upsertMetadataWithHistoryInTransaction(session, retainedMessage.content)
         }
     }
 
@@ -211,12 +211,11 @@ class ChatSessionStore(
         terminalAttemptError: String = "",
     ) {
         database.runInTransaction {
-            room.upsertMetadataInTransaction(session)
             ledger.upsertResponseInTransaction(
                 conversationId = session.id,
                 updatedAt = session.updatedAt,
                 turnSourceMessageId = userMessageId,
-                response = response.toLedgerMessage(),
+                response = response.toLedgerMessage(session),
             )
             if (terminalAttemptId != null && terminalAttemptState != null) {
                 generationAttempts.finishInTransaction(
@@ -225,7 +224,7 @@ class ChatSessionStore(
                     errorMessage = terminalAttemptError,
                 )
             }
-            room.refreshHistoryMetadataInTransaction(session, response.content)
+            room.upsertMetadataWithHistoryInTransaction(session, response.content)
         }
     }
 
@@ -268,7 +267,7 @@ class ChatSessionStore(
                 conversationId = session.id,
                 updatedAt = session.updatedAt,
                 turnSourceMessageId = user.id,
-                response = response.toLedgerMessage(),
+                response = response.toLedgerMessage(session),
                 rebuildDisplayCache = false,
             )
         }
@@ -285,7 +284,6 @@ class ChatSessionStore(
         val index = all.indexOfFirst { it.id == message.id }
         if (index < 0) throw ElecKoiDataException("要更新的消息不存在")
         database.runInTransaction {
-            room.upsertMetadataInTransaction(session)
             if (message.role == MessageRole.Assistant && index > 0) {
                 val user = all.subList(0, index).lastOrNull { it.role == MessageRole.User }
                     ?: throw ElecKoiDataException("AI 回复没有对应的用户回合")
@@ -293,17 +291,17 @@ class ChatSessionStore(
                     conversationId = session.id,
                     updatedAt = session.updatedAt,
                     turnSourceMessageId = user.id,
-                    response = message.toLedgerMessage(),
+                    response = message.toLedgerMessage(session),
                 )
             } else {
                 ledger.upsertTurnInTransaction(
                     conversationId = session.id,
                     createdAt = session.createdAt,
                     updatedAt = session.updatedAt,
-                    turn = message.toLedgerMessage(),
+                    turn = message.toLedgerMessage(session),
                 )
             }
-            room.refreshHistoryMetadataInTransaction(session, message.content)
+            room.upsertMetadataWithHistoryInTransaction(session, message.content)
         }
     }
 
@@ -336,6 +334,8 @@ class ChatSessionStore(
     suspend fun deleteExceptCharacters(characterIds: List<String>) =
         history.deleteExceptCharacters(characterIds)
 
+    suspend fun resumeDelete(sessionId: String) = history.resumeDelete(sessionId)
+
     fun exportHistory(characterId: String, sessionIds: List<String>): String =
         history.export(characterId, sessionIds)
 
@@ -345,7 +345,7 @@ class ChatSessionStore(
     /** Complete per-character history snapshots used by the app-level backup package. */
     fun exportBackupHistories(): Map<String, String> = buildMap {
         characters.loadCharacters().items.forEach { character ->
-            val sessionIds = dao.sessionsForCharacter(character.id).map { it.id }
+            val sessionIds = dao.sessionsForCharacter(character.id).map { it.session.id }
             if (sessionIds.isNotEmpty()) {
                 put(character.id, history.export(character.id, sessionIds))
             }
@@ -359,6 +359,23 @@ class ChatSessionStore(
         }
         return imported
     }
+
+    /**
+     * Streaming app backups keep each conversation in its own ZIP entry. This bounds memory to one
+     * conversation instead of materializing every character history at the same time.
+     */
+    fun backupHistoryTargets(): List<ChatBackupTarget> =
+        characters.loadCharacters().items.flatMap { character ->
+            dao.sessionsForCharacter(character.id).map { session ->
+                ChatBackupTarget(characterId = character.id, sessionId = session.session.id)
+            }
+        }
+
+    fun exportBackupHistory(target: ChatBackupTarget): String =
+        history.export(target.characterId, listOf(target.sessionId))
+
+    suspend fun restoreBackupHistory(characterId: String, json: String): Int =
+        history.import(characterId, json)
 
     fun saveModelSelection(sessionId: String, selection: ChatModelSelection): ChatSession {
         val session = load(sessionId, touch = false)
@@ -415,6 +432,11 @@ class ChatSessionStore(
     }
 
 }
+
+data class ChatBackupTarget(
+    val characterId: String,
+    val sessionId: String,
+)
 
 /**
  * Maps one persisted session to the message-home projection.

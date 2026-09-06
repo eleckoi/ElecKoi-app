@@ -5,10 +5,13 @@ import com.eleckoi.android.foundation.storage.room.ElecKoiDatabase
 import com.eleckoi.android.foundation.storage.room.RoleplayRichHeightDao
 import com.eleckoi.android.foundation.storage.room.RoleplayRichHeightEntity
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
@@ -22,6 +25,7 @@ internal object RoleplayRichHeightCache {
     private const val KeySeparator = '\u001f'
 
     private val writerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val writerMutex = Mutex()
     @Volatile
     private var persistentDao: RoleplayRichHeightDao? = null
     private val heights = object : LinkedHashMap<String, Int>(MaxEntries, 0.75f, true) {
@@ -31,19 +35,36 @@ internal object RoleplayRichHeightCache {
 
     @Synchronized
     fun put(key: String, heightPx: Int) {
-        if (parseKey(key) == null || heightPx !in 1..MaxHeightPx) return
-        heights[key] = heightPx
+        rememberIfChanged(key, heightPx)
     }
 
     fun putPersistent(context: Context, key: String, heightPx: Int) {
         val parsed = parseKey(key) ?: return
         if (heightPx !in 1..MaxHeightPx) return
-        put(key, heightPx)
+        if (!rememberIfChanged(key, heightPx)) return
         val entity = parsed.toEntity(heightPx)
         val appContext = context.applicationContext
-        writerScope.launch {
-            runCatching { dao(appContext).upsert(entity) }
+        writerScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            writerMutex.withLock {
+                runCatching {
+                    dao(appContext).deleteOtherRevisions(
+                        entity.sessionId,
+                        entity.messageId,
+                        entity.contentRevision,
+                    )
+                    dao(appContext).upsert(entity)
+                }
+            }
         }
+    }
+
+    @Synchronized
+    private fun rememberIfChanged(key: String, heightPx: Int): Boolean {
+        if (parseKey(key) == null || heightPx !in 1..MaxHeightPx || heights[key] == heightPx) {
+            return false
+        }
+        heights[key] = heightPx
+        return true
     }
 
     suspend fun restoreSession(context: Context, sessionId: String): JSONObject {

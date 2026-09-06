@@ -197,6 +197,24 @@ class CreatorWorkspaceRepositoryTest {
     }
 
     @Test
+    fun `writing identical workspace text does not rewrite file or manifests`() = runBlocking {
+        val root = temporaryFolder.newFolder("write-identical")
+        val repository = repository(root)
+        val workspace = repository.create("幂等写入")
+        val first = repository.writeText(workspace.id, "index.html", "<main>same</main>")
+        val projectFile = File(root, "workspaces/${workspace.id}/project/index.html")
+        val manifestFile = File(root, "workspaces/${workspace.id}/manifest.json")
+        projectFile.setLastModified(1_000L)
+        manifestFile.setLastModified(2_000L)
+
+        val second = repository.writeText(workspace.id, "index.html", "<main>same</main>")
+
+        assertEquals(first, second)
+        assertEquals(1_000L, projectFile.lastModified())
+        assertEquals(2_000L, manifestFile.lastModified())
+    }
+
+    @Test
     fun `delete path removes only the requested workspace file`() = runBlocking {
         val root = temporaryFolder.newFolder("delete-path")
         val repository = repository(root)

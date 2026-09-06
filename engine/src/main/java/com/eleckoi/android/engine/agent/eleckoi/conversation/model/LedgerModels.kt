@@ -25,6 +25,11 @@ data class LedgerMessage(
     val runtimeTurnId: String = "",
     val turnStartedAtMillis: Long = 0L,
     val turnCompletedAtMillis: Long? = null,
+    /** Speaker identity is independent from provider/model execution identity. */
+    val speakerId: String = "",
+    val speakerKind: String = "",
+    val speakerName: String = "",
+    val speakerAvatarAssetId: String = "",
 )
 
 data class LedgerPage(

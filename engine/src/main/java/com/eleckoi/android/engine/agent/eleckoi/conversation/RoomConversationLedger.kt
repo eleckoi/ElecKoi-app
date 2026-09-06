@@ -15,7 +15,7 @@ import com.eleckoi.android.foundation.storage.room.agent.entity.AgentConversatio
 import com.eleckoi.android.foundation.storage.room.agent.entity.AgentConversationDisplayCacheEntity
 import com.eleckoi.android.foundation.storage.room.agent.entity.AgentResponseEntity
 import com.eleckoi.android.foundation.storage.room.agent.entity.AgentTurnEntity
-import java.security.MessageDigest
+import com.eleckoi.android.foundation.storage.room.agent.entity.ConversationSpeakerEntity
 import com.eleckoi.android.foundation.serialization.ElecKoiJson
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -162,11 +162,23 @@ class RoomConversationLedger(
         check(dao.branchTurn(conversation.activeBranchId, turn.id) != null) {
             "回复所属回合不在当前分支：$turnSourceMessageId"
         }
-        val responseEntity = response.toResponseEntity(conversationId, turn.id)
-        dao.upsertResponses(listOf(responseEntity))
-        dao.deleteContentParts(OwnerResponse, listOf(responseEntity.id))
-        val parts = response.toResponseParts(conversationId, responseEntity.id)
-        if (parts.isNotEmpty()) dao.upsertContentParts(parts.toStorageChunks())
+        val speaker = response.toSpeakerEntity(conversationId)
+        val responseEntity = response.toResponseEntity(
+            conversationId = conversationId,
+            turnId = turn.id,
+            speakerInternalId = speaker.id,
+        )
+        if (dao.speakers(listOf(speaker.id)).singleOrNull() != speaker) {
+            dao.upsertSpeakers(listOf(speaker))
+        }
+        if (dao.responsesForTurns(listOf(turn.id)).singleOrNull() != responseEntity) {
+            dao.upsertResponses(listOf(responseEntity))
+        }
+        replaceContentParts(
+            ownerType = OwnerResponse,
+            ownerId = responseEntity.id,
+            incoming = response.toResponseParts(conversationId, responseEntity.id),
+        )
         finishMutation(conversationId, updatedAt, rebuildDisplayCache)
     }
 
@@ -351,18 +363,15 @@ class RoomConversationLedger(
 
     private fun persistEntries(entries: List<LedgerEntry>) {
         if (entries.isEmpty()) return
+        dao.upsertSpeakers(entries.flatMap(LedgerEntry::speakers).distinctBy(ConversationSpeakerEntity::id))
         dao.upsertTurns(entries.map(LedgerEntry::turn))
-        val responseTurnIdsToClear = entries
-            .filter { it.response == null }
-            .map { it.turn.id }
-            .distinct()
-        if (responseTurnIdsToClear.isNotEmpty()) {
-            dao.deleteResponsesForTurns(responseTurnIdsToClear)
-        }
-        val responses = entries.mapNotNull(LedgerEntry::response)
+        val turnIds = entries.map { it.turn.id }.distinct()
+        val oldResponseIds = dao.responsesForTurns(turnIds).map(AgentResponseEntity::id)
+        if (oldResponseIds.isNotEmpty()) dao.deleteContentParts(OwnerResponse, oldResponseIds)
+        dao.deleteResponsesForTurns(turnIds)
+        val responses = entries.flatMap(LedgerEntry::responses)
         if (responses.isNotEmpty()) dao.upsertResponses(responses)
 
-        val turnIds = entries.map { it.turn.id }.distinct()
         dao.deleteContentParts(OwnerTurn, turnIds)
         val responseIds = responses.map { it.id }.distinct()
         if (responseIds.isNotEmpty()) dao.deleteContentParts(OwnerResponse, responseIds)
@@ -371,15 +380,57 @@ class RoomConversationLedger(
     }
 
     private fun persistEntry(entry: LedgerEntry, clearResponseWhenMissing: Boolean) {
-        dao.upsertTurns(listOf(entry.turn))
-        if (entry.response == null) {
-            if (clearResponseWhenMissing) dao.deleteResponseForTurn(entry.turn.id)
-        } else {
-            dao.upsertResponses(listOf(entry.response))
+        val speakers = entry.speakers.distinctBy(ConversationSpeakerEntity::id)
+        if (speakers.isNotEmpty()) {
+            val currentSpeakers = dao.speakers(speakers.map(ConversationSpeakerEntity::id))
+                .associateBy(ConversationSpeakerEntity::id)
+            val changedSpeakers = speakers.filter { it != currentSpeakers[it.id] }
+            if (changedSpeakers.isNotEmpty()) dao.upsertSpeakers(changedSpeakers)
         }
-        dao.deleteContentParts(OwnerTurn, listOf(entry.turn.id))
-        entry.response?.id?.let { dao.deleteContentParts(OwnerResponse, listOf(it)) }
-        if (entry.parts.isNotEmpty()) dao.upsertContentParts(entry.parts.toStorageChunks())
+        if (dao.turns(listOf(entry.turn.id)).singleOrNull() != entry.turn) {
+            dao.upsertTurns(listOf(entry.turn))
+        }
+        if (entry.responses.isNotEmpty() || clearResponseWhenMissing) {
+            val currentResponses = dao.responsesForTurns(listOf(entry.turn.id))
+            val currentById = currentResponses.associateBy(AgentResponseEntity::id)
+            val incomingIds = entry.responses.mapTo(mutableSetOf(), AgentResponseEntity::id)
+            val obsolete = currentResponses.filter { it.id !in incomingIds }
+            if (obsolete.isNotEmpty()) {
+                dao.deleteContentParts(OwnerResponse, obsolete.map(AgentResponseEntity::id))
+                dao.deleteResponses(obsolete.map(AgentResponseEntity::id))
+            }
+            val changedResponses = entry.responses.filter { it != currentById[it.id] }
+            if (changedResponses.isNotEmpty()) dao.upsertResponses(changedResponses)
+            entry.responses.forEach { response ->
+                replaceContentParts(
+                    ownerType = OwnerResponse,
+                    ownerId = response.id,
+                    incoming = entry.parts.filter { part ->
+                        part.ownerType == OwnerResponse && part.ownerId == response.id
+                    },
+                )
+            }
+        }
+        replaceContentParts(
+            ownerType = OwnerTurn,
+            ownerId = entry.turn.id,
+            incoming = entry.parts.filter { part ->
+                part.ownerType == OwnerTurn && part.ownerId == entry.turn.id
+            },
+        )
+    }
+
+    private fun replaceContentParts(
+        ownerType: String,
+        ownerId: String,
+        incoming: List<AgentContentPartEntity>,
+    ) {
+        val plan = contentPartWritePlan(
+            current = dao.contentParts(ownerType, listOf(ownerId)),
+            incoming = incoming.toStorageChunks(),
+        )
+        if (plan.deletes.isNotEmpty()) dao.deleteContentPartRows(plan.deletes)
+        if (plan.upserts.isNotEmpty()) dao.upsertContentParts(plan.upserts)
     }
 
     private fun finishMutation(
@@ -441,11 +492,13 @@ class RoomConversationLedger(
         if (refs.isEmpty()) return emptyList()
         val turnIds = refs.map(LedgerTurnRef::turnId).distinct()
         val turns = dao.turns(turnIds).associateBy(AgentTurnEntity::id)
-        val responses = dao.responsesForTurns(turnIds).associateBy(AgentResponseEntity::turnId)
+        val responses = dao.responsesForTurns(turnIds)
+            .groupBy(AgentResponseEntity::turnId)
+            .mapValues { (_, rows) -> rows.sortedBy(AgentResponseEntity::responseIndex) }
         val turnParts = dao.contentParts(OwnerTurn, turnIds)
             .mergeStorageChunks()
             .groupBy(AgentContentPartEntity::ownerId)
-        val responseIds = responses.values.map(AgentResponseEntity::id)
+        val responseIds = responses.values.flatten().map(AgentResponseEntity::id)
         val responseParts = if (responseIds.isEmpty()) {
             emptyMap()
         } else {
@@ -453,18 +506,30 @@ class RoomConversationLedger(
                 .mergeStorageChunks()
                 .groupBy(AgentContentPartEntity::ownerId)
         }
+        val speakerIds = buildSet {
+            addAll(turns.values.map(AgentTurnEntity::speakerId))
+            addAll(responses.values.flatten().map(AgentResponseEntity::speakerId))
+        }
+        val speakers = if (speakerIds.isEmpty()) emptyMap() else {
+            dao.speakers(speakerIds.toList()).associateBy(ConversationSpeakerEntity::id)
+        }
         return buildList {
             refs.forEach { ref ->
                 val turn = turns[ref.turnId] ?: return@forEach
-                val response = responses[turn.id]
+                val turnResponses = responses[turn.id].orEmpty()
                 add(
                     PagedConversationTurn(
                         stableTurnId = turn.id,
                         sequence = ref.sequence,
-                        messages = listOfNotNull(
-                            turn.toLedgerMessage(turnParts[turn.id].orEmpty()),
-                            response?.toLedgerMessage(responseParts[response.id].orEmpty()),
-                        ),
+                        messages = buildList {
+                            add(turn.toLedgerMessage(turnParts[turn.id].orEmpty(), speakers[turn.speakerId]))
+                            turnResponses.forEach { response ->
+                                add(response.toLedgerMessage(
+                                    responseParts[response.id].orEmpty(),
+                                    speakers[response.speakerId],
+                                ))
+                            }
+                        },
                     ),
                 )
             }

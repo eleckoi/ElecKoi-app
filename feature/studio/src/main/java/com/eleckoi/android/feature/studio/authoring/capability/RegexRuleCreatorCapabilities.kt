@@ -75,13 +75,14 @@ internal object RegexRuleCreatorCapabilities {
             },
         ) { context, arguments ->
             val rootId = context.resolveCreatorRootId(arguments.creatorString("root_id"))
-            val collection = context.service.loadCreatorRegexRules(context.workspaceId, rootId)
+            val versioned = context.service.loadVersionedCreatorRegexRules(context.workspaceId, rootId)
+            val collection = versioned.collection
             val limit = arguments.creatorInt("limit", 20).coerceIn(1, MaxRegexPageSize)
             val rules = regexPage(collection.scopedRules(), arguments.creatorString("rule_cursor"), limit)
             val versions = regexPage(collection.versions, arguments.creatorString("version_cursor"), limit)
             buildJsonObject {
                 put("rootId", rootId)
-                put("revision", collection.revision())
+                put("revision", versioned.revision.toString())
                 put("activeVersionId", collection.activeVersionId)
                 put("globalRuleCount", collection.globalRules.size)
                 put("promptPresetRuleCount", collection.promptPresetRules.size)
@@ -108,7 +109,8 @@ internal object RegexRuleCreatorCapabilities {
             val query = arguments.creatorString("query").takeIf(String::isNotBlank)
                 ?: throw CreatorAuthoringException("INVALID_ARGUMENTS", "query 不能为空")
             val rootId = context.resolveCreatorRootId(arguments.creatorString("root_id"))
-            val collection = context.service.loadCreatorRegexRules(context.workspaceId, rootId)
+            val versioned = context.service.loadVersionedCreatorRegexRules(context.workspaceId, rootId)
+            val collection = versioned.collection
             val requestedScope = arguments.creatorString("scope").takeIf(String::isNotBlank)?.let(::scopeFromApi)
             val matches = collection.scopedRules().filter { item ->
                 (requestedScope == null || item.scope == requestedScope) &&
@@ -140,7 +142,8 @@ internal object RegexRuleCreatorCapabilities {
             },
         ) { context, arguments ->
             val rootId = context.resolveCreatorRootId(arguments.creatorString("root_id"))
-            val collection = context.service.loadCreatorRegexRules(context.workspaceId, rootId)
+            val versioned = context.service.loadVersionedCreatorRegexRules(context.workspaceId, rootId)
+            val collection = versioned.collection
             val item = collection.scopedRules().firstOrNull { it.rule.id == arguments.creatorString("rule_id") }
                 ?: throw CreatorAuthoringException("RULE_NOT_FOUND", "找不到正则规则")
             val field = arguments.creatorString("content_field").ifBlank { "pattern" }
@@ -153,7 +156,7 @@ internal object RegexRuleCreatorCapabilities {
             val end = (offset + arguments.creatorInt("max_chars", 6000).coerceIn(500, 12000)).coerceAtMost(source.length)
             buildJsonObject {
                 put("rootId", rootId)
-                put("revision", collection.revision())
+                put("revision", versioned.revision.toString())
                 put("rule", item.fullJson(field, source.substring(offset, end)))
                 put("contentOffset", offset)
                 put("contentEnd", end)
@@ -175,7 +178,8 @@ internal object RegexRuleCreatorCapabilities {
             },
         ) { context, arguments ->
             val rootId = context.resolveCreatorRootId(arguments.creatorString("root_id"))
-            val collection = context.service.loadCreatorRegexRules(context.workspaceId, rootId)
+            val versioned = context.service.loadVersionedCreatorRegexRules(context.workspaceId, rootId)
+            val collection = versioned.collection
             val version = collection.versions.firstOrNull { it.id == arguments.creatorString("version_id") }
                 ?: throw CreatorAuthoringException("VERSION_NOT_FOUND", "找不到正则版本")
             val scope = scopeFromApi(arguments.creatorString("scope").ifBlank { "global" })
@@ -191,7 +195,7 @@ internal object RegexRuleCreatorCapabilities {
             )
             buildJsonObject {
                 put("rootId", rootId)
-                put("revision", collection.revision())
+                put("revision", versioned.revision.toString())
                 put("versionId", version.id)
                 put("name", version.name)
                 put("active", version.id == collection.activeVersionId)
@@ -221,8 +225,9 @@ internal object RegexRuleCreatorCapabilities {
         ) { context, arguments ->
             val rootId = context.resolveCreatorRootId(arguments.creatorString("root_id"))
             context.requireCreatorWritableRoot(rootId)
-            val current = context.service.loadCreatorRegexRules(context.workspaceId, rootId)
-            val currentRevision = current.revision()
+            val versioned = context.service.loadVersionedCreatorRegexRules(context.workspaceId, rootId)
+            val current = versioned.collection
+            val currentRevision = versioned.revision.toString()
             val operations = arguments.creatorArray("operations")?.mapIndexed { index, element ->
                 element as? JsonObject
                     ?: throw CreatorAuthoringException("INVALID_ARGUMENTS", "operations[$index] 必须是 object")
@@ -266,18 +271,24 @@ internal object RegexRuleCreatorCapabilities {
             val change = context.regexRuleChanges.get(changeSetId)
                 ?: throw CreatorAuthoringException("CHANGE_SET_NOT_FOUND", "变更集不存在或当前会话已经重建")
             context.requireCreatorWritableRoot(change.rootId)
-            val current = context.service.loadCreatorRegexRules(context.workspaceId, change.rootId)
-            if (current.revision() != change.baseRevision) {
+            val expectedRevision = change.baseRevision.toLongOrNull()
+                ?: throw CreatorAuthoringException("INVALID_CHANGE_SET", "正则变更集 revision 无效")
+            val saved = context.service.saveCreatorRegexRulesIfRevision(
+                context.workspaceId,
+                change.rootId,
+                change.nextCollection,
+                expectedRevision,
+            )
+            if (saved == null) {
                 context.regexRuleChanges.remove(changeSetId)
                 throw CreatorAuthoringException("REVISION_CONFLICT", "正则规则已经变化，旧变更集没有提交")
             }
-            val saved = context.service.saveCreatorRegexRules(context.workspaceId, change.rootId, change.nextCollection)
             context.regexRuleChanges.remove(changeSetId)
             buildJsonObject {
                 put("status", "applied")
                 put("changeSetId", changeSetId)
                 put("rootId", change.rootId)
-                put("revision", saved.revision())
+                put("revision", saved.revision.toString())
                 put("summary", change.summary)
             }
         },

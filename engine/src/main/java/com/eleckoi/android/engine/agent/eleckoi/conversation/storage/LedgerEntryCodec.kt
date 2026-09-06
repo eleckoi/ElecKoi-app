@@ -4,7 +4,8 @@ import com.eleckoi.android.foundation.serialization.ElecKoiJson
 import com.eleckoi.android.foundation.storage.room.agent.entity.AgentContentPartEntity
 import com.eleckoi.android.foundation.storage.room.agent.entity.AgentResponseEntity
 import com.eleckoi.android.foundation.storage.room.agent.entity.AgentTurnEntity
-import java.security.MessageDigest
+import com.eleckoi.android.foundation.storage.room.agent.entity.ConversationSpeakerEntity
+import java.util.Base64
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 
@@ -15,9 +16,13 @@ internal data class LedgerTurnRef(
 
 internal data class LedgerEntry(
     val turn: AgentTurnEntity,
-    val response: AgentResponseEntity?,
+    val speakers: List<ConversationSpeakerEntity>,
+    val responses: List<AgentResponseEntity>,
     val parts: List<AgentContentPartEntity>,
-)
+) {
+    /** Compatibility accessor for the current single-response generation API. */
+    val response: AgentResponseEntity? get() = responses.singleOrNull()
+}
 
 internal fun ledgerEntries(
     conversationId: String,
@@ -28,10 +33,10 @@ internal fun ledgerEntries(
     while (index < messages.size) {
         val message = messages[index]
         val role = message.role.lowercase()
-        val pairedAssistant = if (role == KindUser) {
-            messages.getOrNull(index + 1)?.takeIf { it.role.equals(KindAssistant, ignoreCase = true) }
+        val pairedAssistants = if (role == KindUser) {
+            messages.drop(index + 1).takeWhile { it.role.equals(KindAssistant, ignoreCase = true) }
         } else {
-            null
+            emptyList()
         }
         val kind = when {
             message.id == OpeningMessageId -> KindOpening
@@ -45,9 +50,11 @@ internal fun ledgerEntries(
             kind,
             message.id,
         )
+        val turnSpeaker = message.toSpeakerEntity(conversationId)
         val turn = AgentTurnEntity(
             id = turnId,
             conversationId = conversationId,
+            speakerId = turnSpeaker.id,
             sourceMessageId = message.id,
             kind = kind,
             provider = message.provider,
@@ -82,28 +89,41 @@ internal fun ledgerEntries(
                 ))
             }
         }
-        val response = pairedAssistant?.toResponseEntity(conversationId, turnId)
-        val responseParts = pairedAssistant
-            ?.toResponseParts(conversationId, response!!.id)
-            .orEmpty()
-        add(LedgerEntry(turn, response, turnParts + responseParts))
-        index += if (pairedAssistant == null) 1 else 2
+        val responseSpeakers = pairedAssistants.map { it.toSpeakerEntity(conversationId) }
+        val responses = pairedAssistants.mapIndexed { responseIndex, assistant ->
+            assistant.toResponseEntity(
+                conversationId = conversationId,
+                turnId = turnId,
+                responseIndex = responseIndex,
+                speakerInternalId = responseSpeakers[responseIndex].id,
+            )
+        }
+        val responseParts = pairedAssistants.zip(responses).flatMap { (assistant, response) ->
+            assistant.toResponseParts(conversationId, response.id)
+        }
+        add(LedgerEntry(turn, listOf(turnSpeaker) + responseSpeakers, responses, turnParts + responseParts))
+        index += 1 + pairedAssistants.size
     }
 }
 
 internal fun LedgerMessage.toResponseEntity(
     conversationId: String,
     turnId: String,
+    responseIndex: Int = 0,
+    speakerInternalId: String = toSpeakerEntity(conversationId).id,
 ): AgentResponseEntity {
     val responseId = stableLedgerId(
         "response",
         conversationId,
         turnId,
+        responseIndex.toString(),
     )
     return AgentResponseEntity(
         id = responseId,
         conversationId = conversationId,
         turnId = turnId,
+        responseIndex = responseIndex,
+        speakerId = speakerInternalId,
         sourceMessageId = id,
         status = if (pending) StatusPending else StatusCompleted,
         provider = provider,
@@ -114,6 +134,20 @@ internal fun LedgerMessage.toResponseEntity(
         runtimeTurnId = runtimeTurnId,
         turnStartedAtMillis = turnStartedAtMillis,
         turnCompletedAtMillis = turnCompletedAtMillis,
+    )
+}
+
+internal fun LedgerMessage.toSpeakerEntity(conversationId: String): ConversationSpeakerEntity {
+    val normalizedRole = role.lowercase().ifBlank { KindAssistant }
+    val kind = speakerKind.trim().ifBlank { normalizedRole }
+    val sourceId = speakerId.trim().ifBlank { "role:$kind" }
+    return ConversationSpeakerEntity(
+        id = stableLedgerId("speaker", conversationId, sourceId),
+        conversationId = conversationId,
+        sourceSpeakerId = sourceId,
+        kind = kind,
+        displayName = speakerName.trim(),
+        avatarAssetId = speakerAvatarAssetId.trim(),
     )
 }
 
@@ -199,7 +233,10 @@ internal fun LedgerMessage.toResponseParts(
     }
 }
 
-internal fun AgentTurnEntity.toLedgerMessage(parts: List<AgentContentPartEntity>): LedgerMessage {
+internal fun AgentTurnEntity.toLedgerMessage(
+    parts: List<AgentContentPartEntity>,
+    speaker: ConversationSpeakerEntity? = null,
+): LedgerMessage {
     val text = parts.firstOrNull { it.kind in TextPartKinds }?.text.orEmpty()
     val role = when (kind) {
         KindUser -> KindUser
@@ -215,10 +252,17 @@ internal fun AgentTurnEntity.toLedgerMessage(parts: List<AgentContentPartEntity>
         createdAt = createdAt,
         variableStateJson = variableStateJson,
         inputImageAttachmentsJson = parts.firstOrNull { it.kind == PartInputImages }?.payloadJson ?: "[]",
+        speakerId = speaker?.sourceSpeakerId.orEmpty(),
+        speakerKind = speaker?.kind.orEmpty(),
+        speakerName = speaker?.displayName.orEmpty(),
+        speakerAvatarAssetId = speaker?.avatarAssetId.orEmpty(),
     )
 }
 
-internal fun AgentResponseEntity.toLedgerMessage(parts: List<AgentContentPartEntity>): LedgerMessage =
+internal fun AgentResponseEntity.toLedgerMessage(
+    parts: List<AgentContentPartEntity>,
+    speaker: ConversationSpeakerEntity? = null,
+): LedgerMessage =
     LedgerMessage(
         id = sourceMessageId,
         role = KindAssistant,
@@ -243,6 +287,10 @@ internal fun AgentResponseEntity.toLedgerMessage(parts: List<AgentContentPartEnt
         runtimeTurnId = runtimeTurnId,
         turnStartedAtMillis = turnStartedAtMillis,
         turnCompletedAtMillis = turnCompletedAtMillis,
+        speakerId = speaker?.sourceSpeakerId.orEmpty(),
+        speakerKind = speaker?.kind.orEmpty(),
+        speakerName = speaker?.displayName.orEmpty(),
+        speakerAvatarAssetId = speaker?.avatarAssetId.orEmpty(),
     )
 
 internal fun encodeDisplayCacheChunks(messages: List<LedgerMessage>): List<String> =
@@ -264,6 +312,27 @@ internal fun List<AgentContentPartEntity>.toStorageChunks(): List<AgentContentPa
             )
         }
     }
+
+internal data class ContentPartWritePlan(
+    val upserts: List<AgentContentPartEntity>,
+    val deletes: List<AgentContentPartEntity>,
+)
+
+/**
+ * Plans a row-level replacement. A growing response normally rewrites only its last partial chunk
+ * and appends a new row when that chunk becomes full.
+ */
+internal fun contentPartWritePlan(
+    current: List<AgentContentPartEntity>,
+    incoming: List<AgentContentPartEntity>,
+): ContentPartWritePlan {
+    val currentByKey = current.associateBy(AgentContentPartEntity::storageKey)
+    val incomingByKey = incoming.associateBy(AgentContentPartEntity::storageKey)
+    return ContentPartWritePlan(
+        upserts = incoming.filter { row -> currentByKey[row.storageKey()] != row },
+        deletes = current.filter { row -> row.storageKey() !in incomingByKey },
+    )
+}
 
 internal fun List<AgentContentPartEntity>.mergeStorageChunks(): List<AgentContentPartEntity> =
     groupBy { part ->
@@ -307,16 +376,29 @@ private data class ContentPartKey(
     val partIndex: Int,
 )
 
+private data class ContentPartStorageKey(
+    val ownerType: String,
+    val ownerId: String,
+    val partIndex: Int,
+    val chunkIndex: Int,
+)
+
+private fun AgentContentPartEntity.storageKey() = ContentPartStorageKey(
+    ownerType = ownerType,
+    ownerId = ownerId,
+    partIndex = partIndex,
+    chunkIndex = chunkIndex,
+)
+
 internal fun stableLedgerId(prefix: String, vararg values: String): String {
-    val digest = MessageDigest.getInstance("SHA-256")
-    values.forEach { value ->
-        digest.update(value.toByteArray(Charsets.UTF_8))
-        digest.update(0)
+    val encoder = Base64.getUrlEncoder().withoutPadding()
+    return buildString {
+        append(prefix)
+        values.forEach { value ->
+            append('.')
+            append(encoder.encodeToString(value.toByteArray(Charsets.UTF_8)))
+        }
     }
-    val suffix = digest.digest().take(16).joinToString("") { byte ->
-        (byte.toInt() and 0xff).toString(16).padStart(2, '0')
-    }
-    return "$prefix-$suffix"
 }
 
 internal const val OpeningMessageId = "opening"

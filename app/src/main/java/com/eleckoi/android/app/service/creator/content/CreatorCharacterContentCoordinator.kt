@@ -1,11 +1,13 @@
 package com.eleckoi.android.app.service
 
 import com.eleckoi.android.engine.story.variables.config.VariableConfigRepository
+import com.eleckoi.android.engine.story.variables.config.VersionedVariableConfig
 import com.eleckoi.android.engine.story.variables.model.VariableConfig
 import com.eleckoi.android.engine.story.variables.runtime.VariableRuntimeCheckResult
 import com.eleckoi.android.engine.story.variables.runtime.VariableRuntimeService
 import com.eleckoi.android.engine.workspace.model.CreatorWorkspaceRootAccess
 import com.eleckoi.android.feature.characters.modes.story.regex.data.RegexRuleRepository
+import com.eleckoi.android.feature.characters.modes.story.regex.data.VersionedRegexRuleCollection
 import com.eleckoi.android.feature.characters.modes.story.regex.model.RegexRuleCollection
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.data.SettingLibraryRepository
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibrary
@@ -119,6 +121,14 @@ internal class CreatorCharacterContentCoordinator(
         variableConfig.load(character.id)
     }
 
+    suspend fun loadVersionedCreatorVariableConfig(
+        workspaceId: String,
+        rootId: String,
+    ): VersionedVariableConfig = withContext(Dispatchers.IO) {
+        val (_, character) = rootResolver.requireRoot(workspaceId, rootId)
+        variableConfig.loadVersioned(character.id)
+    }
+
     suspend fun saveCreatorVariableConfig(
         workspaceId: String,
         rootId: String,
@@ -127,6 +137,21 @@ internal class CreatorCharacterContentCoordinator(
         val (root, character) = rootResolver.requireRoot(workspaceId, rootId)
         require(root.access == CreatorWorkspaceRootAccess.ReadWrite) { "这个角色根当前是只读的" }
         variableConfig.save(character.id, config.copy(characterId = character.id))
+    }
+
+    suspend fun saveCreatorVariableConfigIfRevision(
+        workspaceId: String,
+        rootId: String,
+        config: VariableConfig,
+        expectedRevision: Long,
+    ): VersionedVariableConfig? = withContext(Dispatchers.IO) {
+        val (root, character) = rootResolver.requireRoot(workspaceId, rootId)
+        require(root.access == CreatorWorkspaceRootAccess.ReadWrite) { "这个角色根当前是只读的" }
+        variableConfig.saveIfRevision(
+            character.id,
+            config.copy(characterId = character.id),
+            expectedRevision,
+        )
     }
 
     suspend fun validateCreatorVariableSchema(
@@ -150,6 +175,14 @@ internal class CreatorCharacterContentCoordinator(
         regexRules.load(character.id)
     }
 
+    suspend fun loadVersionedCreatorRegexRules(
+        workspaceId: String,
+        rootId: String,
+    ): VersionedRegexRuleCollection = withContext(Dispatchers.IO) {
+        val (_, character) = rootResolver.requireRoot(workspaceId, rootId)
+        regexRules.loadVersioned(character.id)
+    }
+
     suspend fun saveCreatorRegexRules(
         workspaceId: String,
         rootId: String,
@@ -158,6 +191,17 @@ internal class CreatorCharacterContentCoordinator(
         val (root, character) = rootResolver.requireRoot(workspaceId, rootId)
         require(root.access == CreatorWorkspaceRootAccess.ReadWrite) { "这个角色根当前是只读的" }
         regexRules.save(character.id, collection)
+    }
+
+    suspend fun saveCreatorRegexRulesIfRevision(
+        workspaceId: String,
+        rootId: String,
+        collection: RegexRuleCollection,
+        expectedRevision: Long,
+    ): VersionedRegexRuleCollection? = withContext(Dispatchers.IO) {
+        val (root, character) = rootResolver.requireRoot(workspaceId, rootId)
+        require(root.access == CreatorWorkspaceRootAccess.ReadWrite) { "这个角色根当前是只读的" }
+        regexRules.saveIfRevision(character.id, collection, expectedRevision)
     }
 
 }

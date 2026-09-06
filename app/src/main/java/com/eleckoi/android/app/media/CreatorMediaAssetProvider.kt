@@ -6,6 +6,7 @@ import android.database.Cursor
 import android.net.Uri
 import android.os.ParcelFileDescriptor
 import com.eleckoi.android.engine.workspace.storage.CreatorWorkspaceRepository
+import com.eleckoi.android.foundation.storage.room.ElecKoiDatabase
 import java.io.FileNotFoundException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -13,7 +14,11 @@ import kotlinx.coroutines.runBlocking
 /** Read-only, app-private bridge used by Coil to render creator assets in the assistant timeline. */
 class CreatorMediaAssetProvider : ContentProvider() {
     private val repository: CreatorWorkspaceRepository by lazy {
-        CreatorWorkspaceRepository(requireNotNull(context).applicationContext)
+        val appContext = requireNotNull(context).applicationContext
+        CreatorWorkspaceRepository(
+            appContext,
+            ElecKoiDatabase.get(appContext),
+        )
     }
 
     override fun onCreate(): Boolean = true

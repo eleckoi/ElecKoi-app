@@ -44,10 +44,49 @@ internal class CreatorAssistantBackupStore(
         )
     }
 
+    suspend fun targets(): List<CreatorAssistantBackupTarget> = workspaces.list().flatMap { workspace ->
+        workspace.conversations.map { conversation ->
+            CreatorAssistantBackupTarget(workspace.id, conversation.id)
+        }
+    }
+
+    fun exportConversationJson(target: CreatorAssistantBackupTarget): String =
+        ElecKoiPrettyJson.encodeToString(
+            CreatorAssistantBackupDocument(
+                conversations = listOf(
+                    CreatorAssistantConversationBackup(
+                        workspaceId = target.workspaceId,
+                        conversationId = target.conversationId,
+                        messages = ledger.messages(target.conversationId),
+                    ),
+                ),
+            ),
+        )
+
+    fun restoreConversationJson(json: String, restoredWorkspaces: List<CreatorWorkspace>): Int {
+        val document = decodeDocument(json)
+        require(document.conversations.size == 1) { "创作助手分块必须只包含一场对话" }
+        val backup = document.conversations.single()
+        val expected = restoredWorkspaces
+            .firstOrNull { it.id == backup.workspaceId }
+            ?.conversations
+            ?.firstOrNull { it.id == backup.conversationId }
+            ?: error("创作助手分块找不到对应对话")
+        ledger.restore(
+            listOf(
+                CreatorAssistantLedgerRestore(
+                    conversationId = expected.id,
+                    createdAt = expected.createdAt,
+                    updatedAt = expected.updatedAt,
+                    messages = backup.messages,
+                ),
+            ),
+        )
+        return 1
+    }
+
     suspend fun restoreJson(json: String, restoredWorkspaces: List<CreatorWorkspace>): Int {
-        val document = ElecKoiJson.decodeFromString<CreatorAssistantBackupDocument>(json)
-        require(document.format == Format) { "创作助手备份格式不正确" }
-        require(document.version == Version) { "不支持的创作助手备份版本" }
+        val document = decodeDocument(json)
 
         val expected = restoredWorkspaces.flatMap { workspace ->
             workspace.conversations.map { conversation ->
@@ -77,6 +116,12 @@ internal class CreatorAssistantBackupStore(
         return entries.size
     }
 
+    private fun decodeDocument(json: String): CreatorAssistantBackupDocument =
+        ElecKoiJson.decodeFromString<CreatorAssistantBackupDocument>(json).also { document ->
+            require(document.format == Format) { "创作助手备份格式不正确" }
+            require(document.version == Version) { "不支持的创作助手备份版本" }
+        }
+
     private data class ConversationKey(val workspaceId: String, val conversationId: String)
 
     private companion object {
@@ -84,6 +129,11 @@ internal class CreatorAssistantBackupStore(
         const val Version = 1
     }
 }
+
+internal data class CreatorAssistantBackupTarget(
+    val workspaceId: String,
+    val conversationId: String,
+)
 
 internal interface CreatorAssistantBackupLedger {
     fun messages(conversationId: String): List<LedgerMessage>

@@ -150,8 +150,9 @@ class ModelConfigRepository internal constructor(
 
     fun saveModelConfig(config: ModelConfig): ModelConfig {
         val normalized = normalizeConfig(config)
+        val entity = normalized.toEntity(secretCodec)
         database.runInTransaction {
-            dao.upsertConfig(normalized.toEntity(secretCodec))
+            if (dao.config(normalized.id) != entity) dao.upsertConfig(entity)
             if (normalized.isImageGenerationConfig()) {
                 if (normalized.enabled) {
                     ImageGenerationProvider.entries.forEach { imageProvider ->
@@ -159,7 +160,8 @@ class ModelConfigRepository internal constructor(
                     }
                 }
             } else {
-                dao.upsertMeta(ModelConfigMetaEntity(activeConfigId = normalized.id))
+                val meta = ModelConfigMetaEntity(activeConfigId = normalized.id)
+                if (dao.meta() != meta) dao.upsertMeta(meta)
             }
         }
         return normalized
@@ -172,7 +174,8 @@ class ModelConfigRepository internal constructor(
         val activeId = activeConfigIdAfterDelete(collection, target)
         database.runInTransaction {
             dao.deleteConfig(configId)
-            dao.upsertMeta(ModelConfigMetaEntity(activeConfigId = activeId))
+            val meta = ModelConfigMetaEntity(activeConfigId = activeId)
+            if (dao.meta() != meta) dao.upsertMeta(meta)
         }
         return loadModelConfigCollection()
     }

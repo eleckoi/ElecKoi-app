@@ -313,6 +313,8 @@ internal class SettingLibraryEditorState(library: SettingLibrary?) {
             expandedGroupIds = expandedGroupIds + normalizedGroupId
         }
         update(entries + next)
+        selectedTreeNodeId = fileNodeId(id)
+        editorEntryId = id
     }
 
     fun addEjsReference(targetGroupId: String = selectedFolderIdFromNodeId(selectedTreeNodeId, entries)) {

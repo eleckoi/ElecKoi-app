@@ -1,7 +1,6 @@
 package com.eleckoi.android.foundation.storage.room
 
 import androidx.room.Dao
-import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Upsert
@@ -28,7 +27,8 @@ interface StoryPresetDao {
             preset.authorAvatarPath,
             preset.authorTagsJson,
             preset.description,
-            preset.timelineJson,
+            COALESCE((SELECT content.content FROM story_preset_contents AS content
+                WHERE content.presetId = preset.id AND content.kind = 'timeline' LIMIT 1), '[]') AS timelineJson,
             COALESCE((
                 SELECT version.versionNumber
                 FROM story_preset_versions AS version
@@ -76,10 +76,10 @@ interface StoryPresetDao {
 
     @Query(
         """
-        SELECT preset.regexRulesJson
-        FROM story_presets AS preset
+        SELECT content.content
+        FROM story_preset_contents AS content
         INNER JOIN story_preset_state AS state ON state.singletonId = 0
-        WHERE preset.id = state.activePresetId
+        WHERE content.presetId = state.activePresetId AND content.kind = 'regex_rules'
         LIMIT 1
         """,
     )
@@ -90,6 +90,12 @@ interface StoryPresetDao {
 
     @Query("SELECT COALESCE(MAX(sortIndex), -1) + 1 FROM story_presets")
     suspend fun nextSortIndex(): Int
+
+    @Query("SELECT sortIndex FROM story_presets WHERE id = :presetId LIMIT 1")
+    suspend fun presetSortIndex(presetId: String): Int?
+
+    @Query("SELECT activeVersionId FROM story_presets WHERE id = :presetId LIMIT 1")
+    suspend fun presetActiveVersionId(presetId: String): String?
 
     @Query("SELECT name FROM story_presets")
     suspend fun presetNames(): List<String>
@@ -126,24 +132,51 @@ interface StoryPresetDao {
 
     @Transaction
     suspend fun replace(record: StoryPresetRecord) {
-        upsertPreset(record.preset)
-        deleteEntryRows(record.preset.id)
-        deleteGroupRows(record.preset.id)
-        deleteRuntimeEntryRows(record.preset.id)
-        insertEntryRows(record.entries)
-        insertGroupRows(record.groups)
-        insertRuntimeEntryRows(record.runtimeEntries)
+        replaceKnown(record, preset(record.preset.id))
+    }
+
+    @Transaction
+    suspend fun replaceKnown(record: StoryPresetRecord, current: StoryPresetRecord?) {
+        val plan = storyPresetWritePlan(current, record)
+        plan.preset?.let { upsertPreset(it) }
+        plan.deleteContentKinds.forEachPresetDeleteBatch { deletePresetContents(record.preset.id, it) }
+        plan.deleteEntryIds.forEachPresetDeleteBatch { deleteEntryRows(record.preset.id, it) }
+        plan.deleteGroupIds.forEachPresetDeleteBatch { deleteGroupRows(record.preset.id, it) }
+        plan.deleteRuntimeSlots.forEachPresetDeleteBatch { deleteRuntimeEntryRows(record.preset.id, it) }
+        if (plan.upsertEntries.isNotEmpty()) upsertEntryRows(plan.upsertEntries)
+        if (plan.upsertContents.isNotEmpty()) upsertPresetContents(plan.upsertContents)
+        if (plan.upsertGroups.isNotEmpty()) upsertGroupRows(plan.upsertGroups)
+        if (plan.upsertRuntimeEntries.isNotEmpty()) upsertRuntimeEntryRows(plan.upsertRuntimeEntries)
     }
 
     @Transaction
     suspend fun replaceVersion(record: StoryPresetVersionRecord) {
-        upsertVersion(record.version)
-        deleteVersionEntryRows(record.version.presetId, record.version.versionId)
-        deleteVersionGroupRows(record.version.presetId, record.version.versionId)
-        deleteVersionRuntimeEntryRows(record.version.presetId, record.version.versionId)
-        insertVersionEntryRows(record.entries)
-        insertVersionGroupRows(record.groups)
-        insertVersionRuntimeEntryRows(record.runtimeEntries)
+        replaceVersionKnown(record, version(record.version.presetId, record.version.versionId))
+    }
+
+    @Transaction
+    suspend fun replaceVersionKnown(
+        record: StoryPresetVersionRecord,
+        current: StoryPresetVersionRecord?,
+    ) {
+        val plan = storyPresetVersionWritePlan(current, record)
+        plan.version?.let { upsertVersion(it) }
+        plan.deleteContentKinds.forEachPresetDeleteBatch {
+            deleteVersionContents(record.version.presetId, record.version.versionId, it)
+        }
+        plan.deleteEntryIds.forEachPresetDeleteBatch {
+            deleteVersionEntryRows(record.version.presetId, record.version.versionId, it)
+        }
+        plan.deleteGroupIds.forEachPresetDeleteBatch {
+            deleteVersionGroupRows(record.version.presetId, record.version.versionId, it)
+        }
+        plan.deleteRuntimeSlots.forEachPresetDeleteBatch {
+            deleteVersionRuntimeEntryRows(record.version.presetId, record.version.versionId, it)
+        }
+        if (plan.upsertEntries.isNotEmpty()) upsertVersionEntryRows(plan.upsertEntries)
+        if (plan.upsertContents.isNotEmpty()) upsertVersionContents(plan.upsertContents)
+        if (plan.upsertGroups.isNotEmpty()) upsertVersionGroupRows(plan.upsertGroups)
+        if (plan.upsertRuntimeEntries.isNotEmpty()) upsertVersionRuntimeEntryRows(plan.upsertRuntimeEntries)
     }
 
     @Upsert
@@ -153,46 +186,58 @@ interface StoryPresetDao {
     suspend fun upsertPreset(preset: StoryPresetEntity)
 
     @Upsert
+    suspend fun upsertPresetContents(contents: List<StoryPresetContentEntity>)
+
+    @Upsert
     suspend fun upsertLibraryGroup(group: StoryPresetLibraryGroupEntity)
 
     @Upsert
     suspend fun upsertVersion(version: StoryPresetVersionEntity)
 
-    @Insert
-    suspend fun insertEntryRows(entries: List<StoryPresetEntryEntity>)
+    @Upsert
+    suspend fun upsertVersionContents(contents: List<StoryPresetVersionContentEntity>)
 
-    @Insert
-    suspend fun insertGroupRows(groups: List<StoryPresetGroupEntity>)
+    @Upsert
+    suspend fun upsertEntryRows(entries: List<StoryPresetEntryEntity>)
 
-    @Insert
-    suspend fun insertRuntimeEntryRows(entries: List<StoryPresetRuntimeEntryEntity>)
+    @Upsert
+    suspend fun upsertGroupRows(groups: List<StoryPresetGroupEntity>)
 
-    @Insert
-    suspend fun insertVersionEntryRows(entries: List<StoryPresetVersionEntryEntity>)
+    @Upsert
+    suspend fun upsertRuntimeEntryRows(entries: List<StoryPresetRuntimeEntryEntity>)
 
-    @Insert
-    suspend fun insertVersionGroupRows(groups: List<StoryPresetVersionGroupEntity>)
+    @Upsert
+    suspend fun upsertVersionEntryRows(entries: List<StoryPresetVersionEntryEntity>)
 
-    @Insert
-    suspend fun insertVersionRuntimeEntryRows(entries: List<StoryPresetVersionRuntimeEntryEntity>)
+    @Upsert
+    suspend fun upsertVersionGroupRows(groups: List<StoryPresetVersionGroupEntity>)
 
-    @Query("DELETE FROM story_preset_entries WHERE presetId = :presetId")
-    suspend fun deleteEntryRows(presetId: String)
+    @Upsert
+    suspend fun upsertVersionRuntimeEntryRows(entries: List<StoryPresetVersionRuntimeEntryEntity>)
 
-    @Query("DELETE FROM story_preset_groups WHERE presetId = :presetId")
-    suspend fun deleteGroupRows(presetId: String)
+    @Query("DELETE FROM story_preset_entries WHERE presetId = :presetId AND entryId IN (:entryIds)")
+    suspend fun deleteEntryRows(presetId: String, entryIds: List<String>)
 
-    @Query("DELETE FROM story_preset_runtime_entries WHERE presetId = :presetId")
-    suspend fun deleteRuntimeEntryRows(presetId: String)
+    @Query("DELETE FROM story_preset_groups WHERE presetId = :presetId AND groupId IN (:groupIds)")
+    suspend fun deleteGroupRows(presetId: String, groupIds: List<String>)
 
-    @Query("DELETE FROM story_preset_version_entries WHERE presetId = :presetId AND versionId = :versionId")
-    suspend fun deleteVersionEntryRows(presetId: String, versionId: String)
+    @Query("DELETE FROM story_preset_runtime_entries WHERE presetId = :presetId AND slot IN (:slots)")
+    suspend fun deleteRuntimeEntryRows(presetId: String, slots: List<String>)
 
-    @Query("DELETE FROM story_preset_version_groups WHERE presetId = :presetId AND versionId = :versionId")
-    suspend fun deleteVersionGroupRows(presetId: String, versionId: String)
+    @Query("DELETE FROM story_preset_contents WHERE presetId = :presetId AND kind IN (:kinds)")
+    suspend fun deletePresetContents(presetId: String, kinds: List<String>)
 
-    @Query("DELETE FROM story_preset_version_runtime_entries WHERE presetId = :presetId AND versionId = :versionId")
-    suspend fun deleteVersionRuntimeEntryRows(presetId: String, versionId: String)
+    @Query("DELETE FROM story_preset_version_entries WHERE presetId = :presetId AND versionId = :versionId AND entryId IN (:entryIds)")
+    suspend fun deleteVersionEntryRows(presetId: String, versionId: String, entryIds: List<String>)
+
+    @Query("DELETE FROM story_preset_version_groups WHERE presetId = :presetId AND versionId = :versionId AND groupId IN (:groupIds)")
+    suspend fun deleteVersionGroupRows(presetId: String, versionId: String, groupIds: List<String>)
+
+    @Query("DELETE FROM story_preset_version_runtime_entries WHERE presetId = :presetId AND versionId = :versionId AND slot IN (:slots)")
+    suspend fun deleteVersionRuntimeEntryRows(presetId: String, versionId: String, slots: List<String>)
+
+    @Query("DELETE FROM story_preset_version_contents WHERE presetId = :presetId AND versionId = :versionId AND kind IN (:kinds)")
+    suspend fun deleteVersionContents(presetId: String, versionId: String, kinds: List<String>)
 
     @Query("DELETE FROM story_preset_versions WHERE presetId = :presetId AND versionId = :versionId")
     suspend fun deleteVersion(presetId: String, versionId: String)
@@ -208,18 +253,28 @@ interface StoryPresetDao {
         UPDATE story_presets
         SET authorName = :authorName,
             authorTagsJson = :authorTagsJson,
-            description = :description,
-            timelineJson = :timelineJson
+            description = :description
         WHERE id = :presetId
         """,
     )
+    suspend fun updatePresetProfileRow(
+        presetId: String,
+        authorName: String,
+        authorTagsJson: String,
+        description: String,
+    )
+
+    @Transaction
     suspend fun updatePresetProfile(
         presetId: String,
         authorName: String,
         authorTagsJson: String,
         description: String,
         timelineJson: String,
-    )
+    ) {
+        updatePresetProfileRow(presetId, authorName, authorTagsJson, description)
+        upsertPresetContents(listOf(StoryPresetContentEntity(presetId, "timeline", timelineJson)))
+    }
 
     @Query("UPDATE story_presets SET authorAvatarPath = :path WHERE id = :presetId")
     suspend fun updatePresetAuthorAvatar(presetId: String, path: String)
@@ -257,18 +312,20 @@ interface StoryPresetDao {
 
     @Query(
         """
-        UPDATE story_presets
-        SET regexRulesJson = :regexRulesJson
-        WHERE id = (SELECT activePresetId FROM story_preset_state WHERE singletonId = 0 LIMIT 1)
+        UPDATE story_preset_contents
+        SET content = :regexRulesJson
+        WHERE kind = 'regex_rules'
+          AND presetId = (SELECT activePresetId FROM story_preset_state WHERE singletonId = 0 LIMIT 1)
         """,
     )
     fun updateActivePresetRegexRules(regexRulesJson: String)
 
     @Query(
         """
-        UPDATE story_preset_versions
-        SET regexRulesJson = :regexRulesJson
-        WHERE presetId = (SELECT activePresetId FROM story_preset_state WHERE singletonId = 0 LIMIT 1)
+        UPDATE story_preset_version_contents
+        SET content = :regexRulesJson
+        WHERE kind = 'regex_rules'
+          AND presetId = (SELECT activePresetId FROM story_preset_state WHERE singletonId = 0 LIMIT 1)
           AND versionId = (
               SELECT activeVersionId
               FROM story_presets
@@ -288,4 +345,12 @@ interface StoryPresetDao {
     @Query("DELETE FROM story_presets WHERE id = :presetId")
     suspend fun deletePreset(presetId: String)
 
+}
+
+private const val STORY_PRESET_DELETE_BATCH_SIZE = 900
+
+private suspend inline fun List<String>.forEachPresetDeleteBatch(
+    crossinline delete: suspend (List<String>) -> Unit,
+) {
+    chunked(STORY_PRESET_DELETE_BATCH_SIZE).forEach { delete(it) }
 }

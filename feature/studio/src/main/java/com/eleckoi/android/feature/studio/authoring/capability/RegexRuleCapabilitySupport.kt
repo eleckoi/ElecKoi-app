@@ -16,7 +16,6 @@ import com.eleckoi.android.feature.studio.authoring.creatorObjectSchema
 import com.eleckoi.android.feature.studio.authoring.creatorRawString
 import com.eleckoi.android.feature.studio.authoring.creatorString
 import com.eleckoi.android.feature.studio.authoring.creatorStringSchema
-import java.security.MessageDigest
 import java.util.UUID
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -322,9 +321,6 @@ internal fun RegexRuleScope.toApi(): String = when (this) {
     RegexRuleScope.PromptPreset -> "prompt_preset"
     RegexRuleScope.Character -> "character"
 }
-
-internal fun RegexRuleCollection.revision(): String = MessageDigest.getInstance("SHA-256")
-    .digest(toString().toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }.take(24)
 
 private fun JsonObject.requiredId(index: Int): String = creatorString("id").ifBlank { invalid(index, "id 不能为空") }
 private fun JsonObject.stringPatch(name: String, old: String): String = if (name in this) creatorString(name) else old

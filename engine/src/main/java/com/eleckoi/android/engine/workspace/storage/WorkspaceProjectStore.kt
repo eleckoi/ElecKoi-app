@@ -32,7 +32,7 @@ internal class WorkspaceProjectStore(
         workspace: CreatorWorkspace,
         path: String,
         content: String,
-    ): WorkspaceProjectState {
+    ): WorkspaceProjectState? {
         val projectDirectory = paths.projectDirectory(workspace)
         val target = paths.resolveProjectPath(projectDirectory, path)
         val bytes = content.toByteArray(Charsets.UTF_8)
@@ -41,6 +41,14 @@ internal class WorkspaceProjectStore(
         }
         require(!target.exists() || target.isFile) { "目标路径不是文件：$path" }
         paths.ensureNoSymbolicLinks(projectDirectory, target)
+
+        if (
+            target.isFile &&
+            target.length() == bytes.size.toLong() &&
+            target.readBytes().contentEquals(bytes)
+        ) {
+            return null
+        }
 
         val before = inspect(projectDirectory)
         val existingSize = target.takeIf(File::isFile)?.length() ?: 0L
@@ -59,11 +67,12 @@ internal class WorkspaceProjectStore(
         return inspect(projectDirectory)
     }
 
-    fun ensureDirectory(workspace: CreatorWorkspace, path: String): WorkspaceProjectState {
+    fun ensureDirectory(workspace: CreatorWorkspace, path: String): WorkspaceProjectState? {
         val projectDirectory = paths.projectDirectory(workspace)
         val target = paths.resolveProjectPath(projectDirectory, path)
         require(!target.exists() || paths.isDirectoryNoFollow(target)) { "目标路径不是文件夹：$path" }
         paths.ensureNoSymbolicLinks(projectDirectory, target)
+        if (paths.isDirectoryNoFollow(target)) return null
         val before = inspect(projectDirectory)
         val newEntries = paths.countMissingPathEntries(projectDirectory, target)
         require(before.entryCount + newEntries <= MaxFilesystemEntries) {
@@ -177,6 +186,13 @@ internal class WorkspaceProjectStore(
         require(bytes.size.toLong() <= MaxSingleFileBytes) { "工作区内部状态文件过大" }
         require(!target.exists() || target.isFile) { "工作区内部状态目标不是文件" }
         require(!Files.isSymbolicLink(target.toPath())) { "不允许写入符号链接" }
+        if (
+            target.isFile &&
+            target.length() == bytes.size.toLong() &&
+            target.readBytes().contentEquals(bytes)
+        ) {
+            return
+        }
         atomicFiles.writeBytes(target, bytes)
     }
 

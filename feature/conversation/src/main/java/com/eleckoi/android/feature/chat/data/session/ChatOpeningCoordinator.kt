@@ -1,5 +1,6 @@
 package com.eleckoi.android.feature.chat.data.session
 
+import com.eleckoi.android.feature.chat.data.ChatVariableStateCurrent
 import com.eleckoi.android.feature.chat.model.ChatMessage
 import com.eleckoi.android.feature.chat.model.ChatSession
 import com.eleckoi.android.feature.chat.model.MessageRole
@@ -15,9 +16,10 @@ internal class ChatOpeningCoordinator(
         room.databaseTransaction {
             room.dao.sessionsForCharacter(session.characterId)
                 .filter {
-                    it.characterMode == session.characterMode && it.historyUserMessageCount == 0
+                    it.session.characterMode == session.characterMode &&
+                        it.session.historyUserMessageCount == 0
                 }
-                .forEach { room.ledger.deleteConversationInTransaction(it.id) }
+                .forEach { room.ledger.deleteConversationInTransaction(it.session.id) }
             room.dao.deleteUnstartedSessions(session.characterId, session.characterMode)
             room.writeInTransaction(session)
         }
@@ -31,15 +33,18 @@ internal class ChatOpeningCoordinator(
         room.databaseTransaction {
             room.dao.sessionsForCharacter(characterId)
                 .filter {
-                    it.characterMode == characterMode && it.historyUserMessageCount == 0
+                    it.session.characterMode == characterMode &&
+                        it.session.historyUserMessageCount == 0
                 }
                 .forEach { entity ->
                     val current = room.sessionFromEntity(entity, includeAllMessages = true)
                     val messages = ChatOpeningMessagePolicy.replace(
                         messages = current.messages,
                         content = content,
-                        createdAt = entity.createdAt,
-                        initialVariableStateJson = entity.variableStateJson,
+                        createdAt = entity.session.createdAt,
+                        initialVariableStateJson = entity.variableStates
+                            .firstOrNull { it.kind == ChatVariableStateCurrent }
+                            ?.stateJson.orEmpty(),
                         updateExistingVariableState = false,
                     )
                     room.writeInTransaction(current.copy(messages = messages))
@@ -55,14 +60,14 @@ internal class ChatOpeningCoordinator(
         lateinit var updated: ChatSession
         room.databaseTransaction {
             val entity = room.requireSession(sessionId)
-            if (entity.historyUserMessageCount > 0) {
+            if (entity.session.historyUserMessageCount > 0) {
                 throw ElecKoiDataException("已经开始对话，不能再更换开场白")
             }
             val current = room.sessionFromEntity(entity, includeAllMessages = true)
             val messages = ChatOpeningMessagePolicy.replace(
                 messages = current.messages,
                 content = content,
-                createdAt = entity.createdAt,
+                createdAt = entity.session.createdAt,
                 initialVariableStateJson = initialVariableStateJson,
                 updateExistingVariableState = true,
             )
@@ -78,7 +83,7 @@ internal class ChatOpeningCoordinator(
     }
 
     fun hasUserMessages(sessionId: String): Boolean {
-        return room.requireSession(sessionId).historyUserMessageCount > 0
+        return room.requireSession(sessionId).session.historyUserMessageCount > 0
     }
 }
 

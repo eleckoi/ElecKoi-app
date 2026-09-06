@@ -40,6 +40,8 @@ class ChatViewModel(
     private val chatService: ChatService,
     private val frontendProjectService: FrontendProjectService,
     initialAppearance: AppearanceTheme = AppearanceTheme(),
+    private val isSettingLibraryToolEnabled: (characterId: String) -> Boolean = { true },
+    private val enableSettingLibraryTool: suspend (characterId: String) -> Unit = {},
 ) : ViewModel(), AuthorChatGateway {
     private val _uiState = MutableStateFlow(
         ChatUiState(
@@ -138,6 +140,7 @@ class ChatViewModel(
         updateState = { transform -> _uiState.update(transform) },
         showModeConflictIfNeeded = ::showModeConflictIfNeeded,
         onStopRequested = authorEventPublisher::markStopRequested,
+        onGenerationCompleted = ::inspectRequiredTools,
     )
     private val authorGateway = ChatAuthorGatewayAdapter(
         state = { _uiState.value },
@@ -268,6 +271,9 @@ class ChatViewModel(
             is ChatIntent.SetHistoryOpen -> _uiState.update { it.copy(historyOpen = intent.open) }
             is ChatIntent.SetModelPickerOpen -> _uiState.update { it.copy(modelPickerOpen = intent.open) }
             ChatIntent.DismissError -> _uiState.update { it.copy(errorMessage = "") }
+            ChatIntent.DismissRequiredToolPrompt ->
+                _uiState.update { it.copy(requiredToolPrompt = null) }
+            ChatIntent.EnableRequiredSettingLibraryTool -> enableRequiredSettingLibraryTool()
             ChatIntent.DismissChatBackgroundError ->
                 _uiState.update { it.copy(chatBackgroundErrorMessage = "") }
             ChatIntent.DismissModeConflict -> _uiState.update { it.copy(modeConflict = null) }
@@ -338,6 +344,56 @@ class ChatViewModel(
             it.copy(modeConflict = conflict)
         }
         return true
+    }
+
+    private fun inspectRequiredTools(draft: ChatDraft, assistantMessageId: String?) {
+        val prompt = requiredSettingLibraryToolPrompt(
+            draft = draft,
+            assistantMessageId = assistantMessageId,
+            settingLibraryToolEnabled = isSettingLibraryToolEnabled(draft.session.characterId),
+        ) ?: return
+        _uiState.update { current ->
+            if (current.draft?.session?.id == draft.session.id) {
+                current.copy(requiredToolPrompt = prompt)
+            } else {
+                current
+            }
+        }
+    }
+
+    private fun enableRequiredSettingLibraryTool() {
+        val prompt = _uiState.value.requiredToolPrompt?.takeIf { !it.enabling } ?: return
+        _uiState.update { current ->
+            if (current.requiredToolPrompt?.assistantMessageId == prompt.assistantMessageId) {
+                current.copy(requiredToolPrompt = prompt.copy(enabling = true))
+            } else {
+                current
+            }
+        }
+        viewModelScope.launch {
+            runCatching { enableSettingLibraryTool(prompt.characterId) }
+                .onSuccess {
+                    _uiState.update { current ->
+                        if (current.requiredToolPrompt?.assistantMessageId == prompt.assistantMessageId) {
+                            current.copy(requiredToolPrompt = null)
+                        } else {
+                            current
+                        }
+                    }
+                }
+                .onFailure { error ->
+                    _uiState.update { current ->
+                        if (current.requiredToolPrompt?.assistantMessageId == prompt.assistantMessageId) {
+                            current.copy(
+                                requiredToolPrompt = null,
+                                errorMessage = error.message ?: "开启角色设定库工具失败",
+                            )
+                        } else {
+                            current
+                        }
+                    }
+                }
+        }
     }
 
     private fun openCurrentModeChat() {
@@ -454,12 +510,20 @@ class ChatViewModel(
             chatService: ChatService,
             frontendProjectService: FrontendProjectService,
             initialAppearance: AppearanceTheme = AppearanceTheme(),
+            isSettingLibraryToolEnabled: (characterId: String) -> Boolean = { true },
+            enableSettingLibraryTool: suspend (characterId: String) -> Unit = {},
         ): ViewModelProvider.Factory {
             return object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
                     if (modelClass.isAssignableFrom(ChatViewModel::class.java)) {
-                        return ChatViewModel(chatService, frontendProjectService, initialAppearance) as T
+                        return ChatViewModel(
+                            chatService,
+                            frontendProjectService,
+                            initialAppearance,
+                            isSettingLibraryToolEnabled,
+                            enableSettingLibraryTool,
+                        ) as T
                     }
                     throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
                 }

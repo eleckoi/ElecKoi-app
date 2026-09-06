@@ -27,7 +27,9 @@ class UserProfileRepository(
     }
 
     fun saveName(name: String): UserProfile {
-        val saved = load().copy(userName = name.trim())
+        val current = load()
+        val saved = current.copy(userName = name.trim())
+        if (saved == current) return current
         dao.upsert(saved.toEntity())
         return saved
     }

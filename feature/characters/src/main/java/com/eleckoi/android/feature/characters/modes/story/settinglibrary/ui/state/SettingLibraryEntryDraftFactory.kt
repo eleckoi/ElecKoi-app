@@ -20,7 +20,7 @@ internal fun createSettingLibraryEntryDraft(
 ): SettingLibraryEntry {
     val base = SettingLibraryEntry(
         id = id,
-        title = "",
+        title = nextSettingLibraryEntryDraftTitle(groupId, existingEntries),
         enabled = false,
         order = 1,
         viewOrder = (existingEntries.maxOfOrNull { it.viewOrder } ?: 0) + 1,
@@ -44,3 +44,21 @@ internal fun createSettingLibraryEntryDraft(
         base
     }
 }
+
+internal fun nextSettingLibraryEntryDraftTitle(
+    groupId: String,
+    existingEntries: List<SettingLibraryEntry>,
+): String {
+    val siblingTitles = existingEntries
+        .asSequence()
+        .filter { it.groupId == groupId }
+        .map { it.title.trim() }
+        .filter(String::isNotBlank)
+        .toHashSet()
+    if (NewSettingTitle !in siblingTitles) return NewSettingTitle
+    var suffix = 2
+    while ("$NewSettingTitle $suffix" in siblingTitles) suffix++
+    return "$NewSettingTitle $suffix"
+}
+
+private const val NewSettingTitle = "新建设定"

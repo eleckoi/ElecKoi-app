@@ -2,7 +2,7 @@ package com.eleckoi.android.foundation.storage.room
 
 import androidx.room.Dao
 import androidx.room.Query
-import androidx.room.Update
+import androidx.room.Transaction
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
@@ -35,9 +35,11 @@ interface ChatDao {
     @Query("SELECT * FROM chat_sessions ORDER BY updatedAt DESC")
     fun sessionsFlow(): Flow<List<ChatSessionEntity>>
 
+    @Transaction
     @Query("SELECT * FROM chat_sessions WHERE characterId = :characterId ORDER BY updatedAt DESC")
-    fun sessionsForCharacter(characterId: String): List<ChatSessionEntity>
+    fun sessionsForCharacter(characterId: String): List<ChatSessionRecord>
 
+    @Transaction
     @Query(
         """
         SELECT * FROM chat_sessions
@@ -48,13 +50,15 @@ interface ChatDao {
         LIMIT 1
         """,
     )
-    fun latestSession(characterId: String, characterMode: String): ChatSessionEntity?
+    fun latestSession(characterId: String, characterMode: String): ChatSessionRecord?
 
+    @Transaction
     @Query("SELECT * FROM chat_sessions WHERE id = :sessionId LIMIT 1")
-    fun sessionById(sessionId: String): ChatSessionEntity?
+    fun sessionById(sessionId: String): ChatSessionRecord?
 
+    @Transaction
     @Query("SELECT * FROM chat_sessions WHERE id = :sessionId LIMIT 1")
-    fun sessionFlow(sessionId: String): Flow<ChatSessionEntity?>
+    fun sessionFlow(sessionId: String): Flow<ChatSessionRecord?>
 
     @Query("SELECT COUNT(*) FROM chat_sessions WHERE id = :sessionId")
     fun sessionCount(sessionId: String): Int
@@ -62,8 +66,17 @@ interface ChatDao {
     @Upsert
     fun upsertSession(session: ChatSessionEntity)
 
-    @Update
-    fun updateSession(session: ChatSessionEntity)
+    @Upsert
+    fun upsertCharacterSnapshot(snapshot: ChatSessionCharacterSnapshotEntity)
+
+    @Upsert
+    fun upsertModelSettings(settings: ChatSessionModelSettingsEntity)
+
+    @Upsert
+    fun upsertVariableStates(states: List<ChatSessionVariableStateEntity>)
+
+    @Query("UPDATE chat_sessions SET updatedAt = :updatedAt WHERE id = :sessionId AND updatedAt != :updatedAt")
+    fun touchSession(sessionId: String, updatedAt: String): Int
 
     @Query("DELETE FROM chat_sessions WHERE id = :sessionId")
     fun deleteSession(sessionId: String)

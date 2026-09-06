@@ -1,19 +1,48 @@
 package com.eleckoi.android.engine.agent.tools
 
+import com.eleckoi.android.foundation.storage.room.CharacterToolConfigEntity
+import com.eleckoi.android.foundation.storage.room.ElecKoiDatabase
+import com.eleckoi.android.foundation.storage.room.GlobalToolConfigEntity
 import java.io.File
+import java.time.Instant
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 
 /**
  * Persistent tool visibility, keyed by [AgentToolScopes]. Which Harness tools exist is a property of
  * the installed runtime and stays shared; which of them a turn may call belongs to one character.
  */
-class AgentToolCatalogStore internal constructor(
-    private val file: File,
-    private val persist: (File, AgentToolCatalogState) -> Unit,
+class AgentToolCatalogStore private constructor(
+    load: () -> AgentToolCatalogState,
+    private val persist: (AgentToolCatalogState, AgentToolCatalogState) -> Unit,
 ) {
+    internal constructor(
+        file: File,
+        persist: (File, AgentToolCatalogState) -> Unit,
+    ) : this(
+        load = { readAgentToolCatalogState(file) },
+        persist = { _, value -> persist(file, value) },
+    )
+
     constructor(file: File) : this(file, ::writeAgentToolCatalogState)
+
+    constructor(database: ElecKoiDatabase) : this(
+        load = { runRoomIo { readRoomState(database) } },
+        persist = { previous, value -> runRoomIo { writeRoomState(database, previous, value) } },
+    )
+
     private val lock = Any()
-    private var state = readAgentToolCatalogState(file)
+    private var state = load()
+
+    fun exportBackupJson(): String = synchronized(lock) {
+        encodeAgentToolCatalogState(state)
+    }
+
+    fun restoreBackupJson(json: String) = synchronized(lock) {
+        updateState(decodeAgentToolCatalogState(json, "tool-config.json"))
+    }
 
     fun deleteForCharacters(characterIds: Collection<String>) = synchronized(lock) {
         val scopes = characterIds.filter(String::isNotBlank).map(AgentToolScopes::character).toSet()
@@ -93,6 +122,15 @@ class AgentToolCatalogStore internal constructor(
             .mapTo(hashSetOf(), AgentToolGroupSnapshot::id)
             .apply { addAll(state.observedGroups.map(AgentToolGroupSnapshot::id)) }
         state.groupEnabled(scopeId, groupId, state.disabledIn(scopeId), knownGroupIds)
+    }
+
+    fun hasExplicitConfiguration(scopeId: String): Boolean = synchronized(lock) {
+        val scope = AgentToolScopes.normalize(scopeId)
+        scope in state.scopedDisabledGroups ||
+            scope in state.scopedEnabledOptInGroups ||
+            scope in state.scopedSubagentModelConfigIds ||
+            scope in state.scopedSubagentModels ||
+            scope in state.scopedToolModelConfigIds
     }
 
     fun subagentModelConfigId(scopeId: String): String = synchronized(lock) {
@@ -226,8 +264,90 @@ class AgentToolCatalogStore internal constructor(
     }
 
     private fun updateState(next: AgentToolCatalogState) {
-        persist(file, next)
+        if (next == state) return
+        persist(state, next)
         state = next
     }
 
+}
+
+private fun readRoomState(database: ElecKoiDatabase): AgentToolCatalogState {
+    val dao = database.agentToolConfigDao()
+    val global = dao.global()?.payloadJson
+        ?.let { decodeAgentToolCatalogState(it, "global_tool_config") }
+        ?: AgentToolCatalogState()
+    return dao.characters().fold(global) { current, row ->
+        val decoded = decodeAgentToolCatalogState(
+            row.payloadJson,
+            "character_tool_configs/${row.characterId}",
+        )
+        current.copy(
+            scopedDisabledGroups = current.scopedDisabledGroups + decoded.scopedDisabledGroups,
+            scopedEnabledOptInGroups =
+                current.scopedEnabledOptInGroups + decoded.scopedEnabledOptInGroups,
+            scopedSubagentModelConfigIds =
+                current.scopedSubagentModelConfigIds + decoded.scopedSubagentModelConfigIds,
+            scopedSubagentModels = current.scopedSubagentModels + decoded.scopedSubagentModels,
+            scopedToolModelConfigIds =
+                current.scopedToolModelConfigIds + decoded.scopedToolModelConfigIds,
+        )
+    }
+}
+
+private fun writeRoomState(
+    database: ElecKoiDatabase,
+    previous: AgentToolCatalogState,
+    state: AgentToolCatalogState,
+) {
+    val now = Instant.now().toString()
+    val previousShared = encodeAgentToolCatalogState(previous.onlyScopes(setOf(AgentToolScopes.Shared)))
+    val shared = encodeAgentToolCatalogState(state.onlyScopes(setOf(AgentToolScopes.Shared)))
+    val previousCharacters = characterToolPayloads(previous)
+    val characters = characterToolPayloads(state)
+    val removed = previousCharacters.keys.filterNot(characters::containsKey)
+    val changed = characters.mapNotNull { (characterId, payloadJson) ->
+        if (previousCharacters[characterId] == payloadJson) null else CharacterToolConfigEntity(
+            characterId = characterId,
+            payloadJson = payloadJson,
+            updatedAt = now,
+        )
+    }
+    database.runInTransaction {
+        val dao = database.agentToolConfigDao()
+        if (previousShared != shared) {
+            dao.upsertGlobal(GlobalToolConfigEntity(payloadJson = shared, updatedAt = now))
+        }
+        removed.chunked(900).forEach(dao::deleteCharacters)
+        if (changed.isNotEmpty()) dao.upsertCharacters(changed)
+    }
+}
+
+private fun characterToolPayloads(state: AgentToolCatalogState): Map<String, String> {
+    val characterScopes = buildSet {
+        addAll(state.scopedDisabledGroups.keys)
+        addAll(state.scopedEnabledOptInGroups.keys)
+        addAll(state.scopedSubagentModelConfigIds.keys)
+        addAll(state.scopedSubagentModels.keys)
+        addAll(state.scopedToolModelConfigIds.keys)
+    }.mapNotNull { scope -> AgentToolScopes.characterId(scope)?.let { it to scope } }
+    return characterScopes.associate { (characterId, scope) ->
+        characterId to encodeAgentToolCatalogState(
+            state.onlyScopes(setOf(scope)).copy(
+                observedGroups = emptyList(),
+                contextOrder = emptyList(),
+            ),
+        )
+    }
+}
+
+private fun AgentToolCatalogState.onlyScopes(scopes: Set<String>) = copy(
+    scopedDisabledGroups = scopedDisabledGroups.filterKeys { it in scopes },
+    scopedEnabledOptInGroups = scopedEnabledOptInGroups.filterKeys { it in scopes },
+    scopedSubagentModelConfigIds = scopedSubagentModelConfigIds.filterKeys { it in scopes },
+    scopedSubagentModels = scopedSubagentModels.filterKeys { it in scopes },
+    scopedToolModelConfigIds = scopedToolModelConfigIds.filterKeys { it in scopes },
+)
+
+private fun <T> runRoomIo(block: () -> T): T = runBlocking {
+    withContext(Dispatchers.IO) { block() }
 }

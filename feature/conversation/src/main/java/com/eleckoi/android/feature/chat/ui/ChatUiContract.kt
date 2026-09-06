@@ -27,6 +27,7 @@ data class ChatUiState(
     val isSending: Boolean = false,
     val generationPresentation: ChatGenerationPresentation? = null,
     val errorMessage: String = "",
+    val requiredToolPrompt: RequiredToolPrompt? = null,
     val chatBackgroundErrorMessage: String = "",
     val editingMessage: ChatMessage? = null,
     val editInput: String = "",
@@ -83,6 +84,12 @@ data class ChatModeConflict(
     val characterId: String,
     val sessionMode: String,
     val currentMode: String,
+)
+
+data class RequiredToolPrompt(
+    val characterId: String,
+    val assistantMessageId: String,
+    val enabling: Boolean = false,
 )
 
 internal fun chatModeConflict(
@@ -164,6 +171,8 @@ sealed interface ChatIntent {
     data class SetHistoryOpen(val open: Boolean) : ChatIntent
     data class SetModelPickerOpen(val open: Boolean) : ChatIntent
     data object DismissError : ChatIntent
+    data object DismissRequiredToolPrompt : ChatIntent
+    data object EnableRequiredSettingLibraryTool : ChatIntent
     data object DismissChatBackgroundError : ChatIntent
     data object DismissModeConflict : ChatIntent
     data object OpenCurrentModeChat : ChatIntent

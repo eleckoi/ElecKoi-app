@@ -9,11 +9,12 @@ import com.eleckoi.android.feature.characters.modes.story.regex.model.RegexRuleS
 import com.eleckoi.android.feature.characters.modes.story.regex.model.RegexRuleTarget
 import com.eleckoi.android.feature.characters.modes.story.regex.model.RegexRuleVersion
 import com.eleckoi.android.foundation.storage.ElecKoiDataException
-import com.eleckoi.android.foundation.storage.JsonFileStore
 import com.eleckoi.android.foundation.storage.newId
-import com.eleckoi.android.foundation.storage.safeId
 import com.eleckoi.android.foundation.storage.stringOrEmpty
-import com.eleckoi.android.foundation.storage.room.StoryPresetDao
+import com.eleckoi.android.foundation.storage.room.ElecKoiDatabase
+import com.eleckoi.android.foundation.storage.room.GlobalRegexRuleEntity
+import com.eleckoi.android.foundation.storage.room.CharacterRegexRuleEntity
+import com.eleckoi.android.foundation.storage.room.RegexStateEntity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,63 +24,119 @@ import org.json.JSONObject
 
 enum class RegexRuleSurface { Stored, Display, Prompt }
 
+data class VersionedRegexRuleCollection(
+    val collection: RegexRuleCollection,
+    val revision: Long,
+)
+
 class RegexRuleRepository(
-    private val store: JsonFileStore,
+    private val database: ElecKoiDatabase,
     private val characters: CharacterRepository,
-    private val storyPresetDao: StoryPresetDao,
 ) {
+    private val dao = database.regexRuleDao()
+    private val storyPresetDao = database.storyPresetDao()
     private val mutableRevision = MutableStateFlow(0L)
 
-    /** Changes after a complete save so active chat projections can reload the same source files. */
+    /** Changes only after commit so active chat projections reload one complete persisted revision. */
     val revision: StateFlow<Long> = mutableRevision.asStateFlow()
 
-    fun load(characterId: String): RegexRuleCollection {
-        requireCharacter(characterId)
-        val shared = store.readObject(sharedFile)
-        val character = store.readObject(characterFile(characterId))
-        return RegexRuleCollection(
-            globalRules = shared.optJSONArray("global_rules").rules(),
-            promptPresetRules = RegexRuleJsonCodec.decodeRules(storyPresetDao.activePresetRegexRulesJson()),
-            characterRules = character.optJSONArray("rules").rules(),
-            versions = shared.optJSONArray("versions").versions(),
-            activeVersionId = shared.stringOrEmpty("active_version_id"),
-        ).normalized()
+    fun load(characterId: String): RegexRuleCollection = loadVersioned(characterId).collection
+
+    fun loadVersioned(characterId: String): VersionedRegexRuleCollection {
+        return database.runInTransaction<VersionedRegexRuleCollection> {
+            requireCharacter(characterId)
+            val state = dao.state()
+            val collection = RegexRuleCollection(
+                globalRules = dao.globalRules().map { it.rule.toRule(it.id) },
+                promptPresetRules = RegexRuleJsonCodec.decodeRules(storyPresetDao.activePresetRegexRulesJson()),
+                characterRules = dao.characterRules(characterId).map { it.rule.toRule(it.id) },
+                versions = dao.versions().map { it.toVersion() },
+                activeVersionId = state?.activeVersionId.orEmpty(),
+            ).normalized()
+            VersionedRegexRuleCollection(collection, state?.revision ?: 0L)
+        }
     }
 
-    fun save(characterId: String, collection: RegexRuleCollection): RegexRuleCollection {
+    fun save(characterId: String, collection: RegexRuleCollection): RegexRuleCollection =
+        requireNotNull(saveInternal(characterId, collection, expectedRevision = null)).collection
+
+    /** Atomically rejects a delayed Agent change set when its preview revision is stale. */
+    fun saveIfRevision(
+        characterId: String,
+        collection: RegexRuleCollection,
+        expectedRevision: Long,
+    ): VersionedRegexRuleCollection? = saveInternal(characterId, collection, expectedRevision)
+
+    private fun saveInternal(
+        characterId: String,
+        collection: RegexRuleCollection,
+        expectedRevision: Long?,
+    ): VersionedRegexRuleCollection? {
         requireCharacter(characterId)
         val normalized = collection.normalized()
         val promptPresetRulesJson = RegexRuleJsonCodec.encodeRules(normalized.promptPresetRules)
-        store.writeObject(
-            sharedFile,
-            JSONObject()
-                .put("format", SharedFormat)
-                .put("version", 2)
-                .put("active_version_id", normalized.activeVersionId)
-                .put("global_rules", JSONArray(normalized.globalRules.map(RegexRuleJsonCodec::ruleToJson)))
-                .put("versions", JSONArray(normalized.versions.map(::versionJson))),
-        )
-        storyPresetDao.updateActivePresetRegexRules(promptPresetRulesJson)
-        storyPresetDao.updateActivePresetVersionRegexRules(promptPresetRulesJson)
-        store.writeObject(
-            characterFile(characterId),
-            JSONObject()
-                .put("format", CharacterFormat)
-                .put("version", 2)
-                .put("rules", JSONArray(normalized.characterRules.map(RegexRuleJsonCodec::ruleToJson))),
-        )
-        mutableRevision.update { current -> current + 1L }
-        return normalized
+        val result = database.runInTransaction<RegexSaveResult?> {
+            val currentState = dao.state()
+            val currentRevision = currentState?.revision ?: 0L
+            if (expectedRevision != null && currentRevision != expectedRevision) {
+                return@runInTransaction null
+            }
+            val current = RegexRuleCollection(
+                globalRules = dao.globalRules().map { it.rule.toRule(it.id) },
+                promptPresetRules = RegexRuleJsonCodec.decodeRules(
+                    storyPresetDao.activePresetRegexRulesJson(),
+                ),
+                characterRules = dao.characterRules(characterId).map { it.rule.toRule(it.id) },
+                versions = dao.versions().map { it.toVersion() },
+                activeVersionId = currentState?.activeVersionId.orEmpty(),
+            ).normalized()
+            if (current == normalized) {
+                return@runInTransaction RegexSaveResult(
+                    value = VersionedRegexRuleCollection(current, currentRevision),
+                    changed = false,
+                )
+            }
+            saveShared(normalized)
+            if (current.promptPresetRules != normalized.promptPresetRules) {
+                storyPresetDao.updateActivePresetRegexRules(promptPresetRulesJson)
+                storyPresetDao.updateActivePresetVersionRegexRules(promptPresetRulesJson)
+            }
+            dao.saveCharacter(characterId, normalized.characterRules.map {
+                CharacterRegexRuleEntity(characterId, it.id, it.toRoomFields())
+            })
+            RegexSaveResult(
+                value = VersionedRegexRuleCollection(
+                    normalized,
+                    dao.state()?.revision ?: currentRevision,
+                ),
+                changed = true,
+            )
+        }
+        if (result == null) return null
+        if (result.changed) mutableRevision.update { current -> current + 1L }
+        return result.value
     }
 
     fun deleteForCharacters(characterIds: List<String>) {
-        CharacterRegexFiles(store.dir("regex", "characters")).delete(characterIds)
-        mutableRevision.update { current -> current + 1L }
+        val ids = characterIds.filter(String::isNotBlank).distinct()
+        if (ids.isEmpty()) return
+        var deleted = 0
+        database.runInTransaction {
+            deleted = ids.chunked(900).sumOf(dao::deleteForCharacters)
+            if (deleted > 0) bumpPersistedRevision()
+        }
+        if (deleted > 0) mutableRevision.update { current -> current + 1L }
     }
 
     fun deleteExceptCharacters(characterIds: Collection<String>) {
-        CharacterRegexFiles(store.dir("regex", "characters")).retain(characterIds)
-        mutableRevision.update { it + 1L }
+        var deleted = 0
+        database.runInTransaction {
+            val retained = characterIds.toSet()
+            deleted = dao.characterOwners().filterNot { it in retained }
+                .chunked(900).sumOf(dao::deleteForCharacters)
+            if (deleted > 0) bumpPersistedRevision()
+        }
+        if (deleted > 0) mutableRevision.update { it + 1L }
     }
 
     fun importRules(
@@ -178,6 +235,7 @@ class RegexRuleRepository(
     }
 
     fun notifyActivePresetChanged() {
+        database.runInTransaction { bumpPersistedRevision() }
         mutableRevision.update { current -> current + 1L }
     }
 
@@ -259,12 +317,44 @@ class RegexRuleRepository(
         if (characters.characterById(characterId) == null) throw ElecKoiDataException("角色不存在")
     }
 
-    private val sharedFile get() = store.file("regex", "shared-rules.json")
-    private fun characterFile(characterId: String) = store.file("regex", "characters", "${safeId(characterId)}.json")
+    /** Global data must also survive a backup with no character cards. */
+    fun exportSharedBackupJson(): String {
+        return database.runInTransaction<String> { JSONObject()
+            .put("format", "eleckoi.shared-regex-backup")
+            .put("version", 1)
+            .put("global_rules", JSONArray(dao.globalRules().map { RegexRuleJsonCodec.ruleToJson(it.rule.toRule(it.id)) }))
+            .put("versions", JSONArray(dao.versions().map { versionJson(it.toVersion()) }))
+            .put("active_version_id", dao.state()?.activeVersionId.orEmpty())
+            .toString(2)
+        }
+    }
+
+    fun restoreSharedBackupJson(json: String) {
+        val root = JSONObject(json)
+        require(root.optString("format") == "eleckoi.shared-regex-backup" && root.optInt("version") == 1) {
+            "全局正则备份格式不正确"
+        }
+        saveShared(RegexRuleCollection(
+            globalRules = root.optJSONArray("global_rules").rules(),
+            versions = root.optJSONArray("versions").versions(),
+            activeVersionId = root.stringOrEmpty("active_version_id"),
+        ).normalized())
+        mutableRevision.update { it + 1L }
+    }
+
+    private fun saveShared(collection: RegexRuleCollection) {
+        dao.saveShared(
+            collection.globalRules.map { GlobalRegexRuleEntity(it.id, it.toRoomFields()) },
+            collection.versions.mapIndexed { index, version -> version.toRoomVersion(index) },
+            collection.activeVersionId,
+        )
+    }
+
+    private fun bumpPersistedRevision() {
+        if (dao.bumpRevision() == 0) dao.upsertState(RegexStateEntity(revision = 1L, activeVersionId = null))
+    }
 
     private companion object {
-        const val SharedFormat = "eleckoi.regex-rules"
-        const val CharacterFormat = "eleckoi.character-regex-rules"
         const val ExportFormat = "eleckoi.regex-rules-export"
     }
 }
@@ -273,6 +363,11 @@ internal data class DecodedRegexImportDocuments(
     val importedByFile: List<List<ScopedRegexRule>>,
     val failedFileNames: List<String>,
     val skippedDepthRuleCount: Int,
+)
+
+private data class RegexSaveResult(
+    val value: VersionedRegexRuleCollection,
+    val changed: Boolean,
 )
 
 internal fun decodeRegexImportDocuments(

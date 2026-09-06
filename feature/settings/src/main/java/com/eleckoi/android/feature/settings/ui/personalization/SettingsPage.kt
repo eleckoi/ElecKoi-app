@@ -9,12 +9,17 @@ import android.net.Uri
 import android.provider.Settings as AndroidSettings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,6 +29,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -56,8 +62,12 @@ fun SettingsPage(
     onAgentBackgroundProtectionEnabledChange: (Boolean) -> Unit,
     onAgentBackgroundProtectionPermissionChanged: () -> Unit,
     backupBusy: Boolean = false,
+    backupProgressText: String? = null,
+    backupProgressFraction: Float? = null,
+    backupCancellable: Boolean = false,
     onExportBackup: () -> Unit = {},
     onImportBackup: () -> Unit = {},
+    onCancelBackup: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -173,6 +183,46 @@ fun SettingsPage(
             )
         }
         SettingsSection(label = "数据备份", appearance = appearance) {
+            if (backupProgressText != null) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(9.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            text = backupProgressText,
+                            color = appearance.mobileMuted,
+                            fontSize = 13.sp,
+                        )
+                        if (backupCancellable) {
+                            Text(
+                                text = "取消",
+                                color = MaterialTheme.colorScheme.error,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.noRippleClickable { onCancelBackup() }.padding(6.dp),
+                            )
+                        }
+                    }
+                    if (backupProgressFraction == null) {
+                        LinearProgressIndicator(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = appearance.mobileBlue,
+                        )
+                    } else {
+                        LinearProgressIndicator(
+                            progress = { backupProgressFraction.coerceIn(0f, 1f) },
+                            modifier = Modifier.fillMaxWidth(),
+                            color = appearance.mobileBlue,
+                        )
+                    }
+                }
+                SettingsDivider(appearance, startIndent = 0.dp)
+            }
             SettingsDestinationRow(
                 iconPath = PhosphorRegular.UploadSimple,
                 title = "导出数据备份",

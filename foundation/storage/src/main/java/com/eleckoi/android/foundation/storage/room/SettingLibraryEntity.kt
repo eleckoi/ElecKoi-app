@@ -1,6 +1,7 @@
 package com.eleckoi.android.foundation.storage.room
 
 import androidx.room.Embedded
+import androidx.room.DatabaseView
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Relation
@@ -27,17 +28,12 @@ data class SettingLibraryEntity(
     val updatedAt: String,
 )
 
-@Entity(
-    tableName = "setting_library_entries",
-    primaryKeys = ["characterId", "entryId"],
-    foreignKeys = [
-        ForeignKey(
-            entity = SettingLibraryEntity::class,
-            parentColumns = ["characterId"],
-            childColumns = ["characterId"],
-            onDelete = ForeignKey.CASCADE,
-        ),
-    ],
+@DatabaseView(
+    viewName = "setting_library_entries",
+    value = """SELECT link.characterId, link.entryId, link.sortIndex, content.payloadJson
+        FROM setting_library_entry_links AS link
+        JOIN setting_entry_contents AS content ON content.characterId = link.characterId
+          AND content.entryId = link.entryId AND content.revisionId = link.revisionId""",
 )
 data class SettingLibraryEntryEntity(
     val characterId: String,
@@ -89,17 +85,12 @@ data class SettingLibraryVersionEntity(
     val updatedAt: String,
 )
 
-@Entity(
-    tableName = "setting_library_version_entries",
-    primaryKeys = ["characterId", "versionId", "entryId"],
-    foreignKeys = [
-        ForeignKey(
-            entity = SettingLibraryVersionEntity::class,
-            parentColumns = ["characterId", "versionId"],
-            childColumns = ["characterId", "versionId"],
-            onDelete = ForeignKey.CASCADE,
-        ),
-    ],
+@DatabaseView(
+    viewName = "setting_library_version_entries",
+    value = """SELECT link.characterId, link.versionId, link.entryId, link.sortIndex, content.payloadJson
+        FROM setting_library_version_entry_links AS link
+        JOIN setting_entry_contents AS content ON content.characterId = link.characterId
+          AND content.entryId = link.entryId AND content.revisionId = link.revisionId""",
 )
 data class SettingLibraryVersionEntryEntity(
     val characterId: String,

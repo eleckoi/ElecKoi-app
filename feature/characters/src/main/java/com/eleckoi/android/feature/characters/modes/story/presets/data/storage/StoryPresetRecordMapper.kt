@@ -7,11 +7,13 @@ import com.eleckoi.android.feature.characters.modes.story.regex.data.RegexRuleJs
 import com.eleckoi.android.feature.characters.modes.story.regex.data.normalizedRegexRules
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.data.SettingLibraryJsonCodec
 import com.eleckoi.android.foundation.storage.room.StoryPresetEntity
+import com.eleckoi.android.foundation.storage.room.StoryPresetContentEntity
 import com.eleckoi.android.foundation.storage.room.StoryPresetEntryEntity
 import com.eleckoi.android.foundation.storage.room.StoryPresetGroupEntity
 import com.eleckoi.android.foundation.storage.room.StoryPresetRecord
 import com.eleckoi.android.foundation.storage.room.StoryPresetRuntimeEntryEntity
 import com.eleckoi.android.foundation.storage.room.StoryPresetVersionEntity
+import com.eleckoi.android.foundation.storage.room.StoryPresetVersionContentEntity
 import com.eleckoi.android.foundation.storage.room.StoryPresetVersionEntryEntity
 import com.eleckoi.android.foundation.storage.room.StoryPresetVersionGroupEntity
 import com.eleckoi.android.foundation.storage.room.StoryPresetVersionRecord
@@ -31,13 +33,17 @@ internal fun StoryPreset.toStorageRecord(sortIndex: Int): StoryPresetRecord = St
         authorAvatarPath = profile.authorAvatarPath,
         authorTagsJson = StoryPresetMetadataCodec.encodeStringList(profile.tags),
         description = profile.description,
-        timelineJson = StoryPresetMetadataCodec.encodeTimeline(profile.timeline),
-        regexRulesJson = RegexRuleJsonCodec.encodeRules(regexRules),
         sortIndex = sortIndex,
         expandedGroupIdsJson = JSONArray(expandedGroupIds.distinct()).toString(),
-        promptPositionsJson = JSONArray(
-            promptPositions.map(SettingLibraryJsonCodec::promptPositionToJson),
-        ).toString(),
+    ),
+    contents = listOf(
+        StoryPresetContentEntity(id, TimelineContentKind, StoryPresetMetadataCodec.encodeTimeline(profile.timeline)),
+        StoryPresetContentEntity(id, RegexRulesContentKind, RegexRuleJsonCodec.encodeRules(regexRules)),
+        StoryPresetContentEntity(
+            id,
+            PromptPositionsContentKind,
+            JSONArray(promptPositions.map(SettingLibraryJsonCodec::promptPositionToJson)).toString(),
+        ),
     ),
     entries = entries.mapIndexed { index, entry ->
         StoryPresetEntryEntity(
@@ -59,6 +65,7 @@ internal fun StoryPreset.toStorageRecord(sortIndex: Int): StoryPresetRecord = St
 )
 
 internal fun StoryPresetRecord.toStoryPreset(): StoryPreset {
+    val contentByKind = contents.associate { it.kind to it.content }
     return StoryPreset(
         id = preset.id,
         name = preset.name,
@@ -74,7 +81,7 @@ internal fun StoryPresetRecord.toStoryPreset(): StoryPreset {
             authorAvatarPath = preset.authorAvatarPath,
             authorTagsJson = preset.authorTagsJson,
             description = preset.description,
-            timelineJson = preset.timelineJson,
+            timelineJson = contentByKind[TimelineContentKind].orEmpty(),
         ),
         entries = entries.sortedBy { it.sortIndex }.mapNotNull { row ->
             runCatching {
@@ -86,7 +93,7 @@ internal fun StoryPresetRecord.toStoryPreset(): StoryPreset {
                 SettingLibraryJsonCodec.groupFromJson(index, JSONObject(row.payloadJson))
             }.getOrNull()
         },
-        promptPositions = runCatching { JSONArray(preset.promptPositionsJson) }
+        promptPositions = runCatching { JSONArray(contentByKind[PromptPositionsContentKind].orEmpty()) }
             .getOrDefault(JSONArray())
             .let { array ->
                 buildList {
@@ -97,7 +104,9 @@ internal fun StoryPresetRecord.toStoryPreset(): StoryPreset {
                     }
                 }
             },
-        regexRules = RegexRuleJsonCodec.decodeRules(preset.regexRulesJson).normalizedRegexRules(),
+        regexRules = RegexRuleJsonCodec.decodeRules(
+            contentByKind[RegexRulesContentKind].orEmpty(),
+        ).normalizedRegexRules(),
         expandedGroupIds = runCatching { JSONArray(preset.expandedGroupIdsJson) }
             .getOrDefault(JSONArray())
             .let { array ->
@@ -123,9 +132,15 @@ internal fun StoryPresetRecord.toVersionRecord(
         name = versionName,
         createdAtEpochMs = createdAtEpochMs,
         expandedGroupIdsJson = preset.expandedGroupIdsJson,
-        promptPositionsJson = preset.promptPositionsJson,
-        regexRulesJson = preset.regexRulesJson,
     ),
+    contents = contents.map { row ->
+        StoryPresetVersionContentEntity(
+            presetId = row.presetId,
+            versionId = versionId,
+            kind = row.kind,
+            content = row.content,
+        )
+    },
     entries = entries.map { row ->
         StoryPresetVersionEntryEntity(
             presetId = row.presetId,
@@ -160,9 +175,10 @@ internal fun StoryPresetVersionRecord.toWorkingRecord(metadata: StoryPresetEntit
         preset = metadata.copy(
             activeVersionId = version.versionId,
             expandedGroupIdsJson = version.expandedGroupIdsJson,
-            promptPositionsJson = version.promptPositionsJson,
-            regexRulesJson = version.regexRulesJson,
         ),
+        contents = contents.map { row ->
+            StoryPresetContentEntity(metadata.id, row.kind, row.content)
+        },
         entries = entries.map { row ->
             StoryPresetEntryEntity(row.presetId, row.entryId, row.sortIndex, row.payloadJson)
         },
@@ -183,9 +199,10 @@ internal fun StoryPresetVersionRecord.toStandaloneRecord(metadata: StoryPresetEn
     StoryPresetRecord(
         preset = metadata.copy(
             expandedGroupIdsJson = version.expandedGroupIdsJson,
-            promptPositionsJson = version.promptPositionsJson,
-            regexRulesJson = version.regexRulesJson,
         ),
+        contents = contents.map { row ->
+            StoryPresetContentEntity(metadata.id, row.kind, row.content)
+        },
         entries = entries.map { row ->
             StoryPresetEntryEntity(metadata.id, row.entryId, row.sortIndex, row.payloadJson)
         },
@@ -201,3 +218,7 @@ internal fun StoryPresetVersionRecord.toStandaloneRecord(metadata: StoryPresetEn
             )
         },
     )
+
+internal const val TimelineContentKind = "timeline"
+internal const val RegexRulesContentKind = "regex_rules"
+internal const val PromptPositionsContentKind = "prompt_positions"

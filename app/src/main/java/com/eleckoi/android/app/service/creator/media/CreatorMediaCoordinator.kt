@@ -19,7 +19,7 @@ import com.eleckoi.android.foundation.design.components.centerCropBitmap
 import com.eleckoi.android.foundation.design.components.saveBitmapToCache
 import com.eleckoi.android.foundation.serialization.ElecKoiPrettyJson
 import java.io.File
-import java.security.MessageDigest
+import java.util.Base64
 import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
@@ -159,23 +159,62 @@ internal class CreatorMediaCoordinator(
         }
     }
 
+    /** Describes a conversation-owned input without importing it into the workspace manifest. */
+    suspend fun creatorInputAttachment(
+        workspaceId: String,
+        assetId: String,
+        sourceFile: File,
+    ): CreatorMediaAsset = withContext(Dispatchers.IO) {
+        requireNotNull(creatorWorkspaces.get(workspaceId)) { "创作工作区不存在" }
+        val image = inspectImage(sourceFile)
+        CreatorMediaAsset(
+            id = assetId,
+            displayName = "对话上传图片",
+            mimeType = image.mimeType,
+            width = image.width,
+            height = image.height,
+            byteSize = sourceFile.length(),
+            source = CreatorMediaAssetSource.ConversationAttachment,
+            createdAt = Instant.ofEpochMilli(sourceFile.lastModified()).toString(),
+        )
+    }
+
     suspend fun applyCreatorMediaAsset(
         workspaceId: String,
         rootId: String,
         assetId: String,
         slots: Set<AvatarSlot>,
     ): CharacterSlot = withContext(Dispatchers.IO) {
-        require(slots.isNotEmpty()) { "至少选择一个角色图片槽位" }
-        val (root, character) = rootResolver.requireRoot(workspaceId, rootId)
-        require(root.access == CreatorWorkspaceRootAccess.ReadWrite) { "这个角色根当前是只读的" }
         val sourceFile = mediaMutex.withLock {
             require(loadMediaManifest(workspaceId).assets.any { it.id == assetId }) { "创作媒体 asset 不存在" }
             creatorWorkspaces.creatorMediaAssetFile(workspaceId, assetId)
                 ?: error("创作媒体文件已经不存在")
         }
+        applyCreatorMediaFile(workspaceId, rootId, sourceFile, slots)
+    }
+
+    /** Copies only the selected conversation attachment into permanent character-owned media. */
+    suspend fun applyCreatorInputAttachment(
+        workspaceId: String,
+        rootId: String,
+        sourceFile: File,
+        slots: Set<AvatarSlot>,
+    ): CharacterSlot = withContext(Dispatchers.IO) {
+        applyCreatorMediaFile(workspaceId, rootId, sourceFile, slots)
+    }
+
+    private suspend fun applyCreatorMediaFile(
+        workspaceId: String,
+        rootId: String,
+        sourceFile: File,
+        slots: Set<AvatarSlot>,
+    ): CharacterSlot {
+        require(slots.isNotEmpty()) { "至少选择一个角色图片槽位" }
+        val (root, character) = rootResolver.requireRoot(workspaceId, rootId)
+        require(root.access == CreatorWorkspaceRootAccess.ReadWrite) { "这个角色根当前是只读的" }
         val staged = stageCreatorMediaSlots(sourceFile, slots)
         try {
-            characters.saveCharacterAvatars(character.id, staged)
+            return characters.saveCharacterAvatars(character.id, staged)
         } finally {
             staged.values.forEach(File::delete)
         }
@@ -249,7 +288,8 @@ internal class CreatorMediaCoordinator(
             "image/png" -> "png"
             "image/jpeg", "image/jpg" -> "jpg"
             "image/webp" -> "webp"
-            else -> error("只支持 PNG、JPEG 或 WebP 图片")
+            "image/gif" -> "gif"
+            else -> error("只支持 PNG、JPEG、WebP 或 GIF 图片")
         }
         return CreatorImageInfo(width, height, mimeType, extension)
     }
@@ -319,10 +359,10 @@ internal class CreatorMediaCoordinator(
                 append('\u0000').append(file?.lastModified() ?: 0L)
             }
         }
-        val revision = MessageDigest.getInstance("SHA-256")
-            .digest(revisionSource.toByteArray(Charsets.UTF_8))
-            .joinToString("") { byte -> "%02x".format(byte) }
-            .take(24)
+        // This token describes three small path/size/mtime tuples. Encoding keeps it opaque to
+        // the authoring protocol without reading or hashing any media file bytes.
+        val revision = Base64.getUrlEncoder().withoutPadding()
+            .encodeToString(revisionSource.toByteArray(Charsets.UTF_8))
         return CreatorCharacterMediaState(
             rootId = rootId,
             characterId = id,

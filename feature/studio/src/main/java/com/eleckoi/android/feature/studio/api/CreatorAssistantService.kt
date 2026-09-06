@@ -19,8 +19,10 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.S
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryGroup
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPromptPosition
 import com.eleckoi.android.engine.story.variables.model.VariableConfig
+import com.eleckoi.android.engine.story.variables.config.VersionedVariableConfig
 import com.eleckoi.android.engine.story.variables.runtime.VariableRuntimeCheckResult
 import com.eleckoi.android.feature.characters.modes.story.regex.model.RegexRuleCollection
+import com.eleckoi.android.feature.characters.modes.story.regex.data.VersionedRegexRuleCollection
 import java.io.File
 import kotlinx.coroutines.flow.Flow
 
@@ -120,22 +122,42 @@ interface CreatorAssistantService {
         library: SettingLibrary,
     ): SettingLibrary
     suspend fun loadCreatorVariableConfig(workspaceId: String, rootId: String = ""): VariableConfig
+    suspend fun loadVersionedCreatorVariableConfig(
+        workspaceId: String,
+        rootId: String = "",
+    ): VersionedVariableConfig
     suspend fun saveCreatorVariableConfig(
         workspaceId: String,
         rootId: String,
         config: VariableConfig,
     ): VariableConfig
+    suspend fun saveCreatorVariableConfigIfRevision(
+        workspaceId: String,
+        rootId: String,
+        config: VariableConfig,
+        expectedRevision: Long,
+    ): VersionedVariableConfig?
     suspend fun validateCreatorVariableSchema(schemaCode: String): VariableRuntimeCheckResult
     suspend fun validateCreatorVariableState(
         schemaCode: String,
         stateJson: String,
     ): VariableRuntimeCheckResult
     suspend fun loadCreatorRegexRules(workspaceId: String, rootId: String = ""): RegexRuleCollection
+    suspend fun loadVersionedCreatorRegexRules(
+        workspaceId: String,
+        rootId: String = "",
+    ): VersionedRegexRuleCollection
     suspend fun saveCreatorRegexRules(
         workspaceId: String,
         rootId: String,
         collection: RegexRuleCollection,
     ): RegexRuleCollection
+    suspend fun saveCreatorRegexRulesIfRevision(
+        workspaceId: String,
+        rootId: String,
+        collection: RegexRuleCollection,
+        expectedRevision: Long,
+    ): VersionedRegexRuleCollection?
     suspend fun deleteCreatorWorkspace(workspaceId: String)
     suspend fun ensureCreatorConversation(workspaceId: String): CreatorWorkspace
     suspend fun createCreatorConversation(workspaceId: String, title: String = "新对话"): CreatorWorkspace
@@ -187,6 +209,16 @@ interface CreatorAssistantService {
     suspend fun defaultCreatorModelConfig(): ModelConfig
 }
 
+private const val CreatorConversationAttachmentPrefix = "conversation-attachment:"
+
+fun creatorConversationAttachmentAssetId(attachmentId: String): String =
+    "$CreatorConversationAttachmentPrefix$attachmentId"
+
+fun creatorConversationAttachmentId(assetId: String): String? = assetId
+    .takeIf { it.startsWith(CreatorConversationAttachmentPrefix) }
+    ?.removePrefix(CreatorConversationAttachmentPrefix)
+    ?.takeIf(String::isNotBlank)
+
 data class CreatorCharacterPage(
     val items: List<CharacterSlot>,
     val nextCursor: String = "",
@@ -195,6 +227,7 @@ data class CreatorCharacterPage(
 enum class CreatorMediaAssetSource(val storageValue: String) {
     Upload("upload"),
     Generated("generated"),
+    ConversationAttachment("conversation_attachment"),
     ;
 
     companion object {

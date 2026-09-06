@@ -29,6 +29,7 @@ internal class ChatGenerationCoordinator(
     private val updateState: ((ChatUiState) -> ChatUiState) -> Unit,
     private val showModeConflictIfNeeded: (ChatUiState, ChatDraft) -> Boolean,
     private val onStopRequested: () -> Unit,
+    private val onGenerationCompleted: (ChatDraft, assistantMessageId: String?) -> Unit = { _, _ -> },
 ) {
     private var generationJob: Job? = null
     private val generationEpoch = AtomicInteger(0)
@@ -82,7 +83,7 @@ internal class ChatGenerationCoordinator(
                     )
                 }
             }.onSuccess { result ->
-                publishDraftIfCurrent(
+                publishCompletedDraftIfCurrent(
                     epoch = epoch,
                     sessionId = sessionId,
                     draft = result.draft,
@@ -256,7 +257,7 @@ internal class ChatGenerationCoordinator(
                     )
                 }
             }.onSuccess { result ->
-                publishDraftIfCurrent(
+                publishCompletedDraftIfCurrent(
                     epoch = epoch,
                     sessionId = sessionId,
                     draft = result.draft,
@@ -344,6 +345,16 @@ internal class ChatGenerationCoordinator(
                 },
             )
         }
+    }
+
+    private fun publishCompletedDraftIfCurrent(
+        epoch: Int,
+        sessionId: String,
+        draft: ChatDraft,
+        assistantMessageId: String?,
+    ) {
+        publishDraftIfCurrent(epoch, sessionId, draft, assistantMessageId)
+        if (isCurrent(epoch, sessionId)) onGenerationCompleted(draft, assistantMessageId)
     }
 
     private fun settlePendingReplies(reason: String = "生成未完成") {

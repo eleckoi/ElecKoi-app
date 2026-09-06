@@ -47,6 +47,19 @@ class ChatInputImageStore(
         deletePath(image.localPath)
     }
 
+    /** Resolve only files owned by this store; creator tools never receive a device path. */
+    fun findById(imageId: String): File? {
+        if (!InputImageId.matches(imageId)) return null
+        val root = rootDirectory.canonicalFile
+        return AcceptedMediaExtensions.values
+            .asSequence()
+            .distinct()
+            .map { extension -> File(root, "$imageId.$extension").canonicalFile }
+            .firstOrNull { candidate ->
+                candidate.parentFile == root && candidate.isFile
+            }
+    }
+
     fun deletePath(localPath: String) {
         if (localPath.isBlank()) return
         val candidate = File(localPath)
@@ -127,6 +140,7 @@ class ChatInputImageStore(
     private companion object {
         const val CopyBufferBytes = 64 * 1024
         const val MaxDisplayNameChars = 160
+        val InputImageId = Regex("[a-f0-9]{20}")
         val AcceptedMediaTypes = setOf("image/png", "image/jpeg", "image/webp", "image/gif")
         val AcceptedMediaExtensions = mapOf(
             "image/png" to "png",

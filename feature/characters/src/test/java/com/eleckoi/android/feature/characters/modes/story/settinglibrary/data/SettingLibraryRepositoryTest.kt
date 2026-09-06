@@ -482,6 +482,37 @@ class SettingLibraryRepositoryTest {
     }
 
     @Test
+    fun `repeating the same conversation setting update performs no Room write`() {
+        val dao = FakeSettingLibraryDao()
+        val changes = FakeConversationSettingChangeDao()
+        val character = testCharacter()
+        val repository = SettingLibraryRepository(dao, changes, { character })
+        val initial = repository.load(character.id)
+        repository.save(
+            character.id,
+            initial.copy(entries = initial.entries + SettingLibraryEntry(
+                id = "relationship",
+                title = "关系阶段",
+                content = "仍然陌生。",
+                triggerMode = SettingLibraryTriggerMode.AgentTool,
+            )),
+        )
+        val mutation = SettingLibrarySessionMutation.UpdateEntry(
+            entryId = "relationship",
+            groupId = null,
+            title = null,
+            content = "已经建立信任。",
+            selectionHint = null,
+        )
+
+        repository.applySessionMutations(character.id, "session-a", listOf(mutation))
+        val writesAfterChange = changes.upsertedRowCount
+        repository.applySessionMutations(character.id, "session-a", listOf(mutation))
+
+        assertEquals(writesAfterChange, changes.upsertedRowCount)
+    }
+
+    @Test
     fun `conversation library exposes the complete effective directory without changing the base library`() {
         val dao = FakeSettingLibraryDao()
         val changes = FakeConversationSettingChangeDao()
@@ -838,6 +869,17 @@ private class FakeSettingLibraryDao : SettingLibraryDao {
 
     override fun upsertEntryRows(entries: List<SettingLibraryEntryEntity>) = Unit
 
+    override fun insertContent(content: com.eleckoi.android.foundation.storage.room.SettingEntryContentEntity): Long =
+        error("Repository fake stores complete logical records")
+
+    override fun revisionForContent(characterId: String, entryId: String, payload: String): String? = null
+
+    override fun upsertEntryLinks(entries: List<com.eleckoi.android.foundation.storage.room.SettingLibraryEntryLinkEntity>) = Unit
+
+    override fun upsertVersionEntryLinks(entries: List<com.eleckoi.android.foundation.storage.room.SettingLibraryVersionEntryLinkEntity>) = Unit
+
+    override fun deleteUnusedContents(characterId: String) = Unit
+
     override fun upsertGroupRows(groups: List<SettingLibraryGroupEntity>) = Unit
 
     override fun upsertVersionRows(versions: List<SettingLibraryVersionEntity>) = Unit
@@ -879,6 +921,8 @@ private class FakeSettingLibraryDao : SettingLibraryDao {
 
 private class FakeConversationSettingChangeDao : ConversationSettingChangeDao {
     private val values = linkedMapOf<Triple<String, String, String>, ConversationSettingChangeEntity>()
+    var upsertedRowCount: Int = 0
+        private set
 
     override fun changes(sessionId: String): List<ConversationSettingChangeEntity> = values.values
         .filter { it.sessionId == sessionId }
@@ -891,6 +935,7 @@ private class FakeConversationSettingChangeDao : ConversationSettingChangeDao {
             .thenBy { it.targetId })
 
     override fun upsertChanges(changes: List<ConversationSettingChangeEntity>) {
+        upsertedRowCount += changes.size
         changes.forEach { change ->
             values[Triple(change.sessionId, change.targetType, change.targetId)] = change
         }

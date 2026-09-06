@@ -11,4 +11,15 @@ interface RoleplayRichHeightDao {
 
     @Upsert
     suspend fun upsert(height: RoleplayRichHeightEntity)
+
+    @Query(
+        "DELETE FROM roleplay_rich_heights " +
+            "WHERE sessionId = :sessionId AND messageId = :messageId " +
+            "AND contentRevision != :contentRevision",
+    )
+    suspend fun deleteOtherRevisions(
+        sessionId: String,
+        messageId: String,
+        contentRevision: String,
+    )
 }

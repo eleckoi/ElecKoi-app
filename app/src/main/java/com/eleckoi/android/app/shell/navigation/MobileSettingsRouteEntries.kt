@@ -22,6 +22,9 @@ import com.eleckoi.android.app.navigation.MobileRoute
 import com.eleckoi.android.feature.settings.ui.runtime.LocalRuntimeSettingsPage
 import com.eleckoi.android.feature.settings.ui.websearch.WebSearchSettingsPage
 import com.eleckoi.android.feature.settings.ui.update.AppUpdatePage
+import com.eleckoi.android.app.service.backup.BackupMode
+import com.eleckoi.android.app.service.backup.BackupPhase
+import com.eleckoi.android.app.service.backup.BackupProgress
 
 internal fun mobileSettingsRouteEntry(
     currentRoute: MobileRoute,
@@ -56,6 +59,7 @@ internal fun mobileSettingsRouteEntry(
         }
         MobileRoute.Settings -> NavEntry(currentRoute) {
                 val pageAppearance = currentThemeState.value.appearance
+                val backupProgress = dataBackupActions.progress.value
                 SettingsPage(
                     appearance = pageAppearance,
                     onBack = goBackInsideApp,
@@ -79,8 +83,12 @@ internal fun mobileSettingsRouteEntry(
                     onAgentBackgroundProtectionPermissionChanged =
                         currentOnAgentBackgroundProtectionPermissionChanged.value,
                     backupBusy = dataBackupActions.busy.value,
+                    backupProgressText = backupProgress?.displayText(),
+                    backupProgressFraction = backupProgress?.fraction,
+                    backupCancellable = backupProgress?.cancellable == true,
                     onExportBackup = dataBackupActions.export,
                     onImportBackup = dataBackupActions.import,
+                    onCancelBackup = dataBackupActions.cancel,
                 )
         }
         MobileRoute.About -> NavEntry(currentRoute) {
@@ -236,5 +244,16 @@ internal fun mobileSettingsRouteEntry(
                 }
         }
         else -> null
+    }
+}
+
+private fun BackupProgress.displayText(): String {
+    val action = if (mode == BackupMode.Export) "导出" else "导入"
+    val count = if (total > 0) " $completed/$total" else ""
+    return when (phase) {
+        BackupPhase.Preparing -> "正在准备${action}"
+        BackupPhase.Validating -> "正在校验备份$count"
+        BackupPhase.Transferring -> "正在${action}数据$count"
+        BackupPhase.Restoring -> "正在重建数据库$count"
     }
 }

@@ -60,7 +60,11 @@ internal object CreationWorkspaceAgentInstructions {
           unmounted character or infer permission from its existence elsewhere in the app. Character-root listings
           are paginated too; a truncated injected root summary is not the complete mounted set.
         - Character images are three independent slots: avatar_circle, avatar_square, and portrait. Never pass or
-          invent device file paths. When the author explicitly asks to draw a new candidate in chat, call
+          invent device file paths. Images uploaded in a creator-assistant user message remain conversation-owned
+          attachments; that user turn includes a temporary asset_id reference accepted by preview_change and
+          apply_change. Use only the reference for the image the author selects. Applying it copies and crops that one
+          image into permanent character media; do not register or copy the other attachments. When the
+          author explicitly asks to draw a new candidate in chat, call
           character_media.generation_settings to read the enabled provider's prompt format, then call
           character_media.generate_asset with a prompt derived from that conversation. Use natural language
           for OpenAI Images and English visual tags for NovelAI. The host uses the selected image model and

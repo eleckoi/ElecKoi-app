@@ -19,6 +19,7 @@ import com.eleckoi.android.feature.characters.modes.story.presets.data.library.S
 import com.eleckoi.android.feature.characters.modes.story.presets.data.media.StoryPresetAuthorAvatarStore
 import com.eleckoi.android.feature.characters.modes.story.presets.data.policy.uniqueStoryPresetName
 import com.eleckoi.android.feature.characters.modes.story.presets.data.storage.StoryPresetMetadataCodec
+import com.eleckoi.android.feature.characters.modes.story.presets.data.storage.RegexRulesContentKind
 import com.eleckoi.android.feature.characters.modes.story.presets.data.storage.toStorageRecord
 import com.eleckoi.android.feature.characters.modes.story.presets.data.storage.toStoryPreset
 import com.eleckoi.android.feature.characters.modes.story.presets.data.storage.toVersionRecord
@@ -135,7 +136,7 @@ class StoryPresetRepository(
 
     suspend fun setActive(presetId: String) {
         ensureInitialized()
-        if (dao.presetExists(presetId)) {
+        if (dao.state()?.activePresetId != presetId && dao.presetExists(presetId)) {
             dao.upsertState(StoryPresetStateEntity(activePresetId = presetId))
             onActivePresetChanged()
         }
@@ -173,32 +174,68 @@ class StoryPresetRepository(
         return preset
     }
 
-    suspend fun update(preset: StoryPreset) {
+    suspend fun update(preset: StoryPreset) = update(previous = null, preset = preset)
+
+    suspend fun update(previous: StoryPreset?, preset: StoryPreset) {
         ensureInitialized()
-        val existing = dao.preset(preset.id) ?: return
-        val normalized = preset.withRequiredBuiltIns().copy(
-            name = preset.name.trim().take(60).ifBlank { "未命名预设" },
-            modelTags = preset.modelTags.distinctBy { it.id.trim().lowercase() }.take(8),
-            expandedGroupIds = preset.expandedGroupIds.distinct(),
-            promptPositions = preset.promptPositions
-                .distinctBy { it.id }
-                .mapIndexed { index, position -> position.copy(order = index + 1) },
-            regexRules = preset.regexRules.normalizedRegexRules(),
-        )
-        val record = normalized.toStorageRecord(sortIndex = existing.preset.sortIndex)
-        dao.replace(record)
-        val versionId = normalized.activeVersionId.ifBlank { existing.preset.activeVersionId }
+        val sortIndex = dao.presetSortIndex(preset.id) ?: return
+        val activeVersionId = preset.activeVersionId.ifBlank {
+            previous?.activeVersionId?.takeIf(String::isNotBlank)
+                ?: dao.presetActiveVersionId(preset.id).orEmpty()
+        }
+        val normalized = preset.copy(activeVersionId = activeVersionId).normalizedForStorage()
+        val record = normalized.toStorageRecord(sortIndex = sortIndex)
+        val previousRecord = previous
+            ?.takeIf { it.id == normalized.id }
+            ?.normalizedForStorage()
+            ?.toStorageRecord(sortIndex = sortIndex)
+        val knownPreviousRecord = previousRecord ?: dao.preset(normalized.id)
+        dao.replaceKnown(record, knownPreviousRecord)
+        val versionId = normalized.activeVersionId.ifBlank {
+            knownPreviousRecord?.preset?.activeVersionId.orEmpty()
+        }
         val versionSummary = dao.versionSummaries(normalized.id).firstOrNull { it.id == versionId }
         val versionNumber = versionSummary?.number ?: normalized.activeVersionNumber.coerceAtLeast(1)
-        dao.replaceVersion(
-            record.toVersionRecord(
+        val createdAt = versionSummary?.createdAtEpochMs ?: System.currentTimeMillis()
+        val versionRecord = record.toVersionRecord(
+            versionId = versionId,
+            versionNumber = versionNumber,
+            versionName = normalized.name,
+            createdAtEpochMs = createdAt,
+        )
+        val previousVersionRecord = knownPreviousRecord
+            ?.takeIf { it.preset.activeVersionId == versionId }
+            ?.toVersionRecord(
                 versionId = versionId,
                 versionNumber = versionNumber,
-                versionName = normalized.name,
-                createdAtEpochMs = versionSummary?.createdAtEpochMs ?: System.currentTimeMillis(),
-            ),
+                versionName = knownPreviousRecord.preset.name,
+                createdAtEpochMs = createdAt,
+            )
+        if (previousVersionRecord == null) {
+            dao.replaceVersion(versionRecord)
+        } else {
+            dao.replaceVersionKnown(versionRecord, previousVersionRecord)
+        }
+        if (
+            dao.state()?.activePresetId == normalized.id &&
+            knownPreviousRecord?.contents?.firstOrNull { it.kind == RegexRulesContentKind }?.content !=
+                record.contents.firstOrNull { it.kind == RegexRulesContentKind }?.content
+        ) {
+            onActivePresetChanged()
+        }
+    }
+
+    private fun StoryPreset.normalizedForStorage(): StoryPreset {
+        val normalized = withRequiredBuiltIns()
+        return normalized.copy(
+            name = normalized.name.trim().take(60).ifBlank { "未命名预设" },
+            modelTags = normalized.modelTags.distinctBy { it.id.trim().lowercase() }.take(8),
+            expandedGroupIds = normalized.expandedGroupIds.distinct(),
+            promptPositions = normalized.promptPositions
+                .distinctBy { it.id }
+                .mapIndexed { index, position -> position.copy(order = index + 1) },
+            regexRules = normalized.regexRules.normalizedRegexRules(),
         )
-        if (dao.state()?.activePresetId == normalized.id) onActivePresetChanged()
     }
 
     suspend fun rename(presetId: String, name: String) {

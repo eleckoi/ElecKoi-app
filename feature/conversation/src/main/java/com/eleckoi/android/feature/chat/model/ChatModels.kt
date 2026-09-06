@@ -53,6 +53,8 @@ data class ChatUserImageAttachment(
     val localPath: String,
     val mediaType: String,
     val displayName: String = "",
+    /** Conversation-owned reference accepted by creator media tools; blank in ordinary role chat. */
+    val creatorMediaReference: String = "",
     val bytes: Long = 0L,
     val imageWidth: Int = 0,
     val imageHeight: Int = 0,
@@ -83,6 +85,11 @@ data class ChatMessage(
     val contextWindowUsage: ChatContextWindowUsage? = null,
     /** Exact native Agent history items retained in Room but excluded by role-chat projection. */
     val modelHistoryItems: List<String> = emptyList(),
+    /** Product speaker identity; provider/model above describes execution instead. */
+    val speakerId: String = "",
+    val speakerKind: String = "",
+    val speakerName: String = "",
+    val speakerAvatarAssetId: String = "",
 )
 
 /**

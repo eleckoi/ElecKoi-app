@@ -121,6 +121,10 @@ class StoryPresetViewModel(
     }
 
     fun update(preset: StoryPreset) {
+        val previous = _uiState.value.let { state ->
+            state.editorPreset?.takeIf { it.id == preset.id }
+                ?: state.activePreset?.takeIf { it.id == preset.id }
+        }
         _uiState.update { state ->
             state.copy(
                 editorPreset = if (state.editorPreset?.id == preset.id) preset else state.editorPreset,
@@ -128,7 +132,7 @@ class StoryPresetViewModel(
             )
         }
         viewModelScope.launch(Dispatchers.IO) {
-            updateMutex.withLock { repository.update(preset) }
+            updateMutex.withLock { repository.update(previous, preset) }
         }
     }
 

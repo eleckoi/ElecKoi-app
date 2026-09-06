@@ -24,6 +24,7 @@ class AssistantRoomHistoryTest {
             localPath = imageFile.absolutePath,
             mediaType = "image/webp",
             displayName = "reference.webp",
+            creatorMediaReference = "conversation-attachment:image-1",
             bytes = 8_192L,
             imageWidth = 640,
             imageHeight = 960,

@@ -5,32 +5,48 @@ import com.eleckoi.android.feature.chat.model.ChatMessage
 import com.eleckoi.android.feature.chat.model.ChatSession
 import com.eleckoi.android.feature.chat.model.MessageRole
 import com.eleckoi.android.foundation.storage.room.ChatSessionEntity
+import com.eleckoi.android.foundation.storage.room.ChatSessionCharacterSnapshotEntity
+import com.eleckoi.android.foundation.storage.room.ChatSessionModelSettingsEntity
+import com.eleckoi.android.foundation.storage.room.ChatSessionRecord
+import com.eleckoi.android.foundation.storage.room.ChatSessionVariableStateEntity
 
-internal fun ChatSession.toEntity(): ChatSessionEntity = ChatSessionEntity(
-    id = id,
-    workspaceId = workspaceId,
-    title = title,
-    characterId = characterId,
-    characterName = characterName,
-    characterAvatar = characterAvatar,
-    characterMode = characterMode,
-    permissionMode = permissionMode.name,
-    characterPersonaJson = characterPersonaJsonString(characterPersona),
-    modelSettingsJson = modelSettingsJsonString(modelSettings),
-    initialVariableStateJson = initialVariableStateJson,
-    variableStateJson = variableStateJson,
-    historySummary = messages.asReversed().firstOrNull { it.content.isNotBlank() }
-        ?.content.orEmpty().take(42),
-    historyMessageCount = messages.size,
-    historyUserMessageCount = messages.count { it.role == MessageRole.User },
-    createdAt = createdAt,
-    updatedAt = updatedAt,
+internal fun ChatSession.toRoomRecord(): ChatSessionRecord = ChatSessionRecord(
+    session = ChatSessionEntity(
+        id = id,
+        workspaceId = workspaceId,
+        title = title,
+        characterId = characterId,
+        characterName = characterName,
+        characterAvatar = characterAvatar,
+        characterMode = characterMode,
+        permissionMode = permissionMode.name,
+        historySummary = messages.asReversed().firstOrNull { it.content.isNotBlank() }
+            ?.content.orEmpty().take(42),
+        historyMessageCount = messages.size,
+        historyUserMessageCount = messages.count { it.role == MessageRole.User },
+        createdAt = createdAt,
+        updatedAt = updatedAt,
+    ),
+    characterSnapshot = ChatSessionCharacterSnapshotEntity(
+        sessionId = id,
+        personaJson = characterPersonaJsonString(characterPersona),
+    ),
+    modelSettings = ChatSessionModelSettingsEntity(
+        sessionId = id,
+        settingsJson = modelSettingsJsonString(modelSettings),
+    ),
+    variableStates = listOf(
+        ChatSessionVariableStateEntity(id, ChatVariableStateInitial, initialVariableStateJson),
+        ChatSessionVariableStateEntity(id, ChatVariableStateCurrent, variableStateJson),
+    ),
 )
 
 internal fun chatSessionFromRoom(
-    session: ChatSessionEntity,
+    record: ChatSessionRecord,
     messages: List<ChatMessage>,
-): ChatSession = ChatSession(
+): ChatSession {
+    val session = record.session
+    return ChatSession(
     id = session.id,
     workspaceId = session.workspaceId,
     title = session.title.ifBlank { session.characterName.ifBlank { "新对话" } },
@@ -38,7 +54,7 @@ internal fun chatSessionFromRoom(
     characterName = session.characterName,
     characterAvatar = session.characterAvatar,
     characterPersona = characterPersonaFromJsonString(
-        value = session.characterPersonaJson,
+        value = record.characterSnapshot?.personaJson.orEmpty(),
         characterName = session.characterName,
         characterAvatar = session.characterAvatar,
     ),
@@ -49,7 +65,13 @@ internal fun chatSessionFromRoom(
     messages = messages,
     createdAt = session.createdAt,
     updatedAt = session.updatedAt,
-    modelSettings = modelSettingsFromJsonString(session.modelSettingsJson),
-    initialVariableStateJson = session.initialVariableStateJson,
-    variableStateJson = session.variableStateJson,
+    modelSettings = modelSettingsFromJsonString(record.modelSettings?.settingsJson.orEmpty()),
+    initialVariableStateJson = record.variableStates
+        .firstOrNull { it.kind == ChatVariableStateInitial }?.stateJson.orEmpty(),
+    variableStateJson = record.variableStates
+        .firstOrNull { it.kind == ChatVariableStateCurrent }?.stateJson.orEmpty(),
 )
+}
+
+internal const val ChatVariableStateInitial = "initial"
+internal const val ChatVariableStateCurrent = "current"

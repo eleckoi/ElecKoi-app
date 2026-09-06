@@ -11,6 +11,7 @@ import com.eleckoi.android.feature.conversation.timeline.model.CreationTimelineI
 import com.eleckoi.android.feature.conversation.timeline.model.CreationTimelineKind
 import com.eleckoi.android.feature.chat.model.ChatUserImageAttachment
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -245,5 +246,26 @@ class CreationRegenerationPlanTest {
         assertEquals("/private/reference.webp", prompt.images.single().localPath)
         assertEquals("image/webp", prompt.images.single().mediaType)
         assertEquals("reference.webp", prompt.images.single().name)
+    }
+
+    @Test
+    fun creationPromptExposesConversationOwnedImageReferenceToCharacterMediaTools() {
+        val prompt = creationAgentPrompt(
+            text = "把这张图设成头像和立绘",
+            inputImages = listOf(
+                ChatUserImageAttachment(
+                    id = "image-1",
+                    localPath = "/private/reference.webp",
+                    mediaType = "image/webp",
+                    displayName = "参考图片.webp",
+                    creatorMediaReference = "conversation-attachment:input-1",
+                ),
+            ),
+        )
+
+        assertTrue(prompt.text.contains("参考图片.webp -> asset_id=conversation-attachment:input-1"))
+        assertTrue(prompt.text.contains("不是工作区永久资产"))
+        assertTrue(prompt.text.contains("不要登记或复制未选图片"))
+        assertFalse(prompt.text.contains("/private/reference.webp"))
     }
 }

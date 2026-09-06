@@ -14,6 +14,7 @@ import com.eleckoi.android.engine.workspace.model.CreatorWorkspace
 import com.eleckoi.android.engine.workspace.storage.CreatorWorkspaceRepository
 import com.eleckoi.android.feature.chat.data.markdown.CompletedMarkdownDocumentLoader
 import com.eleckoi.android.foundation.storage.room.ElecKoiDatabase
+import com.eleckoi.android.foundation.storage.PersistentCleanupRunner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -24,6 +25,7 @@ internal class CreatorLedgerCoordinator(
     private val attachmentCleanup: ConversationAttachmentCleanup,
     private val onWorkspacesDeleted: suspend (List<String>) -> Unit,
     private val beforeDeletion: (Collection<String>) -> Unit,
+    private val cleanupRunner: PersistentCleanupRunner,
 ) {
     /**
      * RoomConversationLedger exposes synchronous transaction primitives. This is their suspend
@@ -63,7 +65,16 @@ internal class CreatorLedgerCoordinator(
     }
 
     suspend fun deleteWorkspace(workspaceId: String) = withContext(Dispatchers.IO) {
-        val conversations = creatorWorkspaces.get(workspaceId)?.conversations.orEmpty()
+        cleanupRunner.run(WorkspaceCleanupKind, workspaceId) { deleteWorkspaceNow(workspaceId) }
+    }
+
+    internal suspend fun deleteWorkspaceNow(workspaceId: String) = withContext(Dispatchers.IO) {
+        val workspace = creatorWorkspaces.get(workspaceId)
+        if (workspace == null) {
+            creatorWorkspaces.delete(workspaceId)
+            return@withContext
+        }
+        val conversations = workspace.conversations
         val ids = conversations.map { it.id }
         beforeDeletion(ids)
         onWorkspacesDeleted(listOf(workspaceId))
@@ -207,6 +218,28 @@ internal class CreatorLedgerCoordinator(
     ): CreatorWorkspace = withContext(Dispatchers.IO) {
         val workspace = creatorWorkspaces.get(workspaceId) ?: error("创作工作区不存在")
         require(workspace.conversations.any { it.id == conversationId }) { "创作助手对话不存在" }
+        cleanupRunner.run(
+            CreatorConversationCleanupKind,
+            conversationCleanupTarget(workspaceId, conversationId),
+        ) {
+            deleteConversationNow(workspaceId, conversationId)
+        } ?: error("创作工作区不存在")
+    }
+
+    internal suspend fun resumeConversationDeletion(targetId: String) {
+        val parts = targetId.split(CleanupTargetSeparator, limit = 2)
+        require(parts.size == 2) { "创作助手对话清理目标无效" }
+        deleteConversationNow(parts[0], parts[1])
+    }
+
+    private suspend fun deleteConversationNow(
+        workspaceId: String,
+        conversationId: String,
+    ): CreatorWorkspace? = withContext(Dispatchers.IO) {
+        val workspace = creatorWorkspaces.get(workspaceId) ?: return@withContext null
+        if (workspace.conversations.none { it.id == conversationId }) {
+            return@withContext withTimelines(workspace)
+        }
         beforeDeletion(listOf(conversationId))
         MarkdownRebuildableCaches.clearAfterConversationDeletion(listOf(conversationId))
         attachmentCleanup.deleteConversations(listOf(conversationId)) {
@@ -217,6 +250,16 @@ internal class CreatorLedgerCoordinator(
 
     private companion object {
         const val InitialTimelineTurns = 10
+        const val WorkspaceCleanupKind = "creator_workspace"
+        const val CreatorConversationCleanupKind = "creator_conversation"
+        const val CleanupTargetSeparator = "::"
+
+        fun conversationCleanupTarget(workspaceId: String, conversationId: String): String {
+            require(CleanupTargetSeparator !in workspaceId && CleanupTargetSeparator !in conversationId) {
+                "创作助手对话清理目标无效"
+            }
+            return "$workspaceId$CleanupTargetSeparator$conversationId"
+        }
     }
 }
 

@@ -4,6 +4,8 @@ import com.eleckoi.android.feature.chat.ui.*
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
 import com.eleckoi.android.engine.agent.diagnostics.AgentTurnRequestCapture
 import com.eleckoi.android.engine.generation.model.ModelConfig
 import com.eleckoi.android.feature.characters.model.CharacterMode
@@ -20,6 +22,8 @@ import com.eleckoi.android.feature.chat.ui.message.ChatAgentProcessSheet
 import com.eleckoi.android.feature.chat.ui.roleplay.dialog.RoleplayOpeningJumpDialog
 import com.eleckoi.android.feature.chat.ui.roleplay.web.model.RoleplayTranscriptModel
 import com.eleckoi.android.foundation.design.components.ConfirmDialog
+import com.eleckoi.android.foundation.design.components.DialogConfirmButton
+import com.eleckoi.android.foundation.design.components.DialogDismissButton
 import com.eleckoi.android.foundation.design.components.ErrorDialog
 
 /**
@@ -130,6 +134,39 @@ internal fun ChatScreenOverlays(
             message = state.errorMessage,
             appearance = state.appearance,
             onDismiss = { onIntent(ChatIntent.DismissError) },
+        )
+    }
+
+    state.requiredToolPrompt?.let { prompt ->
+        AlertDialog(
+            onDismissRequest = {
+                if (!prompt.enabling) onIntent(ChatIntent.DismissRequiredToolPrompt)
+            },
+            title = { Text("需要开启角色设定库工具", color = state.appearance.mobileText) },
+            text = {
+                Text(
+                    "模型尝试读取角色设定，但“角色设定库”工具当前处于关闭状态，所以工具调用被当成了普通文字。开启后，请重新生成这条回复。",
+                    color = state.appearance.mobileMuted,
+                )
+            },
+            confirmButton = {
+                DialogConfirmButton(
+                    text = if (prompt.enabling) "正在开启…" else "立即开启",
+                    appearance = state.appearance,
+                    enabled = !prompt.enabling,
+                    onClick = { onIntent(ChatIntent.EnableRequiredSettingLibraryTool) },
+                )
+            },
+            dismissButton = {
+                if (!prompt.enabling) {
+                    DialogDismissButton(
+                        text = "稍后",
+                        appearance = state.appearance,
+                        onClick = { onIntent(ChatIntent.DismissRequiredToolPrompt) },
+                    )
+                }
+            },
+            containerColor = state.appearance.mobileSurface,
         )
     }
 

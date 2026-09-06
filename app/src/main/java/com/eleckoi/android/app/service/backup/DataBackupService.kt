@@ -12,6 +12,7 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.data.Se
 import com.eleckoi.android.feature.preferences.UiPreferencesRepository
 import com.eleckoi.android.feature.chat.data.ChatSessionStore
 import com.eleckoi.android.engine.generation.config.ModelConfigRepository
+import com.eleckoi.android.engine.immersive.project.FrontendProjectRepository
 import com.eleckoi.android.engine.story.variables.config.VariableConfigRepository
 import com.eleckoi.android.engine.workspace.storage.CreatorWorkspaceRepository
 import com.eleckoi.android.foundation.serialization.ElecKoiJson
@@ -22,9 +23,7 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.UUID
-import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
-import java.util.zip.ZipOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonArray
@@ -56,92 +55,62 @@ class DataBackupService(
     private val uiPreferences: UiPreferencesRepository,
     private val appFont: AppFontRepository,
     private val modelConfigs: ModelConfigRepository,
+    private val frontendProjects: FrontendProjectRepository,
+    private val exportToolConfig: () -> String,
+    private val restoreToolConfig: (String) -> Unit,
     database: ElecKoiDatabase,
     private val creatorWorkspaces: CreatorWorkspaceRepository,
 ) {
     private val creatorAssistantBackup = CreatorAssistantBackupStore(database, creatorWorkspaces)
+    private val streamingBackup = StreamingDataBackupService(
+        context = context,
+        characters = characters,
+        profile = profile,
+        settingLibrary = settingLibrary,
+        variableConfig = variableConfig,
+        regexRules = regexRules,
+        storyPresets = storyPresets,
+        sessions = sessions,
+        uiPreferences = uiPreferences,
+        appFont = appFont,
+        modelConfigs = modelConfigs,
+        frontendProjects = frontendProjects,
+        exportToolConfig = exportToolConfig,
+        restoreToolConfig = restoreToolConfig,
+        creatorWorkspaces = creatorWorkspaces,
+        creatorAssistantBackup = creatorAssistantBackup,
+        includedRoots = IncludedRoots,
+        maximumEntryCount = MaxEntryCount,
+    )
 
-    suspend fun exportTo(uri: Uri): BackupResult = withContext(Dispatchers.IO) {
-        val root = context.filesDir.absolutePath
-        val characterPayload = rewriteJsonPaths(characters.exportCharacters(), root, toMarker = true)
-        val profilePayload = exportProfile(root)
-        val preferencePayload = uiPreferences.exportSnapshotJson()
-        val fontPayload = appFont.exportSelectionJson()
-        val modelPayload = modelConfigs.exportBackupJson()
-        val presetPayload = rewriteJsonPaths(storyPresets.exportBackupJson(), root, toMarker = true)
-        val creatorAssistantPayload = creatorAssistantBackup.exportJson()
-        val characterItems = characters.loadCharacters().items
-        val characterSegments = characterItems.map { safeSegment(it.id) }
-        require(characterSegments.size == characterSegments.toSet().size) { "角色 ID 无法安全打包" }
-        val historySnapshots = sessions.exportBackupHistories()
-        val sections = linkedMapOf(
-            "characters.json" to characterPayload,
-            "profile.json" to profilePayload,
-            "preferences.json" to preferencePayload,
-            "app-font.json" to fontPayload,
-            "model-configs.json" to modelPayload,
-            "presets.json" to presetPayload,
-            "creator-assistant.json" to rewriteJsonPaths(
-                creatorAssistantPayload.json,
-                root,
-                toMarker = true,
-            ),
-        )
-        characterItems.forEach { character ->
-            val id = safeSegment(character.id)
-            sections["settings/$id.json"] = rewriteJsonPaths(
-                settingLibrary.exportSnapshotJson(character.id), root, toMarker = true,
-            )
-            sections["variables/$id.json"] = rewriteJsonPaths(
-                variableConfig.exportJson(character.id), root, toMarker = true,
-            )
-            sections["regex/$id.json"] = rewriteJsonPaths(
-                regexRules.exportBackupJson(character.id), root, toMarker = true,
-            )
-        }
-        historySnapshots.forEach { (characterId, history) ->
-            sections["chats/${safeSegment(characterId)}.json"] =
-                rewriteJsonPaths(history, root, toMarker = true)
-        }
+    suspend fun exportTo(
+        uri: Uri,
+        onProgress: (BackupProgress) -> Unit = {},
+    ): BackupResult = streamingBackup.exportTo(uri, onProgress)
 
-        val archiveTree = collectBackupArchiveTree(context.filesDir, IncludedRoots)
-        require(archiveTree.directories.size + archiveTree.files.size <= MaxEntryCount) {
-            "备份文件数量过多"
+    suspend fun importFrom(
+        uri: Uri,
+        onProgress: (BackupProgress) -> Unit = {},
+    ): BackupResult = withContext(Dispatchers.IO) {
+        check(characters.loadCharacters().items.isEmpty()) {
+            "请在没有角色的干净安装中导入备份"
         }
-        val manifest = buildJsonObject {
-            put("format", ArchiveFormat)
-            put("version", ArchiveVersion)
-            put("sections", JsonArray(sections.keys.map(::JsonPrimitive)))
-            put("directories", JsonArray(archiveTree.directories.map(::JsonPrimitive)))
-            put("files", JsonArray(archiveTree.files.map { JsonPrimitive(it.entryName) }))
-            put(
-                "excluded",
-                JsonArray(listOf("model_credentials", "web_search_api_key", "remote_dsh_credentials", "agent_tool_catalog")
-                    .map(::JsonPrimitive)),
-            )
+        when (val archive = streamingBackup.inspect(uri, onProgress)) {
+            LegacyBackupArchive -> importLegacyV2(uri, onProgress)
+            is StreamingBackupArchive -> streamingBackup.importFrom(uri, archive, onProgress)
         }
-        context.contentResolver.openOutputStream(uri)?.use { output ->
-            ZipOutputStream(output.buffered()).use { zip ->
-                writeTextEntry(zip, ManifestEntry, ElecKoiPrettyJson.encodeToString(manifest))
-                sections.forEach { (name, value) -> writeTextEntry(zip, name, value) }
-                archiveTree.files.forEach { entry ->
-                    zip.putNextEntry(ZipEntry(entry.entryName))
-                    entry.file.inputStream().use { it.copyTo(zip) }
-                    zip.closeEntry()
-                }
-            }
-        } ?: throw IOException("无法打开备份保存位置")
-        BackupResult(
-            mode = BackupMode.Export,
-            characters = characterItems.size,
-            sessions = historySnapshots.size,
-            files = archiveTree.files.size,
-            creatorWorkspaces = creatorAssistantPayload.workspaceCount,
-            creatorConversations = creatorAssistantPayload.conversationCount,
-        )
     }
 
-    suspend fun importFrom(uri: Uri): BackupResult = withContext(Dispatchers.IO) {
+    private suspend fun importLegacyV2(
+        uri: Uri,
+        onProgress: (BackupProgress) -> Unit,
+    ): BackupResult = withContext(Dispatchers.IO) {
+        onProgress(BackupProgress(
+            mode = BackupMode.Import,
+            phase = BackupPhase.Restoring,
+            current = "正在导入旧备份格式",
+            cancellable = false,
+        ))
         check(characters.loadCharacters().items.isEmpty()) {
             "请在没有角色的干净安装中导入备份"
         }
@@ -179,11 +148,12 @@ class DataBackupService(
             require(fileNames.size + directoryNames.size <= MaxEntryCount) { "备份文件数量过多" }
             restoreBackupDirectories(context.filesDir, directoryNames)
             restoreFiles(staging, fileNames)
-            val restoredCreatorWorkspaces = creatorWorkspaces.reloadAfterBackupRestore()
 
             val restoredProfile = profileFromJson(profilePayload)
             profile.restoreSnapshot(restoredProfile)
             val restoredCharacters = characters.importCharacters(payload)
+            val restoredCreatorWorkspaces = creatorWorkspaces.reloadAfterBackupRestore()
+            sections["author-frontends.json"]?.let(frontendProjects::restoreBackupJson)
             restoredCharacters.items.forEach { character ->
                 val id = safeSegment(character.id)
                 settingLibrary.restoreSnapshotJson(
@@ -208,9 +178,11 @@ class DataBackupService(
                 }
             val restoredSessions = sessions.restoreBackupHistories(histories)
             storyPresets.restoreBackupJson(sections.getValue("presets.json"))
+            sections["shared-regex.json"]?.let(regexRules::restoreSharedBackupJson)
             uiPreferences.restoreSnapshotJson(sections.getValue("preferences.json"))
             appFont.restoreSelectionJson(sections.getValue("app-font.json"))
             modelConfigs.restoreBackupJson(sections.getValue("model-configs.json"))
+            sections["tool-config.json"]?.let(restoreToolConfig)
             val restoredCreatorConversations = creatorAssistantBackup.restoreJson(
                 sections.getValue("creator-assistant.json"),
                 restoredCreatorWorkspaces,
@@ -264,7 +236,7 @@ class DataBackupService(
 
     private fun validateCharacters(json: String) {
         val element = ElecKoiJson.parseToJsonElement(json)
-        require(element is JsonObject && element["items"]?.jsonArray?.isNotEmpty() == true) {
+        require(element is JsonObject && element["items"] is JsonArray) {
             "角色备份格式不正确"
         }
     }
@@ -332,12 +304,6 @@ class DataBackupService(
     private fun readJson(file: File): JsonObject =
         ElecKoiJson.parseToJsonElement(file.readText()).jsonObject
 
-    private fun writeTextEntry(zip: ZipOutputStream, name: String, value: String) {
-        zip.putNextEntry(ZipEntry(name))
-        zip.write(value.toByteArray(Charsets.UTF_8))
-        zip.closeEntry()
-    }
-
     private fun rewriteJsonPaths(json: String, root: String, toMarker: Boolean): String {
         val element = ElecKoiJson.parseToJsonElement(json)
         return ElecKoiPrettyJson.encodeToString(rewriteElement(element, root, toMarker))
@@ -394,11 +360,8 @@ class DataBackupService(
             "data/characters",
             "data/user",
             "data/settings",
-            "data/regex",
             "data/story-presets",
-            "author_frontends/catalog.json",
             "author_frontends/projects",
-            "creator_workspaces/catalog.json",
             "creator_workspaces/workspaces",
             "creator_workspaces/characters",
             "fonts/imported",
@@ -419,3 +382,17 @@ data class BackupResult(
 )
 
 enum class BackupMode { Export, Import }
+
+data class BackupProgress(
+    val mode: BackupMode,
+    val phase: BackupPhase,
+    val completed: Int = 0,
+    val total: Int = 0,
+    val current: String = "",
+    val cancellable: Boolean = true,
+) {
+    val fraction: Float?
+        get() = total.takeIf { it > 0 }?.let { completed.coerceIn(0, it).toFloat() / it }
+}
+
+enum class BackupPhase { Preparing, Validating, Transferring, Restoring }

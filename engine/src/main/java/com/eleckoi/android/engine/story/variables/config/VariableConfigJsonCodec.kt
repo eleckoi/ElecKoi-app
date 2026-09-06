@@ -8,6 +8,11 @@ import com.eleckoi.android.engine.story.variables.model.VariableReadMode
 import com.eleckoi.android.foundation.storage.ElecKoiDataException
 import com.eleckoi.android.foundation.storage.objects
 import com.eleckoi.android.foundation.storage.room.VariableConfigEntity
+import com.eleckoi.android.foundation.storage.room.VariableConfigRecord
+import com.eleckoi.android.foundation.storage.room.VariableConfigVersionEntity
+import com.eleckoi.android.foundation.storage.room.VariableConfigVersionContentEntity
+import com.eleckoi.android.foundation.storage.room.VariableConfigObjectEntity
+import com.eleckoi.android.foundation.storage.room.VariableConfigVariableEntity
 import com.eleckoi.android.foundation.storage.stringOrEmpty
 import com.eleckoi.android.foundation.storage.strings
 import org.json.JSONArray
@@ -63,23 +68,70 @@ internal object VariableConfigJsonCodec {
         return rootVersion(data)
     }
 
-    fun decodeVersions(json: String): List<VariableConfigVersion> {
-        return JSONArray(json.ifBlank { "[]" }).objects().map(::versionFromJson).toList()
+    fun toRecord(config: VariableConfig, updatedAt: String, revision: Long): VariableConfigRecord {
+        val versions = config.versions.mapIndexed { index, version ->
+            VariableConfigVersionEntity(
+                characterId = config.characterId,
+                versionId = version.id,
+                sortIndex = index,
+                name = version.name,
+                expandedObjectIdsJson = JSONArray(version.expandedObjectIds).toString(),
+                createdAt = version.createdAt,
+                updatedAt = version.updatedAt,
+            )
+        }
+        return VariableConfigRecord(
+            config = VariableConfigEntity(config.characterId, config.activeVersionId, updatedAt, revision),
+            versions = versions,
+            contents = config.versions.flatMap { version ->
+                listOf(
+                    VariableConfigVersionContentEntity(
+                        config.characterId, version.id, InitialStateContentKind,
+                        version.resolvedInitialStateJson(),
+                    ),
+                    VariableConfigVersionContentEntity(
+                        config.characterId, version.id, SchemaCodeContentKind, version.schemaCode,
+                    ),
+                )
+            },
+            objects = config.versions.flatMap { version ->
+                version.objects.mapIndexed { index, item ->
+                    VariableConfigObjectEntity(
+                        config.characterId, version.id, item.id, index, objectJson(item).toString(),
+                    )
+                }
+            },
+            variables = config.versions.flatMap { version ->
+                version.variables.mapIndexed { index, item ->
+                    VariableConfigVariableEntity(
+                        config.characterId, version.id, item.id, index, variableJson(item).toString(),
+                    )
+                }
+            },
+        )
     }
 
-    fun toEntity(config: VariableConfig, updatedAt: String): VariableConfigEntity {
-        return VariableConfigEntity(
-            characterId = config.characterId,
-            name = config.name,
-            initialStateJson = config.initialStateJson,
-            schemaCode = config.schemaCode,
-            objectsJson = JSONArray(config.objects.map(::objectJson)).toString(),
-            variablesJson = JSONArray(config.variables.map(::variableJson)).toString(),
-            expandedObjectIdsJson = JSONArray(config.expandedObjectIds).toString(),
-            activeVersionId = config.activeVersionId,
-            versionsJson = JSONArray(config.versions.map(::versionJson)).toString(),
-            updatedAt = updatedAt,
-        )
+    fun versionsFromRecord(record: VariableConfigRecord): List<VariableConfigVersion> {
+        val contentByKey = record.contents.associate { (it.versionId to it.kind) to it.content }
+        val objectsByVersion = record.objects.groupBy(VariableConfigObjectEntity::versionId)
+        val variablesByVersion = record.variables.groupBy(VariableConfigVariableEntity::versionId)
+        return record.versions.sortedBy(VariableConfigVersionEntity::sortIndex).map { entity ->
+            VariableConfigVersion(
+                id = entity.versionId,
+                name = entity.name,
+                initialStateJson = contentByKey[entity.versionId to InitialStateContentKind].orEmpty(),
+                schemaCode = contentByKey[entity.versionId to SchemaCodeContentKind].orEmpty(),
+                objects = objectsByVersion[entity.versionId].orEmpty()
+                    .sortedBy(VariableConfigObjectEntity::sortIndex)
+                    .mapIndexed { index, row -> objectFromJson(JSONObject(row.payloadJson), index) },
+                variables = variablesByVersion[entity.versionId].orEmpty()
+                    .sortedBy(VariableConfigVariableEntity::sortIndex)
+                    .mapIndexed { index, row -> variableFromJson(JSONObject(row.payloadJson), index) },
+                expandedObjectIds = JSONArray(entity.expandedObjectIdsJson).strings(),
+                createdAt = entity.createdAt,
+                updatedAt = entity.updatedAt,
+            )
+        }
     }
 
     private fun parse(json: String): JSONObject {
@@ -212,3 +264,5 @@ internal object VariableConfigJsonCodec {
 }
 
 private const val VariableConfigFormat = "eleckoi.variable-config"
+private const val InitialStateContentKind = "initial_state"
+private const val SchemaCodeContentKind = "schema_code"

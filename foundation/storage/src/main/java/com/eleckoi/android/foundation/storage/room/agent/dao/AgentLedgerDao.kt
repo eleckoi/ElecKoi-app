@@ -1,6 +1,7 @@
 package com.eleckoi.android.foundation.storage.room.agent.dao
 
 import androidx.room.Dao
+import androidx.room.Delete
 import androidx.room.Query
 import androidx.room.Upsert
 import androidx.paging.PagingSource
@@ -9,6 +10,7 @@ import com.eleckoi.android.foundation.storage.room.agent.entity.AgentBranchTurnE
 import com.eleckoi.android.foundation.storage.room.agent.entity.AgentContentPartEntity
 import com.eleckoi.android.foundation.storage.room.agent.entity.AgentConversationEntity
 import com.eleckoi.android.foundation.storage.room.agent.entity.AgentConversationDisplayCacheEntity
+import com.eleckoi.android.foundation.storage.room.agent.entity.ConversationSpeakerEntity
 import com.eleckoi.android.foundation.storage.room.agent.entity.AgentResponseEntity
 import com.eleckoi.android.foundation.storage.room.agent.entity.AgentTurnEntity
 
@@ -62,6 +64,12 @@ interface AgentLedgerDao {
     fun upsertBranch(branch: AgentBranchEntity)
 
     @Upsert
+    fun upsertSpeakers(speakers: List<ConversationSpeakerEntity>)
+
+    @Query("SELECT * FROM conversation_speakers WHERE id IN (:ids)")
+    fun speakers(ids: List<String>): List<ConversationSpeakerEntity>
+
+    @Upsert
     fun upsertTurns(turns: List<AgentTurnEntity>)
 
     @Upsert
@@ -72,6 +80,10 @@ interface AgentLedgerDao {
 
     @Upsert
     fun upsertContentParts(parts: List<AgentContentPartEntity>)
+
+    /** Deletes only obsolete chunks; recovery checkpoints retain unchanged response rows. */
+    @Delete
+    fun deleteContentPartRows(parts: List<AgentContentPartEntity>)
 
     @Query("SELECT * FROM agent_branch_turns WHERE branchId = :branchId ORDER BY sequence ASC")
     fun branchTurns(branchId: String): List<AgentBranchTurnEntity>
@@ -149,9 +161,7 @@ interface AgentLedgerDao {
 
     @Query(
         """
-        SELECT COUNT(*) + COALESCE(SUM(
-            CASE WHEN response.id IS NULL THEN 0 ELSE 1 END
-        ), 0)
+        SELECT COUNT(DISTINCT path.turnId) + COUNT(response.id)
         FROM agent_branch_turns AS path
         LEFT JOIN agent_responses AS response ON response.turnId = path.turnId
         WHERE path.branchId = :branchId
@@ -183,7 +193,7 @@ interface AgentLedgerDao {
     @Query("SELECT * FROM agent_responses WHERE turnId IN (:turnIds)")
     fun responsesForTurns(turnIds: List<String>): List<AgentResponseEntity>
 
-    @Query("SELECT * FROM agent_responses WHERE turnId = :turnId LIMIT 1")
+    @Query("SELECT * FROM agent_responses WHERE turnId = :turnId ORDER BY responseIndex ASC LIMIT 1")
     fun responseForTurn(turnId: String): AgentResponseEntity?
 
     @Query(
@@ -203,8 +213,8 @@ interface AgentLedgerDao {
     @Query("DELETE FROM agent_responses WHERE turnId IN (:turnIds)")
     fun deleteResponsesForTurns(turnIds: List<String>)
 
-    @Query("DELETE FROM agent_responses WHERE turnId = :turnId")
-    fun deleteResponseForTurn(turnId: String)
+    @Query("DELETE FROM agent_responses WHERE id IN (:responseIds)")
+    fun deleteResponses(responseIds: List<String>)
 
     @Query("DELETE FROM agent_branch_turns WHERE branchId = :branchId AND sequence >= :fromSequence")
     fun deleteBranchTurnsFrom(branchId: String, fromSequence: Int)

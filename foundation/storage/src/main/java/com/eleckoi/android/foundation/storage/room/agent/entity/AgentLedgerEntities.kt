@@ -73,9 +73,9 @@ data class AgentBranchEntity(
     val createdAt: String,
 )
 
-/** Stable user/system/opening turn. Editing updates its content while preserving this identity. */
+/** Stable speaker identity inside one saved conversation, separate from the model that produced it. */
 @Entity(
-    tableName = "agent_turns",
+    tableName = "conversation_speakers",
     primaryKeys = ["id"],
     foreignKeys = [
         ForeignKey(
@@ -87,12 +87,47 @@ data class AgentBranchEntity(
     ],
     indices = [
         Index("conversationId"),
+        Index(value = ["conversationId", "sourceSpeakerId"], unique = true),
+    ],
+)
+data class ConversationSpeakerEntity(
+    val id: String,
+    val conversationId: String,
+    /** Product identity such as user, narrator, or a card-internal character id. */
+    val sourceSpeakerId: String,
+    val kind: String,
+    val displayName: String,
+    val avatarAssetId: String,
+)
+
+/** Stable user/system/opening turn. Editing updates its content while preserving this identity. */
+@Entity(
+    tableName = "agent_turns",
+    primaryKeys = ["id"],
+    foreignKeys = [
+        ForeignKey(
+            entity = AgentConversationEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["conversationId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+        ForeignKey(
+            entity = ConversationSpeakerEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["speakerId"],
+            onDelete = ForeignKey.RESTRICT,
+        ),
+    ],
+    indices = [
+        Index("conversationId"),
+        Index("speakerId"),
         Index(value = ["conversationId", "sourceMessageId"]),
     ],
 )
 data class AgentTurnEntity(
     val id: String,
     val conversationId: String,
+    val speakerId: String,
     val sourceMessageId: String,
     val kind: String,
     val provider: String,
@@ -101,7 +136,7 @@ data class AgentTurnEntity(
     val variableStateJson: String,
 )
 
-/** 一个用户回合当前唯一的 AI 回复；重新生成时直接覆盖这一行。 */
+/** One visible reply in a turn. Several ordered speakers may answer the same turn. */
 @Entity(
     tableName = "agent_responses",
     primaryKeys = ["id"],
@@ -118,16 +153,25 @@ data class AgentTurnEntity(
             childColumns = ["turnId"],
             onDelete = ForeignKey.CASCADE,
         ),
+        ForeignKey(
+            entity = ConversationSpeakerEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["speakerId"],
+            onDelete = ForeignKey.RESTRICT,
+        ),
     ],
     indices = [
         Index("conversationId"),
-        Index(value = ["turnId"], unique = true),
+        Index("speakerId"),
+        Index(value = ["turnId", "responseIndex"], unique = true),
     ],
 )
 data class AgentResponseEntity(
     val id: String,
     val conversationId: String,
     val turnId: String,
+    val responseIndex: Int,
+    val speakerId: String,
     val sourceMessageId: String,
     val status: String,
     val provider: String,

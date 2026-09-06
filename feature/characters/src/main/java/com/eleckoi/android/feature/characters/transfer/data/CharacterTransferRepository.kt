@@ -379,7 +379,7 @@ class CharacterTransferRepository(
         if (target.toPath().startsWith(importRoot)) target.delete()
     }
 
-    private fun cleanupImportedCharacter(characterId: String) {
+    private suspend fun cleanupImportedCharacter(characterId: String) {
         val ids = listOf(characterId)
         settingLibrary.deleteForCharacters(ids)
         variableConfig.deleteForCharacters(ids)
