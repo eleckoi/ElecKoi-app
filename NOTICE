@@ -1,42 +1,90 @@
 ElecKoi
-Copyright (c) ElecKoi contributors
+Copyright (c) 2026 ElecKoi contributors
 
-Except where a file or notice states otherwise, ElecKoi source code is
-licensed under the GNU Affero General Public License, version 3 or any later
-version. Third-party components remain under their respective licenses.
+Except where a file or notice states otherwise, ElecKoi original source code and
+first-party assets are licensed under the GNU Affero General Public License,
+version 3 or any later version. Third-party components remain under their
+respective licenses; the root AGPL license does not replace or remove those terms.
 
-本产品包含以下第三方素材。
+Distribution-specific notices are retained in:
+
+- app/src/main/assets/licenses/
+- app/src/main/assets/variable-runtime/
+- app/src/main/rust/vendor/
+- runtime/licenses/
+
+------------------------------------------------------------------------------
+Gradle Wrapper
+------------------------------------------------------------------------------
+
+The repository includes the Gradle 9.3.1 wrapper JAR so the documented build
+can bootstrap Gradle. Gradle is licensed under Apache-2.0.
+
+- Upstream: https://github.com/gradle/gradle/tree/v9.3.1
+- Wrapper JAR SHA-256: e996d452d2645e70c01c11143ca2d3742734a28da2bf61f25c82bdc288c9e637
+- License text: runtime/licenses/Apache-2.0.txt
+
+------------------------------------------------------------------------------
+Grok Build Markdown components
+------------------------------------------------------------------------------
+
+ElecKoi links the `xai-grok-markdown` and `xai-grok-markdown-core` crates from
+https://github.com/xai-org/grok-build at pinned commit
+98c3b2438aa922fbbe6178a5c0a4c48f85edc8ce. ElecKoi adapts
+their headless parsing output to JNI-safe payloads and the Android/Compose
+document model.
+
+Grok Build first-party code is licensed under Apache-2.0. The applicable
+license text and generated Rust dependency notices are included in:
+
+- runtime/licenses/Apache-2.0.txt
+- app/src/main/assets/licenses/rust-markdown-third-party-notices.html
+
+The linked Mermaid implementation and its ancestry retain their own notices in
+app/src/main/rust/vendor/mermaid-to-svg/.
 
 ------------------------------------------------------------------------------
 Font Awesome Free
 ------------------------------------------------------------------------------
 
-图标（icons）部分以 CC BY 4.0 License 授权。
+Selected Font Awesome Free icon geometry is licensed under CC BY 4.0.
 
-  项目主页: https://fontawesome.com
-  许可证:   https://creativecommons.org/licenses/by/4.0/
+  Creator and copyright holder: Fonticons, Inc. / Font Awesome
+  Project: https://fontawesome.com
+  License: https://creativecommons.org/licenses/by/4.0/
+  Imported version: not recorded
+  Modification status: vector path coordinates are reproduced without shape changes
 
-使用范围：
-  foundation/design/src/main/java/com/eleckoi/android/foundation/design/components/ElecKoiIcons.kt
-    - AppIconPaths.PromptMarkerThumbTack （源自 Font Awesome Solid `thumb-tack`）
-    - AppIconPaths.PromptPosition        （源自 Font Awesome Solid `square-poll-horizontal`）
-    - AppIconPaths.MessageEditPencil      （源自 Font Awesome Solid `pencil`）
-    - AppIconPaths.MessageSendPaperPlane  （源自 Font Awesome Solid `paper-plane`）
+Used in:
+  foundation/design/src/main/java/com/eleckoi/android/foundation/design/components/ElecKoiIconPaths.kt
+    - AppIconPaths.PromptMarkerThumbTack (Font Awesome Solid `thumb-tack`)
+    - AppIconPaths.PromptPosition (`square-poll-horizontal`)
+    - AppIconPaths.MessageEditPencil (`pencil`)
+    - AppIconPaths.MessageSendPaperPlane (`paper-plane`)
 
-上述常量保存的是图标的矢量路径数据，未作形状修改。若增删此类图标，
-请同步更新本文件的清单。
+------------------------------------------------------------------------------
+DeepSeek Harness visual assets
+------------------------------------------------------------------------------
+
+Selected icon geometry is reproduced or adapted from DeepSeek Harness, licensed
+under the MIT License, Copyright (c) 2026 DeepSeek. The applicable MIT text is at
+runtime/licenses/deepseek-harness-MIT.txt.
+
+Used in:
+  foundation/design/src/main/java/com/eleckoi/android/foundation/design/components/DshPermissionIcons.kt
+  foundation/design/src/main/java/com/eleckoi/android/foundation/design/components/DshTimelineIcons.kt
+  foundation/design/src/main/java/com/eleckoi/android/foundation/design/components/ElecKoiIconPaths.kt
 
 ------------------------------------------------------------------------------
 GitHub Primer Octicons
 ------------------------------------------------------------------------------
 
-以 MIT License 授权。
+The GitHub mark path used by the About screen comes from Primer Octicons and
+is licensed under the MIT License.
 
-  项目主页: https://github.com/primer/octicons
-  许可证:   https://github.com/primer/octicons/blob/main/LICENSE
+- Upstream: https://github.com/primer/octicons
+- License text: app/src/main/assets/licenses/primer-octicons.MIT.txt
 
-使用范围：
+Used in:
   feature/settings/src/main/java/com/eleckoi/android/feature/settings/ui/personalization/about/AboutElecKoiPage.kt
-    - GitHubMarkPath（GitHub 官方 Primer Octicons `mark-github-24`）
-
-上述常量保存的是官方图标的原始矢量路径数据，未作形状修改。
+    - GitHubMarkPath (Primer Octicons `mark-github-24`)

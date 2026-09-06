@@ -51,10 +51,9 @@
 
 项目当前需要着重思考的公开课题，将持续整理在 [AI 角色扮演开发难题](docs/open-problems/README.md)。
 
-## 社区与 QQ 群
+## QQ 群
 
-- GitHub：通过 Issue、Discussion 或 Pull Request 参与项目。
-- QQ 群：`1041463229`，可在 QQ 中搜索群号加入。
+`1041463229`
 
 ## 为什么做电子爱
 
@@ -91,7 +90,6 @@
 - 感谢 [Tavern-Helper](https://github.com/N0VI028/JS-Slash-Runner) 及 MVU 内容生态推动变量驱动角色扮演的实践。电子爱延续了“状态能够参与叙事”的创作方向，并以自己的层级数据模型、Agent 工具、补丁协议、Zod 校验、消息快照和事务提交机制实现。
 - 感谢 [TauriTavern](https://github.com/Darkatse/TauriTavern) 对移动端长聊天与富内容运行问题的公开探索，为电子爱调研这类工程问题提供了可供比较的实践。
 - 感谢 [EJS](https://github.com/mde/ejs) 建立的模板语法与创作生态。电子爱独立实现了对部分 EJS 模板语法的兼容，未内置 EJS 上游运行库。
-- 感谢 [Grok Build](https://github.com/xai-org/grok-build) 提供无界面的流式 Markdown 解析组件。电子爱直接使用固定版本的 `xai-grok-markdown` 与 `xai-grok-markdown-core`，并将解析结果接入 Android 与 Compose 显示层。相关上游代码继续遵守 Apache-2.0 许可证，Mermaid 组件继续遵守其 MIT 许可证。
 
 实际随包分发的第三方代码、二进制文件和素材及其许可证，以 `NOTICE` 和各级许可文件中的记录为准。
 

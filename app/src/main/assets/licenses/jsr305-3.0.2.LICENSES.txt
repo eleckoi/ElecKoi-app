@@ -1,0 +1,74 @@
+JSR-305 3.0.2 license and attribution record
+================================================
+
+Component: com.google.code.findbugs:jsr305:3.0.2
+Published binary SHA-256:
+766ad2a0783f2687962c8ad74ceecc38a28b9f72a2d085ee438b7813e928d0c7
+Published source JAR SHA-256:
+1c9e85e272d0708c6a591dc74828c71603053b48cc75ae83cce56912a2aa063b
+
+The published Maven POM declares the Apache Software License, Version 2.0:
+https://repo1.maven.org/maven2/com/google/code/findbugs/jsr305/3.0.2/jsr305-3.0.2.pom
+
+The complete Apache-2.0 terms are packaged separately as Apache-2.0.txt.
+
+The JSR-305 reference-implementation source archive retained by the Google Code
+Archive contains the following BSD-3-Clause license. ElecKoi retains these
+terms in addition to the published POM declaration so distribution does not
+depend on resolving the conflicting upstream metadata.
+
+Source archive:
+https://storage.googleapis.com/google-code-archive-source/v2/code.google.com/jsr-305/source-archive.zip
+Archive SHA-256:
+4f29730ba2229df8af699ee139486bf5593052d2fcc2bd0fc3cfe121fd76025b
+License path in archive: jsr-305/trunk/ri/LICENSE
+
+Copyright (c) 2007-2009, JSR305 expert group
+All rights reserved.
+
+http://www.opensource.org/licenses/bsd-license.php
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright notice,
+      this list of conditions and the following disclaimer in the documentation
+      and/or other materials provided with the distribution.
+    * Neither the name of the JSR305 expert group nor the names of its
+      contributors may be used to endorse or promote products derived from
+      this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+
+Four files in the published source JAR carry the following separate header:
+
+    Copyright (c) 2005 Brian Goetz
+    Released under the Creative Commons Attribution License
+      (http://creativecommons.org/licenses/by/2.5)
+    Official home: http://www.jcip.net
+
+Files:
+
+- javax/annotation/concurrent/GuardedBy.java
+- javax/annotation/concurrent/Immutable.java
+- javax/annotation/concurrent/NotThreadSafe.java
+- javax/annotation/concurrent/ThreadSafe.java
+
+License: Creative Commons Attribution 2.5 Generic (CC BY 2.5)
+Legal terms: https://creativecommons.org/licenses/by/2.5/legalcode
+
+ElecKoi obtains these compiled annotations transitively through Guava and does
+not edit their source. Android build tools may convert the Java bytecode to DEX
+as part of ordinary application packaging.

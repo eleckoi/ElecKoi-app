@@ -1,0 +1,12 @@
+OkHttp 4.12.0 embedded data notice
+
+Note that publicsuffixes.gz is compiled from The Public Suffix List:
+https://publicsuffix.org/list/public_suffix_list.dat
+
+It is subject to the terms of the Mozilla Public License, v. 2.0:
+https://mozilla.org/MPL/2.0/
+
+This notice is reproduced from
+okhttp3/internal/publicsuffix/NOTICE in the published OkHttp 4.12.0 JAR.
+The complete MPL-2.0 terms are packaged in
+dompurify-3.3.2.LICENSE.txt.

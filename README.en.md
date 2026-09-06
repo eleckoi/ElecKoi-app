@@ -51,10 +51,9 @@ ElecKoi aims to build a continuously improving creative flywheel: turn the commu
 
 Open problems that require focused attention will be collected in [Open Problems in AI Roleplay Development](docs/open-problems/README.en.md).
 
-## Community and QQ Group
+## QQ Group
 
-- GitHub: participate through Issues, Discussions, or Pull Requests.
-- QQ group: `1041463229`; search this group number in QQ to join.
+`1041463229`
 
 ## Why ElecKoi
 
@@ -91,7 +90,6 @@ Thank you to the following open-source projects and creators for advancing the A
 - Thanks to [Tavern-Helper](https://github.com/N0VI028/JS-Slash-Runner) and the MVU content ecosystem for advancing variable-driven roleplay. ElecKoi carries forward the idea that state can participate in storytelling, implemented through its own hierarchical data model, Agent tools, patch protocol, Zod validation, message snapshots, and transactional commits.
 - Thanks to [TauriTavern](https://github.com/Darkatse/TauriTavern) for publicly exploring long-conversation and rich-content runtime challenges on mobile, providing useful engineering practice for comparison during ElecKoi's research.
 - Thanks to [EJS](https://github.com/mde/ejs) for establishing its template syntax and creative ecosystem. ElecKoi independently implements compatibility with part of the EJS template syntax and does not bundle the upstream EJS runtime.
-- Thanks to [Grok Build](https://github.com/xai-org/grok-build) for providing a headless streaming Markdown parser. ElecKoi directly uses pinned versions of `xai-grok-markdown` and `xai-grok-markdown-core` and connects their parsed output to Android and Compose rendering. The upstream code remains under the Apache-2.0 License, while the Mermaid component remains under the MIT License.
 
 For the authoritative record of third-party code, binaries, assets, and licenses actually distributed with the app, refer to `NOTICE` and the license files throughout the repository.
 
