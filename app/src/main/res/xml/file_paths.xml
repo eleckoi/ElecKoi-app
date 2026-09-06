@@ -9,4 +9,7 @@
     <files-path
         name="diagnostics"
         path="diagnostics/" />
+    <files-path
+        name="app_updates"
+        path="app_updates/" />
 </paths>

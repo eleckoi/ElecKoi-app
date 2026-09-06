@@ -1,7 +1,11 @@
 package com.eleckoi.android.app.update
 
 import android.content.Context
+import com.eleckoi.android.feature.settings.ui.update.GitHubConnectionSettings
+import com.eleckoi.android.feature.settings.ui.update.GitHubConnectionSource
+import com.eleckoi.android.feature.settings.ui.update.normalizeMirrorPrefix
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -21,6 +25,7 @@ internal data class AppUpdateSnapshot(
     val latestRelease: AppRelease? = null,
     val lastCheckedAtMillis: Long = 0L,
     val notifiedTag: String = "",
+    val connection: GitHubConnectionSettings = GitHubConnectionSettings(),
 )
 
 internal class AppUpdateRepository(
@@ -35,7 +40,7 @@ internal class AppUpdateRepository(
     suspend fun current(): AppUpdateSnapshot = snapshot.first()
 
     suspend fun checkForUpdate(): AppUpdateSnapshot {
-        val result = releaseClient.latest()
+        val result = releaseClient.latest(current().connection)
         dataStore.edit { preferences ->
             preferences[Keys.LastCheckedAt] = nowMillis()
             when (result) {
@@ -48,6 +53,17 @@ internal class AppUpdateRepository(
 
     suspend fun setRemindersEnabled(enabled: Boolean) {
         dataStore.edit { preferences -> preferences[Keys.RemindersEnabled] = enabled }
+    }
+
+    suspend fun setConnection(settings: GitHubConnectionSettings) {
+        val prefix = normalizeMirrorPrefix(settings.customPrefix)
+        require(settings.source != GitHubConnectionSource.Custom || prefix != null) {
+            "请填写有效的 HTTPS 镜像地址"
+        }
+        dataStore.edit { preferences ->
+            preferences[Keys.ConnectionSource] = settings.source.name
+            preferences[Keys.CustomMirrorPrefix] = prefix.orEmpty()
+        }
     }
 
     suspend fun markNotified(tagName: String) {
@@ -64,6 +80,14 @@ internal class AppUpdateRepository(
                 pageUrl = pageUrl,
                 notes = preferences[Keys.LatestNotes].orEmpty(),
                 publishedAt = preferences[Keys.LatestPublishedAt].orEmpty(),
+                apk = preferences[Keys.LatestApkUrl]?.let { downloadUrl ->
+                    AppReleaseApk(
+                        name = preferences[Keys.LatestApkName].orEmpty(),
+                        downloadUrl = downloadUrl,
+                        sizeBytes = preferences[Keys.LatestApkSize] ?: 0L,
+                        sha256 = preferences[Keys.LatestApkSha256],
+                    )
+                },
             )
         } else {
             null
@@ -73,6 +97,20 @@ internal class AppUpdateRepository(
             latestRelease = release,
             lastCheckedAtMillis = preferences[Keys.LastCheckedAt] ?: 0L,
             notifiedTag = preferences[Keys.NotifiedTag].orEmpty(),
+            connection = connectionFrom(preferences),
+        )
+    }
+
+    private fun connectionFrom(preferences: Preferences): GitHubConnectionSettings {
+        val prefix = normalizeMirrorPrefix(preferences[Keys.CustomMirrorPrefix].orEmpty()).orEmpty()
+        val source = GitHubConnectionSource.entries.find {
+            it.name == preferences[Keys.ConnectionSource]
+        } ?: GitHubConnectionSource.Official
+        return GitHubConnectionSettings(
+            source = if (source == GitHubConnectionSource.Custom && prefix.isEmpty()) {
+                GitHubConnectionSource.Official
+            } else source,
+            customPrefix = prefix,
         )
     }
 
@@ -82,6 +120,19 @@ internal class AppUpdateRepository(
         preferences[Keys.LatestPageUrl] = release.pageUrl
         preferences[Keys.LatestNotes] = release.notes
         preferences[Keys.LatestPublishedAt] = release.publishedAt
+        val apk = release.apk
+        if (apk != null) {
+            preferences[Keys.LatestApkName] = apk.name
+            preferences[Keys.LatestApkUrl] = apk.downloadUrl
+            preferences[Keys.LatestApkSize] = apk.sizeBytes
+            if (apk.sha256 != null) {
+                preferences[Keys.LatestApkSha256] = apk.sha256
+            } else {
+                preferences.remove(Keys.LatestApkSha256)
+            }
+        } else {
+            clearApk(preferences)
+        }
     }
 
     private fun clearRelease(preferences: MutablePreferences) {
@@ -90,9 +141,19 @@ internal class AppUpdateRepository(
         preferences.remove(Keys.LatestPageUrl)
         preferences.remove(Keys.LatestNotes)
         preferences.remove(Keys.LatestPublishedAt)
+        clearApk(preferences)
+    }
+
+    private fun clearApk(preferences: MutablePreferences) {
+        preferences.remove(Keys.LatestApkName)
+        preferences.remove(Keys.LatestApkUrl)
+        preferences.remove(Keys.LatestApkSize)
+        preferences.remove(Keys.LatestApkSha256)
     }
 
     private object Keys {
+        val ConnectionSource = stringPreferencesKey("github_connection_source")
+        val CustomMirrorPrefix = stringPreferencesKey("github_custom_mirror_prefix")
         val RemindersEnabled = booleanPreferencesKey("reminders_enabled")
         val LatestTag = stringPreferencesKey("latest_tag")
         val LatestTitle = stringPreferencesKey("latest_title")
@@ -101,7 +162,9 @@ internal class AppUpdateRepository(
         val LatestPublishedAt = stringPreferencesKey("latest_published_at")
         val LastCheckedAt = longPreferencesKey("last_checked_at")
         val NotifiedTag = stringPreferencesKey("notified_tag")
+        val LatestApkName = stringPreferencesKey("latest_apk_name")
+        val LatestApkUrl = stringPreferencesKey("latest_apk_url")
+        val LatestApkSize = longPreferencesKey("latest_apk_size")
+        val LatestApkSha256 = stringPreferencesKey("latest_apk_sha256")
     }
 }
-
-private typealias MutablePreferences = androidx.datastore.preferences.core.MutablePreferences
