@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.NavKey
 import com.eleckoi.android.feature.characters.modes.story.presets.ui.StoryPresetPage
@@ -100,18 +101,28 @@ internal fun mobileSettingsRouteEntry(
         }
         MobileRoute.AppUpdate -> NavEntry(currentRoute) {
                 val state = currentAppUpdateState.value
+                val connectionState = appUpdateViewModel.connection.state.collectAsStateWithLifecycle().value
                 AppUpdatePage(
                     appearance = currentThemeState.value.appearance,
                     installedVersion = state.installedVersion,
                     latestVersion = state.latestVersion,
                     releaseNotes = state.latestRelease?.notes.orEmpty(),
                     releasePageUrl = state.latestRelease?.pageUrl.orEmpty(),
+                    downloadState = state.downloadUiState,
                     updateAvailable = state.updateAvailable,
                     remindersEnabled = state.remindersEnabled,
                     checking = state.checking,
                     checkedOnce = state.checkedOnce,
                     errorMessage = state.errorMessage,
+                    connectionState = connectionState,
+                    onSaveConnection = appUpdateViewModel.connection::save,
+                    onTestConnections = appUpdateViewModel.connection::testApi,
+                    onTestConnectionDownloads = appUpdateViewModel.connection::testDownloads,
+                    onCancelConnectionTest = appUpdateViewModel.connection::cancelTest,
                     onRefresh = appUpdateViewModel::refresh,
+                    onDownload = appUpdateViewModel::download,
+                    onCancelDownload = appUpdateViewModel::cancelDownload,
+                    onInstall = appUpdateViewModel::install,
                     onRemindersEnabledChange = appUpdateViewModel::setRemindersEnabled,
                     onBack = goBackInsideApp,
                 )

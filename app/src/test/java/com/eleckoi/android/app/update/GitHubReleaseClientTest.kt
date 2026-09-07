@@ -38,4 +38,28 @@ class GitHubReleaseClientTest {
             )
         }
     }
+
+    @Test
+    fun selectsOfficialArm64ApkWithOptionalDigest() {
+        for (digest in listOf("null", "\"sha256:${"a".repeat(64)}\"")) {
+            val release = GitHubReleaseClient.parseRelease(
+                """
+                {
+                  "tag_name": "v0.2.0",
+                  "html_url": "https://github.com/eleckoi/ElecKoi/releases/tag/v0.2.0",
+                  "assets": [
+                    {"name":"foreign-arm64.apk","browser_download_url":"https://example.invalid/app.apk","size":34},
+                    {"name":"app-x86.apk","browser_download_url":"https://github.com/eleckoi/ElecKoi/releases/download/v0.2.0/app-x86.apk","size":34},
+                    {"name":"app-arm64.apk","browser_download_url":"https://github.com/eleckoi/ElecKoi/releases/download/v0.2.0/app-arm64.apk","size":34,"digest":$digest}
+                  ]
+                }
+                """.trimIndent(),
+            )
+
+            val apk = requireNotNull(release.apk)
+            assertEquals("app-arm64.apk", apk.name)
+            assertEquals(34L, apk.sizeBytes)
+            assertEquals(if (digest == "null") null else "a".repeat(64), apk.sha256)
+        }
+    }
 }

@@ -101,6 +101,7 @@ fun ElecKoiApp() {
             repository = application.appUpdateRepository,
             installedVersion = context.installedVersionName(),
             scheduler = application.appUpdateScheduler,
+            context = context,
         ),
     )
     val webSearchSettingsViewModel: WebSearchSettingsViewModel = viewModel(
