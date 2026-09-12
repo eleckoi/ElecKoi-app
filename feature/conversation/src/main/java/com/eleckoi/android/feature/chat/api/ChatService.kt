@@ -44,6 +44,12 @@ interface ChatService {
         sessionId: String,
         permissionMode: AgentPermissionMode,
     ): ChatDraft
+    /** Updates one persisted message without starting a new model turn. */
+    suspend fun editChatMessage(
+        sessionId: String,
+        messageId: String,
+        content: String,
+    ): ChatDraft
     fun saveModelConfig(config: ModelConfig): ModelConfig
     fun refreshModelsForChat(config: ModelConfig): ModelConfig
     fun saveCharacterImagePrompt(characterId: String, prompt: String): CharacterSlot

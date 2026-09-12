@@ -137,6 +137,7 @@ sealed interface ChatIntent {
     data class OpenEditMessage(val message: ChatMessage) : ChatIntent
     data object CloseEditMessage : ChatIntent
     data class EditInputChanged(val value: String) : ChatIntent
+    data object SaveEditedMessage : ChatIntent
     data object SubmitEditedMessage : ChatIntent
     data class RegenerateFrom(val message: ChatMessage) : ChatIntent
     data class RegenerateImage(val messageId: String, val attachmentId: String) : ChatIntent

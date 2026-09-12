@@ -240,6 +240,7 @@ class ChatViewModel(
             is ChatIntent.OpenEditMessage -> openEditMessage(intent.message)
             ChatIntent.CloseEditMessage -> closeEditMessage()
             is ChatIntent.EditInputChanged -> _uiState.update { it.copy(editInput = intent.value) }
+            ChatIntent.SaveEditedMessage -> saveEditedMessage()
             ChatIntent.SubmitEditedMessage -> submitEditedMessage()
             is ChatIntent.RegenerateFrom -> regenerateFrom(intent.message)
             is ChatIntent.RegenerateImage -> draftMutationController.regenerateImage(intent.messageId, intent.attachmentId)
@@ -413,7 +414,8 @@ class ChatViewModel(
     fun openEditMessage(message: ChatMessage) {
         val snapshot = _uiState.value
         val rejectedReason = when {
-            message.role != MessageRole.User -> "not-user"
+            message.role == MessageRole.System -> "not-editable"
+            message.pending -> "pending"
             snapshot.isSending -> "sending"
             else -> null
         }
@@ -429,6 +431,10 @@ class ChatViewModel(
 
     fun submitEditedMessage() {
         generationCoordinator.submitEditedMessage()
+    }
+
+    fun saveEditedMessage() {
+        generationCoordinator.saveEditedMessage()
     }
 
     fun regenerateFrom(message: ChatMessage) {
