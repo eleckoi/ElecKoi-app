@@ -92,6 +92,7 @@ internal class CharacterAgentTurnRunner(
         }
         val preparedTurn = turnPreparer.prepare(
             session = session,
+            prompt = prompt,
             config = config,
             replacementMessageId = replacementMessageId,
             obsoleteRuntimeThreadIds = obsoleteRuntimeThreadIds,
@@ -181,7 +182,7 @@ internal class CharacterAgentTurnRunner(
             ensureActive(lease)
             agent.start()
             ensureActive(lease)
-            activeTurn = agent.send(prompt, preparedTurn.contextInjections)
+            activeTurn = agent.send(preparedTurn.prompt, preparedTurn.contextInjections)
             suspend fun awaitTurnCompletion(): AgentSessionEvent.TurnCompleted =
                 kotlinx.coroutines.selects.select {
                     turnResults.onReceive { it }
