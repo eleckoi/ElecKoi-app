@@ -6,6 +6,7 @@ import com.eleckoi.android.engine.agent.api.AgentContextInjection
 import com.eleckoi.android.engine.agent.api.AgentContextRole
 import com.eleckoi.android.engine.agent.api.AgentFileAccessScope
 import com.eleckoi.android.engine.agent.api.AgentHistoryPolicy
+import com.eleckoi.android.engine.agent.api.AgentPrompt
 import com.eleckoi.android.engine.agent.api.AgentSessionOptions
 import com.eleckoi.android.engine.agent.api.AgentThreadStart
 import com.eleckoi.android.engine.agent.api.AgentVirtualFileSearch
@@ -48,6 +49,7 @@ import com.eleckoi.android.foundation.storage.ElecKoiDataException
 
 internal data class CharacterAgentTurnPreparation(
     val options: AgentSessionOptions,
+    val prompt: AgentPrompt,
     val contextInjections: List<AgentContextInjection>,
     val imageConfig: ModelConfig?,
     val variableTurnState: CharacterVariableTurnState?,
@@ -69,6 +71,7 @@ internal class CharacterAgentTurnPreparer(
 ) {
     suspend fun prepare(
         session: ChatSession,
+        prompt: AgentPrompt,
         config: ModelConfig,
         replacementMessageId: String?,
         obsoleteRuntimeThreadIds: Set<String> = emptySet(),
@@ -96,7 +99,7 @@ internal class CharacterAgentTurnPreparer(
         )
         // GenerationService already restored the authoritative Room branch before entering this
         // preparer. Re-reading the same branch here doubled every turn's history materialization.
-        val roomHistory = session.messages.map { message ->
+        val roomHistorySource = session.messages.map { message ->
             message.copy(
                 content = message.content.resolveCharacterCardMacros(macroValues),
                 reasoningContent = message.reasoningContent.resolveCharacterCardMacros(macroValues),
@@ -120,15 +123,19 @@ internal class CharacterAgentTurnPreparer(
         } else {
             null
         }
-        val variableTurnState = activeVariableConfig?.let { activeConfig ->
+        val variableTurnState = if (characterMode == CharacterMode.Story) {
             CharacterVariableTurnState(
-                session.variableStateJson.ifBlank { activeConfig.initialStateJson },
+                session.variableStateJson.ifBlank {
+                    activeVariableConfig?.initialStateJson.orEmpty().ifBlank { "{}" }
+                },
             )
+        } else {
+            null
         }
         val promotedStoryTurnContext = storyTurnContext
             ?.resolveCharacterCardMacros(macroValues)
             ?.resolveDynamicEntries(
-                messages = roomHistory,
+                messages = roomHistorySource,
                 stateJson = variableTurnState?.stateJson.orEmpty(),
                 runtime = variableRuntime,
             )
@@ -141,6 +148,48 @@ internal class CharacterAgentTurnPreparer(
                     groups = library.groups.filter { it.id.startsWith("story-preset:") },
                 )
             }
+        }
+        val selectedImageConfigId = toolModelConfigId(
+            toolScopeId,
+            AgentToolRequestPolicy.BuiltInAutoIllustration,
+        )
+        val imageConfig = settings.loadModelConfigCollection().configs.firstOrNull {
+            it.id == selectedImageConfigId && it.isImageGenerationConfig()
+        }
+            ?.takeIf {
+                activeToolContext.isEnabled(AgentToolRequestPolicy.BuiltInAutoIllustration)
+            }
+        val settingContextSource = CharacterSettingContextResolver.resolve(
+            library = storyLibrary,
+            messages = roomHistorySource,
+            imageActionEnabled = imageConfig != null,
+        )
+        val promptMacroResolver = PromptMacroResolver(
+            stateJson = variableTurnState?.stateJson ?: session.variableStateJson,
+        )
+
+        // Prompt macros use two passes. Every active fragment applies state changes first, then
+        // every getvar sees the completed turn state regardless of the entry's prompt position.
+        val stagedSettingContext = settingContextSource.map { injection ->
+            injection.copy(content = promptMacroResolver.applyMutations(injection.content))
+        }
+        val stagedRoleplayPlanItems = promotedStoryTurnContext?.fixedRoleplayPlanItems.orEmpty()
+            .map(promptMacroResolver::applyMutations)
+        val stagedAuthorPrompt = promptMacroResolver.applyMutations(
+            session.characterPersona.assistantPrompt.resolveCharacterCardMacros(macroValues),
+        )
+        val stagedPrompt = prompt.copy(
+            text = promptMacroResolver.applyMutations(
+                prompt.text.resolveCharacterCardMacros(macroValues),
+            ),
+        )
+        variableTurnState?.replaceState(promptMacroResolver.stateJson)
+
+        val roomHistory = roomHistorySource.map { message ->
+            message.copy(
+                content = promptMacroResolver.resolveValues(message.content),
+                reasoningContent = promptMacroResolver.resolveValues(message.reasoningContent),
+            )
         }
         val currentUserMessageId = session.messages.asReversed()
             .firstOrNull { it.role == MessageRole.User }
@@ -160,23 +209,13 @@ internal class CharacterAgentTurnPreparer(
             messages = promptHistory.map { it.toLedgerMessage() },
             currentUserMessageId = currentUserMessageId,
         )
-        val selectedImageConfigId = toolModelConfigId(
-            toolScopeId,
-            AgentToolRequestPolicy.BuiltInAutoIllustration,
-        )
-        val imageConfig = settings.loadModelConfigCollection().configs.firstOrNull {
-            it.id == selectedImageConfigId && it.isImageGenerationConfig()
-        }
-            ?.takeIf {
-                activeToolContext.isEnabled(AgentToolRequestPolicy.BuiltInAutoIllustration)
-            }
         val resolvedRoleplayPlanItems = effectiveRoleplayPlanItems(
-            items = promotedStoryTurnContext?.fixedRoleplayPlanItems.orEmpty(),
+            items = stagedRoleplayPlanItems.map(promptMacroResolver::resolveValues),
             imageActionEnabled = imageConfig != null,
         )
         val instructions = characterAgentInstructions(
             mode = characterMode,
-            authorPrompt = session.characterPersona.assistantPrompt.resolveCharacterCardMacros(macroValues),
+            authorPrompt = promptMacroResolver.resolveValues(stagedAuthorPrompt),
             protocolInstructions = if (characterMode == CharacterMode.Story) {
                 ""
             } else {
@@ -184,14 +223,10 @@ internal class CharacterAgentTurnPreparer(
             },
         )
         val contextInjections = buildList {
-            addAll(CharacterSettingContextResolver.resolve(
-                library = storyLibrary,
-                messages = roomHistory,
-                imageActionEnabled = imageConfig != null,
-            ).map { injection ->
+            addAll(stagedSettingContext.map { injection ->
                 injection.copy(
                     content = RegexRuleProcessor.transform(
-                        text = injection.content,
+                        text = promptMacroResolver.resolveValues(injection.content),
                         rules = regexRules.rulesFor(
                             regexConfig,
                             RegexRuleTarget.SettingContent,
@@ -304,6 +339,7 @@ internal class CharacterAgentTurnPreparer(
                 dynamicTools = dynamicTools,
                 toolContextBlocks = activeToolContext.blocks,
             ),
+            prompt = stagedPrompt.copy(text = promptMacroResolver.resolveValues(stagedPrompt.text)),
             contextInjections = contextInjections,
             imageConfig = imageConfig,
             variableTurnState = variableTurnState,
