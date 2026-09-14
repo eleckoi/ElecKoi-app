@@ -15,6 +15,8 @@ class HtmlThemeTemplateTest {
             "api.messages.regenerate(id)",
             "api.messages.edit(editingMessage.id, text)",
             "api.messages.editAndRegenerate(editingMessage.id, text)",
+            "api.presentation.renderMessageContent(node, message)",
+            "api.presentation.disposeMessagePresentation(content)",
             "api.chat.send(text)",
             "api.chat.stopGeneration()",
             "api.events.on(\"message.delta\"",

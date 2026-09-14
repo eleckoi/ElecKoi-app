@@ -433,5 +433,5 @@ private const val LocalOnlyContentSecurityPolicy =
         "font-src 'self' data:; " +
         "style-src 'self' 'unsafe-inline'; " +
         "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
-        "worker-src 'none'; frame-src 'none'; object-src 'none'; " +
+        "worker-src 'none'; frame-src 'self' data: blob:; object-src 'none'; " +
         "base-uri 'self'; form-action 'self'"

@@ -184,6 +184,8 @@
       overflow-wrap: anywhere;
       white-space: pre-wrap;
     }
+    .content[data-eleckoi-content-kind="frontend"],
+    .content[data-eleckoi-content-kind="mixed"] { white-space: normal; }
 
     details {
       margin-bottom: 9px;
@@ -426,6 +428,27 @@
         errorNode.style.display = "none";
       }
 
+      function renderMessageContent(node, message) {
+        if (api?.presentation?.renderMessageContent) {
+          try {
+            api.presentation.renderMessageContent(node, message);
+            return;
+          } catch (error) {
+            console.warn("ElecKoi message renderer failed", error);
+          }
+        }
+        node.dataset.eleckoiContentKind = "text";
+        node.textContent = message.content || (message.pending && !message.agentActivity ? "…" : "");
+      }
+
+      function disposeRenderedMessages() {
+        if (!api?.presentation?.disposeMessagePresentation) return;
+        messageNodes.forEach((article) => {
+          const content = article.querySelector(".content");
+          if (content) api.presentation.disposeMessagePresentation(content);
+        });
+      }
+
       function setGenerating(value) {
         generating = Boolean(value);
         statusNode.classList.toggle("busy", generating);
@@ -530,7 +553,7 @@
         const content = document.createElement("p");
         content.className = "content";
         updateAgentActivity(bubble, message, content);
-        content.textContent = message.content || (message.pending && !message.agentActivity ? "…" : "");
+        renderMessageContent(content, message);
         bubble.append(content);
 
         article.append(meta, bubble, renderMessageActions(message));
@@ -556,7 +579,7 @@
           reasoning.remove();
         }
         updateAgentActivity(bubble, message, content);
-        content.textContent = message.content || (message.pending && !message.agentActivity ? "…" : "");
+        renderMessageContent(content, message);
         article.querySelector(".message-actions")?.replaceWith(renderMessageActions(message));
       }
 
@@ -598,6 +621,7 @@
 
       function renderMessages(forceBottom = false) {
         const shouldFollow = forceBottom || nearBottom();
+        disposeRenderedMessages();
         messagesNode.replaceChildren();
         messageNodes.clear();
         if (messages.length === 0) {
