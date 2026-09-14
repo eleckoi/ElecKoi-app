@@ -171,6 +171,12 @@ internal fun AiCreationAssistantScreen(
     val selectedModelSupportsImages = state.modelConfigs
         .firstOrNull { it.id == state.selectedModelConfigId }
         ?.supportsImageInput(state.selectedModelId) == true
+    val previewCharacterAvatarPath = (state.creatorRootCharacters + state.characterDirectory)
+        .firstOrNull { it.id == workspace?.linkedCharacterId }
+        ?.let { character ->
+            character.persona.assistantAvatar.ifBlank { character.avatar }
+        }
+        .orEmpty()
     if (showPreview && workspace != null && directory != null && previewEntryFile != null) {
         ImmersiveChatScreen(
             project = FrontendProject(
@@ -183,6 +189,7 @@ internal fun AiCreationAssistantScreen(
             ),
             projectDirectory = directory,
             characterName = workspace.name,
+            characterAvatarPath = previewCharacterAvatarPath,
             chatGateway = chatGateway,
             appearance = appearance,
             storagePrincipal = AuthorFrontendStoragePrincipal.creationWorkspace(workspace.id),

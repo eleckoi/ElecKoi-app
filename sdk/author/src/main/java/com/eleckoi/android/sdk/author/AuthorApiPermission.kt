@@ -13,6 +13,8 @@ enum class AuthorApiPermission(val wireName: String) {
     ChatSend("chat.send"),
     ChatWrite("chat.write"),
     CharacterRead("character.read"),
+    AppearanceRead("appearance.read"),
+    AppearanceWrite("appearance.write"),
     SettingLibraryRead("setting_library.read"),
     InputRead("input.read"),
     InputWrite("input.write"),

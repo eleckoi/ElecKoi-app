@@ -11,6 +11,7 @@ import com.eleckoi.android.engine.generation.model.ModelConfig
 import com.eleckoi.android.feature.characters.model.CharacterMode
 import com.eleckoi.android.feature.chat.model.ChatDraft
 import com.eleckoi.android.feature.chat.model.ChatMessage
+import com.eleckoi.android.feature.chat.model.MessageRole
 import com.eleckoi.android.feature.modelconfig.model.ModelParameters
 import com.eleckoi.android.feature.chat.ui.diagnostics.AgentRequestCaptureDialog
 import com.eleckoi.android.feature.chat.ui.sheets.ChatHistorySheet
@@ -52,13 +53,22 @@ internal fun ChatScreenOverlays(
         EditMessageSheet(
             editorKey = state.editingMessage.id,
             value = state.editInput,
+            isAssistant = state.editingMessage.role == MessageRole.Assistant,
             appearance = state.appearance,
             onValueChange = { onIntent(ChatIntent.EditInputChanged(it)) },
             onDismiss = { onIntent(ChatIntent.CloseEditMessage) },
-            onSubmit = { editedText ->
-                onResumeToEnd()
+            onSave = { editedText ->
                 onIntent(ChatIntent.EditInputChanged(editedText))
-                onIntent(ChatIntent.SubmitEditedMessage)
+                onIntent(ChatIntent.SaveEditedMessage)
+            },
+            onRegenerate = if (state.editingMessage.role == MessageRole.User) {
+                { editedText ->
+                    onResumeToEnd()
+                    onIntent(ChatIntent.EditInputChanged(editedText))
+                    onIntent(ChatIntent.SubmitEditedMessage)
+                }
+            } else {
+                null
             },
         )
     }

@@ -2,6 +2,7 @@ package com.eleckoi.android.feature.chat.ui.immersive
 
 import android.graphics.Color as AndroidColor
 import android.net.Uri
+import android.view.ViewGroup
 import android.webkit.MimeTypeMap
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -44,11 +45,16 @@ import com.eleckoi.android.sdk.author.AuthorApiEnvironment
 import com.eleckoi.android.sdk.author.AuthorApiPermission
 import com.eleckoi.android.sdk.author.AuthorApiRouter
 import com.eleckoi.android.sdk.author.AuthorApiRuntimeState
+import com.eleckoi.android.sdk.author.AuthorChatBackgroundSnapshot
 import com.eleckoi.android.sdk.author.bridge.WebViewAuthorBridge
 import com.eleckoi.android.foundation.design.AppearanceTheme
+import com.eleckoi.android.feature.chat.ui.layout.ChatBackground
+import com.eleckoi.android.feature.chat.ui.layout.ChatBackdropSpec
+import com.eleckoi.android.feature.chat.ui.layout.resolveChatBackgroundChoiceForMode
 import com.eleckoi.android.engine.immersive.model.FrontendProject
 import com.eleckoi.android.engine.immersive.security.AuthorFrontendStoragePrincipal
 import com.eleckoi.android.engine.immersive.security.ImmersiveWebSecurity
+import com.eleckoi.android.engine.immersive.security.MediaPath
 import com.eleckoi.android.engine.immersive.security.ProjectPath
 import com.eleckoi.android.engine.immersive.security.RuntimePath
 import com.eleckoi.android.sdk.author.AuthorChatGateway
@@ -60,17 +66,21 @@ fun ImmersiveChatScreen(
     project: FrontendProject,
     projectDirectory: File,
     characterName: String,
+    characterAvatarPath: String,
     chatGateway: AuthorChatGateway,
     appearance: AppearanceTheme,
+    chatBackdropSpec: ChatBackdropSpec = ChatBackdropSpec(appearance),
     storagePrincipal: AuthorFrontendStoragePrincipal,
     authorApiPermissions: Set<AuthorApiPermission> = AuthorApiPermission.previewLocalFull,
     onExit: () -> Unit,
     onFallbackToNative: () -> Unit,
+    onOpenChatBackgroundSettings: (() -> Unit)? = null,
 ) {
     BackHandler(onBack = onExit)
     val context = LocalContext.current
-    var loadError by remember(project.id) { mutableStateOf("") }
-    var reloadKey by remember(project.id) { mutableIntStateOf(0) }
+    val projectRevision = "${project.id}:${project.importedAt}"
+    var loadError by remember(projectRevision) { mutableStateOf("") }
+    var reloadKey by remember(projectRevision) { mutableIntStateOf(0) }
     val sdkSource = remember {
         context.assets.open("frontend/preview/eleckoi.js").bufferedReader().use { it.readText() }
     }
@@ -80,7 +90,35 @@ fun ImmersiveChatScreen(
     val isolatedOrigin = remember(storagePrincipal) {
         ImmersiveWebSecurity.isolatedOrigin(storagePrincipal)
     }
-    val assetLoader = remember(project.id, projectDirectory, isolatedHost) {
+    val chatBackgroundFile = remember(chatBackdropSpec) {
+        resolveChatBackgroundChoiceForMode(
+            characterBackgroundPath = chatBackdropSpec.characterBackgroundPath,
+            characterFile = chatBackdropSpec.characterBackgroundPath
+                .takeIf { it.isNotBlank() }
+                ?.let(::File)
+                ?.takeIf(File::isFile),
+            globalFile = chatBackdropSpec.appearance.textureImagePath
+                .takeIf { it.isNotBlank() }
+                ?.let(::File)
+                ?.takeIf(File::isFile),
+            defaultCharacterFile = chatBackdropSpec.defaultCharacterBackgroundPath
+                .takeIf { it.isNotBlank() }
+                ?.let(::File)
+                ?.takeIf(File::isFile),
+        ).file
+    }
+    val characterAvatarFile = remember(characterAvatarPath) {
+        characterAvatarPath.takeIf(String::isNotBlank)?.let(::File)?.takeIf(File::isFile)
+    }
+    val characterAvatarUrl = characterAvatarFile?.let { "$isolatedOrigin${MediaPath}character-avatar" }.orEmpty()
+    val chatBackgroundUrl = chatBackgroundFile?.let { "$isolatedOrigin${MediaPath}chat-background" }.orEmpty()
+    val assetLoader = remember(
+        projectRevision,
+        projectDirectory,
+        isolatedHost,
+        characterAvatarFile,
+        chatBackgroundFile,
+    ) {
         WebViewAssetLoader.Builder()
             .setDomain(isolatedHost)
             .addPathHandler(ProjectPath) { requestedPath ->
@@ -95,15 +133,40 @@ fun ImmersiveChatScreen(
                     )
                 } else null
             }
+            .addPathHandler(MediaPath) { requestedPath ->
+                when (requestedPath) {
+                    "character-avatar" -> characterAvatarFile?.let(::localMediaResponse)
+                    "chat-background" -> chatBackgroundFile?.let(::localMediaResponse)
+                    else -> null
+                }
+            }
             .build()
     }
-    val runtime = remember(project.id, project.characterId, characterName) {
+    val runtime = remember(
+        projectRevision,
+        project.characterId,
+        characterName,
+        characterAvatarUrl,
+        chatBackgroundUrl,
+        chatBackdropSpec,
+    ) {
         AuthorApiRuntimeState(
             surface = "immersive_chat",
             characterId = project.characterId,
             characterName = characterName,
-        )
+            characterAvatarUrl = characterAvatarUrl,
+        ).apply {
+            chatBackground = AuthorChatBackgroundSnapshot(
+                mode = chatBackgroundMode(chatBackdropSpec.characterBackgroundPath),
+                imageUrl = chatBackgroundUrl,
+                opacity = chatBackdropSpec.characterBackgroundOpacity.toDouble(),
+                blur = chatBackdropSpec.characterBackgroundBlur.toDouble(),
+                scrim = chatBackdropSpec.characterBackgroundScrim.toDouble(),
+                hasImage = chatBackgroundFile != null,
+            )
+        }
     }
+    runtime.openChatBackgroundSettings = onOpenChatBackgroundSettings
     val router = remember(runtime, chatGateway, authorApiPermissions) {
         AuthorApiRouter(
             AuthorApiEnvironment.forChat(
@@ -118,8 +181,15 @@ fun ImmersiveChatScreen(
         WebViewAuthorBridge(router = router, allowedOrigin = isolatedOrigin)
     }
     val configuration = LocalConfiguration.current
-    val webView = remember(project.id, bridge, assetLoader) {
+    val webView = remember(projectRevision, bridge, assetLoader) {
         WebView(context).apply {
+            // AndroidView may otherwise attach this child with WRAP_CONTENT. Chromium maps that
+            // layout-param mode to force-zero-layout-height, which makes CSS viewport-height
+            // units resolve to zero even when the native view is visibly full-screen.
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            )
             AuthorFrontendServiceWorkerBlocker.install()
             setBackgroundColor(AndroidColor.TRANSPARENT)
             settings.javaScriptEnabled = true
@@ -194,7 +264,7 @@ fun ImmersiveChatScreen(
         }
     }
 
-    androidx.compose.runtime.LaunchedEffect(project.id, isolatedOrigin, reloadKey) {
+    androidx.compose.runtime.LaunchedEffect(projectRevision, isolatedOrigin, reloadKey) {
         loadError = ""
         val entry = project.entryFile.split('/').joinToString("/") { Uri.encode(it) }
         webView.loadUrl("$isolatedOrigin$ProjectPath$entry")
@@ -205,6 +275,10 @@ fun ImmersiveChatScreen(
             .fillMaxSize()
             .background(appearance.mobileBg),
     ) {
+        ChatBackground(
+            spec = chatBackdropSpec,
+            modifier = Modifier.fillMaxSize(),
+        )
         AndroidView(
             factory = { webView },
             update = { view ->
@@ -270,9 +344,27 @@ private fun projectResponse(rootDirectory: File, requestedPath: String): WebReso
     return WebResourceResponse(mime, "UTF-8", file.inputStream().buffered())
 }
 
+private fun localMediaResponse(file: File): WebResourceResponse {
+    val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension.lowercase())
+        ?: when (file.extension.lowercase()) {
+            "svg" -> "image/svg+xml"
+            else -> "application/octet-stream"
+        }
+    return WebResourceResponse(mime, null, file.inputStream().buffered())
+}
+
+private fun chatBackgroundMode(path: String): String = when {
+    path.isBlank() -> "automatic"
+    path == com.eleckoi.android.feature.characters.model.AppDefaultChatBackground -> "app_default"
+    path == com.eleckoi.android.feature.characters.model.CustomChatBackground -> "custom"
+    path == com.eleckoi.android.feature.characters.model.GlobalChatBackground -> "global"
+    else -> "character"
+}
+
 private fun WebResourceResponse.withLocalSecurityHeaders(): WebResourceResponse = apply {
     val existing = responseHeaders.orEmpty()
     responseHeaders = existing + mapOf(
+        "Cache-Control" to "no-store",
         "Content-Security-Policy" to LocalOnlyContentSecurityPolicy,
         "Referrer-Policy" to "no-referrer",
         "X-Content-Type-Options" to "nosniff",
@@ -341,5 +433,5 @@ private const val LocalOnlyContentSecurityPolicy =
         "font-src 'self' data:; " +
         "style-src 'self' 'unsafe-inline'; " +
         "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
-        "worker-src 'none'; frame-src 'none'; object-src 'none'; " +
+        "worker-src 'none'; frame-src 'self' data: blob:; object-src 'none'; " +
         "base-uri 'self'; form-action 'self'"

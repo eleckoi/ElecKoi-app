@@ -3,6 +3,7 @@ package com.eleckoi.android.sdk.author
 import com.eleckoi.android.engine.creator.capability.CreatorCapability
 import com.eleckoi.android.engine.creator.capability.CreatorCapabilityRegistry
 import com.eleckoi.android.sdk.author.app.AppAuthorApi
+import com.eleckoi.android.sdk.author.appearance.AppearanceAuthorApi
 import com.eleckoi.android.sdk.author.character.CharacterAuthorApi
 import com.eleckoi.android.sdk.author.chat.ChatAuthorApi
 import com.eleckoi.android.sdk.author.context.ContextAuthorApi
@@ -34,6 +35,7 @@ internal object AuthorCapabilityRegistry {
                 MessageAuthorApi.routes,
                 ChatAuthorApi.routes,
                 CharacterAuthorApi.routes,
+                AppearanceAuthorApi.routes,
                 SettingLibraryAuthorApi.routes,
                 InputAuthorApi.routes,
                 AuthorEventApi.routes,

@@ -20,8 +20,10 @@ import com.eleckoi.android.feature.characters.modes.story.regex.ui.RegexRulesPag
 import com.eleckoi.android.app.navigation.MobileRoute
 import com.eleckoi.android.engine.agent.tools.AgentToolScopes
 import com.eleckoi.android.engine.agent.tools.AgentToolRequestPolicy
+import com.eleckoi.android.engine.immersive.security.AuthorFrontendStoragePrincipal
 import com.eleckoi.android.feature.agenttools.ui.tools.AgentToolGroupDetailPage
 import com.eleckoi.android.feature.agenttools.ui.tools.AgentToolsPage
+import com.eleckoi.android.feature.chat.ui.immersive.ImmersiveChatScreen
 
 internal fun mobileStoryRouteEntry(
     currentRoute: MobileRoute,
@@ -76,6 +78,21 @@ internal fun mobileStoryRouteEntry(
                     appearance = pageAppearance,
                     viewModel = frontendBeautyViewModel,
                     onBack = goBackInsideApp,
+                    previewContent = { project, directory, onExit ->
+                        ImmersiveChatScreen(
+                            project = project,
+                            projectDirectory = directory,
+                            characterName = character?.name.orEmpty(),
+                            characterAvatarPath = character?.persona?.assistantAvatar
+                                ?.ifBlank { character.avatar }
+                                .orEmpty(),
+                            chatGateway = chatViewModel,
+                            appearance = pageAppearance,
+                            storagePrincipal = AuthorFrontendStoragePrincipal.publishedProject(project.id),
+                            onExit = onExit,
+                            onFallbackToNative = onExit,
+                        )
+                    },
                 )
         }
         MobileRoute.AiCreationAssistant -> NavEntry(currentRoute) {

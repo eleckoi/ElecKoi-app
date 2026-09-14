@@ -30,6 +30,20 @@ internal class FrontendProjectServiceImpl(
         return frontendProjects.publishProject(characterId, sourceDirectory, name, entryFile, select)
     }
 
+    override suspend fun saveHtmlFrontendProject(
+        characterId: String,
+        projectId: String?,
+        name: String,
+        html: String,
+        select: Boolean,
+    ): FrontendProject {
+        return frontendProjects.saveHtmlProject(characterId, projectId, name, html, select)
+    }
+
+    override suspend fun readFrontendProjectEntry(characterId: String, projectId: String): String {
+        return frontendProjects.readProjectEntry(characterId, projectId)
+    }
+
     override suspend fun selectFrontendProject(characterId: String, projectId: String?) {
         frontendProjects.selectProject(characterId, projectId)
     }

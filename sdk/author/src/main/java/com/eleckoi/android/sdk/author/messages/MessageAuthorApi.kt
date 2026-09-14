@@ -65,6 +65,11 @@ internal object MessageAuthorApi {
             val id = (params["id"] as? JsonPrimitive)?.content.orEmpty()
             environment.requireChatGateway().regenerate(id).toAuthorJson()
         },
+        AuthorApiRoute(AuthorApiCatalog.require("messages.edit")) { environment, params ->
+            val id = (params["id"] as? JsonPrimitive)?.content.orEmpty()
+            val text = (params["text"] as? JsonPrimitive)?.content.orEmpty()
+            environment.requireChatGateway().editMessage(id, text).toAuthorJson()
+        },
         AuthorApiRoute(AuthorApiCatalog.require("messages.editAndRegenerate")) { environment, params ->
             val id = (params["id"] as? JsonPrimitive)?.content.orEmpty()
             val text = (params["text"] as? JsonPrimitive)?.content.orEmpty()
