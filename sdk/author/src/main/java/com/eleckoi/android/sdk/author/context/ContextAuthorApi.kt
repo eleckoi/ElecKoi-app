@@ -14,6 +14,7 @@ internal object ContextAuthorApi {
                 put("surface", runtime.surface)
                 put("characterId", runtime.characterId)
                 put("characterName", runtime.characterName)
+                put("characterAvatarUrl", runtime.characterAvatarUrl)
                 put("messageId", runtime.currentMessage?.id.orEmpty())
                 put("messageRole", runtime.currentMessage?.role.orEmpty())
                 put("hasChat", snapshot?.draft != null || runtime.chatSession != null || runtime.currentMessage != null)

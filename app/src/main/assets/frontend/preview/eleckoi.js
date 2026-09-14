@@ -1,7 +1,7 @@
 (function installElecKoiAuthorApi(global) {
   "use strict";
 
-  const API_VERSION = "0.2.0-preview.5";
+  const API_VERSION = "0.2.0-preview.6";
   if (global.ElecKoi && global.ElecKoi.api && global.ElecKoi.api.version === API_VERSION) {
     return;
   }
@@ -130,6 +130,7 @@
       get: (id) => call("messages.get", { id }),
       current: () => call("messages.current"),
       regenerate: (id) => call("messages.regenerate", { id }),
+      edit: (id, text) => call("messages.edit", { id, text }),
       editAndRegenerate: (id, text) => call("messages.editAndRegenerate", { id, text }),
     }),
     chat: Object.freeze({
@@ -145,6 +146,10 @@
       selectModel: (options) => call("chat.selectModel", options),
     }),
     character: Object.freeze({ current: () => call("character.current") }),
+    appearance: Object.freeze({
+      getChatBackground: () => call("appearance.getChatBackground"),
+      openChatBackgroundSettings: () => call("appearance.openChatBackgroundSettings"),
+    }),
     settingLibrary: Object.freeze({ getSummary: () => call("settingLibrary.getSummary") }),
     input: Object.freeze({
       get: () => call("input.get"),

@@ -87,6 +87,20 @@ internal class ChatAuthorGatewayAdapter(
         return accepted("已开始重新生成")
     }
 
+    override fun editMessage(messageId: String, text: String): AuthorCommandResult {
+        val replacement = text.trim()
+        val current = state()
+        if (replacement.isBlank()) return rejected("修改后的消息不能为空")
+        if (current.isSending) return rejected("AI 正在生成")
+        val message = current.draft?.session?.messages?.firstOrNull { it.id == messageId }
+            ?: return rejected("没有找到消息：$messageId")
+        if (message.role == MessageRole.System) return rejected("系统消息不能修改")
+        if (message.pending) return rejected("消息仍在生成中，暂时不能修改")
+        updateState { it.copy(editingMessage = message, editInput = replacement) }
+        actions.saveEditedMessage()
+        return accepted("消息修改已保存")
+    }
+
     override fun editAndRegenerate(messageId: String, text: String): AuthorCommandResult {
         val replacement = text.trim()
         val current = state()
@@ -209,6 +223,7 @@ internal class ChatAuthorActions(
     val send: (String) -> Unit,
     val stopGeneration: () -> Unit,
     val regenerate: (ChatMessage) -> Unit,
+    val saveEditedMessage: () -> Unit,
     val submitEditedMessage: () -> Unit,
     val createChat: (String, String) -> Unit,
     val openChat: (String) -> Unit,

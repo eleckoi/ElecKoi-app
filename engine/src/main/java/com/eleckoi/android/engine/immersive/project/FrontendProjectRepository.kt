@@ -132,6 +132,35 @@ class FrontendProjectRepository(
         }
     }
 
+    suspend fun saveHtmlProject(
+        characterId: String,
+        projectId: String?,
+        name: String,
+        html: String,
+        select: Boolean = true,
+    ): FrontendProject = withContext(Dispatchers.IO) {
+        require(characterId.isNotBlank()) { "没有可关联的角色" }
+        val normalizedName = name.trim().take(80).ifBlank { "自定义 HTML 主题" }
+        if (projectId == null) {
+            createHtmlProject(characterId, normalizedName, html, select)
+        } else {
+            updateHtmlProject(characterId, projectId, normalizedName, html, select)
+        }
+    }
+
+    suspend fun readProjectEntry(characterId: String, projectId: String): String =
+        withContext(Dispatchers.IO) {
+            require(characterId.isNotBlank() && SafeProjectId.matches(projectId)) {
+                "前端项目编号无效"
+            }
+            val project = dao.project(projectId)?.takeIf { it.characterId == characterId }
+                ?: error("前端项目不存在")
+            FrontendHtmlProjectFiles.readEntry(
+                projectDirectoryFile(project.id),
+                project.entryFile,
+            )
+        }
+
     suspend fun selectProject(characterId: String, projectId: String?) = withContext(Dispatchers.IO) {
         if (projectId != null) {
             require(dao.project(projectId)?.characterId == characterId) { "前端项目不存在" }
@@ -265,6 +294,67 @@ class FrontendProjectRepository(
             if (select) {
                 dao.upsertSettings(currentSettings(project.characterId).copy(selectedProjectId = project.id))
             }
+        }
+    }
+
+    private fun createHtmlProject(
+        characterId: String,
+        name: String,
+        html: String,
+        select: Boolean,
+    ): FrontendProject {
+        val id = UUID.randomUUID().toString()
+        val staging = File(root, ".staging/$id/project")
+        val destination = projectDirectoryFile(id)
+        try {
+            val imported = FrontendHtmlProjectFiles.create(html, staging)
+            destination.parentFile?.mkdirs()
+            require(staging.renameTo(destination)) { "无法保存 HTML 主题" }
+            val project = FrontendProject(
+                id = id,
+                characterId = characterId,
+                name = name,
+                entryFile = imported.entryFile,
+                files = imported.files,
+                importedAt = Instant.now().toString(),
+            )
+            persistProjectAndSelection(project, select)
+            return project
+        } catch (error: Throwable) {
+            destination.deleteRecursively()
+            throw error
+        } finally {
+            File(root, ".staging/$id").deleteRecursively()
+        }
+    }
+
+    private fun updateHtmlProject(
+        characterId: String,
+        projectId: String,
+        name: String,
+        html: String,
+        select: Boolean,
+    ): FrontendProject {
+        require(SafeProjectId.matches(projectId)) { "前端项目编号无效" }
+        val existing = dao.project(projectId)?.takeIf { it.characterId == characterId }
+            ?: error("前端项目不存在")
+        val directory = projectDirectoryFile(projectId)
+        val previousHtml = FrontendHtmlProjectFiles.readEntry(directory, existing.entryFile)
+        val existingProject = fromEntity(existing)
+        val updated = existingProject.copy(
+            name = name,
+            files = (existingProject.files + existing.entryFile).distinct().sorted(),
+            importedAt = Instant.now().toString(),
+        )
+        try {
+            FrontendHtmlProjectFiles.replaceEntry(directory, existing.entryFile, html)
+            persistProjectAndSelection(updated, select)
+            return updated
+        } catch (error: Throwable) {
+            runCatching {
+                FrontendHtmlProjectFiles.replaceEntry(directory, existing.entryFile, previousHtml)
+            }
+            throw error
         }
     }
 

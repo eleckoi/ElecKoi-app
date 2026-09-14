@@ -16,6 +16,14 @@ interface FrontendProjectService {
         entryFile: String = "index.html",
         select: Boolean = true,
     ): FrontendProject
+    suspend fun saveHtmlFrontendProject(
+        characterId: String,
+        projectId: String?,
+        name: String,
+        html: String,
+        select: Boolean = true,
+    ): FrontendProject
+    suspend fun readFrontendProjectEntry(characterId: String, projectId: String): String
     suspend fun selectFrontendProject(characterId: String, projectId: String?)
     suspend fun setMessageRendererEnabled(characterId: String, enabled: Boolean)
     suspend fun deleteFrontendProject(characterId: String, projectId: String)

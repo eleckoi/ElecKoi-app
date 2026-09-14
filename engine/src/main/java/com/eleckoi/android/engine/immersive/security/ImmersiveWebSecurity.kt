@@ -63,10 +63,13 @@ object ImmersiveWebSecurity {
         if (scheme != "https") return false
         if (host != expectedHost || !HostPattern.matches(expectedHost)) return false
         if (port != -1 || userInfo != null) return false
-        return path?.startsWith(ProjectPath) == true || path?.startsWith(RuntimePath) == true
+        return path?.startsWith(ProjectPath) == true ||
+            path?.startsWith(RuntimePath) == true ||
+            path?.startsWith(MediaPath) == true
     }
 }
 
 internal const val VirtualTopLevelDomain = "invalid"
 const val ProjectPath = "/frontend-project/"
 const val RuntimePath = "/eleckoi-runtime/"
+const val MediaPath = "/eleckoi-media/"

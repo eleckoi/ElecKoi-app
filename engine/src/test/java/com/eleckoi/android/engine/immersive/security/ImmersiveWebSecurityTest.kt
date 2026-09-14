@@ -27,6 +27,16 @@ class ImmersiveWebSecurityTest {
                 scheme = "https",
                 host = host,
                 port = -1,
+                path = "/eleckoi-media/character-avatar",
+                userInfo = null,
+                expectedHost = host,
+            ),
+        )
+        assertTrue(
+            ImmersiveWebSecurity.isAllowedLocalResource(
+                scheme = "https",
+                host = host,
+                port = -1,
                 path = "/eleckoi-runtime/eleckoi.js",
                 userInfo = null,
                 expectedHost = host,

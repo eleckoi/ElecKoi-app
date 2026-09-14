@@ -13,7 +13,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-const val AuthorApiVersion: String = "0.2.0-preview.5"
+const val AuthorApiVersion: String = "0.2.0-preview.6"
 const val AuthorApiStage: String = "preview"
 
 @Serializable
@@ -95,6 +95,7 @@ class AuthorApiRuntimeState(
     val surface: String,
     val characterId: String,
     val characterName: String,
+    val characterAvatarUrl: String = "",
 ) {
     @Volatile
     var variableConfig: VariableConfig? = null
@@ -123,7 +124,23 @@ class AuthorApiRuntimeState(
 
     @Volatile
     var messageSendGateway: AuthorMessageSendGateway? = null
+
+    /** Resolved native chat-background metadata exposed to immersive frontends on demand. */
+    @Volatile
+    var chatBackground: AuthorChatBackgroundSnapshot? = null
+
+    @Volatile
+    var openChatBackgroundSettings: (() -> Unit)? = null
 }
+
+data class AuthorChatBackgroundSnapshot(
+    val mode: String = "app_default",
+    val imageUrl: String = "",
+    val opacity: Double = 0.72,
+    val blur: Double = 0.0,
+    val scrim: Double = 0.22,
+    val hasImage: Boolean = false,
+)
 
 data class AuthorChatSnapshot(
     val draft: AuthorChatDraftSnapshot?,
@@ -188,6 +205,14 @@ data class AuthorMessageSnapshot(
     val pending: Boolean,
     val variableStateJson: String,
     val toolCalls: List<AuthorToolCallSnapshot> = emptyList(),
+    val hasAgentProcess: Boolean = false,
+    val agentActivity: AuthorAgentActivitySnapshot? = null,
+)
+
+data class AuthorAgentActivitySnapshot(
+    val label: String,
+    val running: Boolean,
+    val thinking: Boolean,
 )
 
 data class AuthorToolCallSnapshot(
@@ -242,6 +267,7 @@ interface AuthorChatGateway : AuthorInlineMessageGateway {
     fun setInput(value: String): AuthorCommandResult
     fun stopGeneration(): AuthorCommandResult
     fun regenerate(messageId: String): AuthorCommandResult
+    fun editMessage(messageId: String, text: String): AuthorCommandResult
     fun editAndRegenerate(messageId: String, text: String): AuthorCommandResult
     fun createNewChat(characterId: String, characterMode: String?): AuthorCommandResult
     fun openChat(sessionId: String): AuthorCommandResult

@@ -2,7 +2,9 @@ package com.eleckoi.android.feature.chat.ui
 
 import com.eleckoi.android.feature.chat.model.ChatDraft
 import com.eleckoi.android.feature.chat.model.ChatOpeningOption
+import com.eleckoi.android.feature.chat.model.ChatMessage
 import com.eleckoi.android.feature.chat.model.ChatSession
+import com.eleckoi.android.feature.chat.model.MessageRole
 import com.eleckoi.android.feature.characters.model.CharacterCard
 import com.eleckoi.android.engine.generation.model.ModelConfig
 import com.eleckoi.android.feature.modelconfig.model.ModelParameters
@@ -81,9 +83,36 @@ class ChatAuthorGatewayAdapterTest {
         fixture.scope.cancel()
     }
 
+    @Test
+    fun `direct edit accepts a settled assistant message without regenerating`() {
+        val assistant = ChatMessage(
+            id = "assistant-1",
+            role = MessageRole.Assistant,
+            content = "旧回复",
+        )
+        var saved = false
+        val fixture = fixture(
+            initialState = ChatUiState(
+                draft = openingDraft(selectedId = "opening-1").let { draft ->
+                    draft.copy(session = draft.session.copy(messages = listOf(assistant)))
+                },
+            ),
+            onSaveEditedMessage = { saved = true },
+        )
+
+        val result = fixture.gateway.editMessage(assistant.id, "新回复")
+
+        assertTrue(result.accepted)
+        assertTrue(saved)
+        assertEquals(assistant, fixture.state.value.editingMessage)
+        assertEquals("新回复", fixture.state.value.editInput)
+        fixture.scope.cancel()
+    }
+
     private fun fixture(
         onSend: (String) -> Unit = {},
         initialState: ChatUiState = ChatUiState(),
+        onSaveEditedMessage: () -> Unit = {},
         onSelectOpening: suspend (String, String) -> Result<ChatDraft> = { _, _ ->
             Result.failure(IllegalStateException("unused"))
         },
@@ -98,6 +127,7 @@ class ChatAuthorGatewayAdapterTest {
                 send = onSend,
                 stopGeneration = {},
                 regenerate = {},
+                saveEditedMessage = onSaveEditedMessage,
                 submitEditedMessage = {},
                 createChat = { _, _ -> },
                 openChat = {},

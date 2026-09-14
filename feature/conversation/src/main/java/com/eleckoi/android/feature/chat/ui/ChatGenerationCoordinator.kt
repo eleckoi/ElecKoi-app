@@ -135,6 +135,52 @@ internal class ChatGenerationCoordinator(
         )
     }
 
+    fun saveEditedMessage() {
+        val snapshot = state()
+        val target = snapshot.editingMessage ?: return
+        val draft = snapshot.draft ?: return
+        val replacement = snapshot.editInput.trim()
+        if (replacement.isEmpty() || snapshot.isSending) return
+        if (showModeConflictIfNeeded(snapshot, draft)) return
+        persistEditedMessage(draft, target, replacement)
+    }
+
+    private fun persistEditedMessage(
+        draft: ChatDraft,
+        target: ChatMessage,
+        replacement: String,
+    ) {
+        val sessionId = draft.session.id
+        updateState { it.copy(editingMessage = null, editInput = "") }
+        scope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    chatService.editChatMessage(
+                        sessionId = sessionId,
+                        messageId = target.id,
+                        content = replacement,
+                    )
+                }
+            }.onSuccess { updated ->
+                updateState { current ->
+                    if (current.draft?.session?.id == sessionId) {
+                        current.copy(draft = updated)
+                    } else {
+                        current
+                    }
+                }
+            }.onFailure { error ->
+                updateState { current ->
+                    if (current.draft?.session?.id == sessionId) {
+                        current.copy(errorMessage = error.message ?: "修改消息失败")
+                    } else {
+                        current
+                    }
+                }
+            }
+        }
+    }
+
     fun regenerateFrom(message: ChatMessage) {
         val snapshot = state()
         val draft = snapshot.draft ?: return

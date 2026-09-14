@@ -149,6 +149,7 @@ class ChatViewModel(
             send = ::startSending,
             stopGeneration = ::stopSending,
             regenerate = ::regenerateFrom,
+            saveEditedMessage = ::saveEditedMessage,
             submitEditedMessage = ::submitEditedMessage,
             createChat = ::createChat,
             openChat = ::loadDraft,
@@ -240,6 +241,7 @@ class ChatViewModel(
             is ChatIntent.OpenEditMessage -> openEditMessage(intent.message)
             ChatIntent.CloseEditMessage -> closeEditMessage()
             is ChatIntent.EditInputChanged -> _uiState.update { it.copy(editInput = intent.value) }
+            ChatIntent.SaveEditedMessage -> saveEditedMessage()
             ChatIntent.SubmitEditedMessage -> submitEditedMessage()
             is ChatIntent.RegenerateFrom -> regenerateFrom(intent.message)
             is ChatIntent.RegenerateImage -> draftMutationController.regenerateImage(intent.messageId, intent.attachmentId)
@@ -293,6 +295,9 @@ class ChatViewModel(
     override fun stopGeneration() = authorGateway.stopGeneration()
 
     override fun regenerate(messageId: String) = authorGateway.regenerate(messageId)
+
+    override fun editMessage(messageId: String, text: String) =
+        authorGateway.editMessage(messageId, text)
 
     override fun editAndRegenerate(messageId: String, text: String) =
         authorGateway.editAndRegenerate(messageId, text)
@@ -413,7 +418,8 @@ class ChatViewModel(
     fun openEditMessage(message: ChatMessage) {
         val snapshot = _uiState.value
         val rejectedReason = when {
-            message.role != MessageRole.User -> "not-user"
+            message.role == MessageRole.System -> "not-editable"
+            message.pending -> "pending"
             snapshot.isSending -> "sending"
             else -> null
         }
@@ -429,6 +435,10 @@ class ChatViewModel(
 
     fun submitEditedMessage() {
         generationCoordinator.submitEditedMessage()
+    }
+
+    fun saveEditedMessage() {
+        generationCoordinator.saveEditedMessage()
     }
 
     fun regenerateFrom(message: ChatMessage) {

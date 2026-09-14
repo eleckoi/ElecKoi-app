@@ -21,7 +21,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -43,6 +45,7 @@ private data class FrontendGalleryItem(
     val title: String,
     val subtitle: String,
     val isImport: Boolean = false,
+    val isHtmlCreator: Boolean = false,
     val isNative: Boolean = false,
 )
 
@@ -53,6 +56,8 @@ internal fun FrontendProjectGallery(
     selectedProjectId: String?,
     appearance: AppearanceTheme,
     onSelect: (String?) -> Unit,
+    onCreateHtmlTheme: () -> Unit,
+    onEdit: (String) -> Unit,
     onImport: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -77,6 +82,14 @@ internal fun FrontendProjectGallery(
             }
             add(
                 FrontendGalleryItem(
+                    id = "create-html",
+                    title = "编写 HTML 主题",
+                    subtitle = "HTML / CSS / JS",
+                    isHtmlCreator = true,
+                ),
+            )
+            add(
+                FrontendGalleryItem(
                     id = "import",
                     title = if (isImporting) "正在导入…" else "导入前端项目",
                     subtitle = "HTML / ZIP",
@@ -99,13 +112,19 @@ internal fun FrontendProjectGallery(
         items(galleryItems, key = { it.id }) { item ->
             FrontendProjectCard(
                 item = item,
-                selected = !item.isImport && item.id == selectedFrontendId,
+                selected = !item.isImport && !item.isHtmlCreator && item.id == selectedFrontendId,
                 appearance = appearance,
+                onEdit = if (!item.isNative && !item.isImport && !item.isHtmlCreator) {
+                    { onEdit(item.id) }
+                } else {
+                    null
+                },
                 onClick = {
                     when {
                         item.isImport && !isImporting -> onImport()
+                        item.isHtmlCreator -> onCreateHtmlTheme()
                         item.isNative -> onSelect(null)
-                        !item.isImport -> onSelect(item.id)
+                        else -> onSelect(item.id)
                     }
                 },
             )
@@ -118,6 +137,7 @@ private fun FrontendProjectCard(
     item: FrontendGalleryItem,
     selected: Boolean,
     appearance: AppearanceTheme,
+    onEdit: (() -> Unit)?,
     onClick: () -> Unit,
 ) {
     Surface(
@@ -140,6 +160,7 @@ private fun FrontendProjectCard(
         Column {
             when {
                 item.isImport -> ImportFrontendThumbnail(appearance)
+                item.isHtmlCreator -> HtmlThemeThumbnail(appearance)
                 item.isNative -> NativeChatThumbnail(appearance)
                 else -> ImportedProjectThumbnail(item.title, appearance)
             }
@@ -170,9 +191,19 @@ private fun FrontendProjectCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                if (item.isImport) {
+                if (item.isImport || item.isHtmlCreator) {
                     StrokeSvgIcon(AppIconPaths.ChevronRight, appearance.mobileSoft, iconSize = 20.dp)
                 } else {
+                    onEdit?.let { edit ->
+                        IconButton(onClick = edit, modifier = Modifier.size(36.dp)) {
+                            Icon(
+                                imageVector = Icons.Rounded.Edit,
+                                contentDescription = "编辑 HTML",
+                                tint = appearance.mobileMuted,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
                     FrontendSelectionIndicator(selected = selected, appearance = appearance)
                 }
             }
@@ -338,7 +369,36 @@ private fun ImportFrontendThumbnail(appearance: AppearanceTheme) {
         }
         Spacer(modifier = Modifier.height(11.dp))
         Text(
-            text = "添加第一个前端",
+            text = "选择 HTML / ZIP",
+            color = appearance.mobileText,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
+@Composable
+private fun HtmlThemeThumbnail(appearance: AppearanceTheme) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(210.dp)
+            .background(appearance.mobileSearchBg),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(54.dp)
+                .background(appearance.mobileBlue.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
+                .border(1.dp, appearance.mobileBlue.copy(alpha = 0.24f), RoundedCornerShape(12.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text("</>", color = appearance.mobileBlue, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        }
+        Spacer(modifier = Modifier.height(11.dp))
+        Text(
+            text = "粘贴 HTML 代码",
             color = appearance.mobileText,
             fontSize = 12.sp,
             fontWeight = FontWeight.Medium,

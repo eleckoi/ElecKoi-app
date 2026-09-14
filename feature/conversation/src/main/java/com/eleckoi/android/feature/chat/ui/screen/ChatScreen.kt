@@ -85,7 +85,30 @@ fun ChatScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val frontendWorkspace by viewModel.frontendWorkspace.collectAsStateWithLifecycle()
     val immersiveProject = frontendWorkspace.selectedProject
+    val immersiveDraft = state.draft
+    var characterBackgroundSettingsOpen by remember(state.draft?.session?.id) { mutableStateOf(false) }
+    val immersiveCharacterPersona = immersiveDraft?.session?.characterPersona
+    val immersiveBackdropSpec = remember(state.appearance, immersiveCharacterPersona) {
+        ChatBackdropSpec(
+            appearance = state.appearance,
+            characterBackgroundPath = immersiveCharacterPersona?.chatBackground.orEmpty(),
+            defaultCharacterBackgroundPath = immersiveCharacterPersona?.defaultChatBackground.orEmpty(),
+            characterBackgroundOpacity = immersiveCharacterPersona?.chatBackgroundOpacity ?: 0.72f,
+            characterBackgroundBlur = immersiveCharacterPersona?.chatBackgroundBlur ?: 0f,
+            characterBackgroundScrim = immersiveCharacterPersona?.chatBackgroundScrim ?: 0.22f,
+            characterBackgroundResolved = immersiveCharacterPersona != null,
+        )
+    }
     SyncChatOrientation(allowLandscape = immersiveProject != null)
+    if (characterBackgroundSettingsOpen && immersiveDraft != null) {
+        CharacterChatBackgroundDestination(
+            state = state,
+            draft = immersiveDraft,
+            onIntent = viewModel::onIntent,
+            onBack = { characterBackgroundSettingsOpen = false },
+        )
+        return
+    }
     if (immersiveProject != null) {
         val projectDirectory = viewModel.frontendProjectDirectory(immersiveProject.id)
         if (projectDirectory != null) {
@@ -93,11 +116,16 @@ fun ChatScreen(
                 project = immersiveProject,
                 projectDirectory = projectDirectory,
                 characterName = state.chatCharacterName,
+                characterAvatarPath = state.draft?.session?.let { session ->
+                    session.characterPersona.assistantAvatar.ifBlank { session.characterAvatar }
+                }.orEmpty(),
                 chatGateway = viewModel,
                 appearance = state.appearance,
+                chatBackdropSpec = immersiveBackdropSpec,
                 storagePrincipal = AuthorFrontendStoragePrincipal.publishedProject(immersiveProject.id),
                 onExit = onBack,
                 onFallbackToNative = viewModel::clearFrontendProject,
+                onOpenChatBackgroundSettings = { characterBackgroundSettingsOpen = true },
             )
             return
         } else {
@@ -138,7 +166,6 @@ fun ChatScreen(
     var roleplayProcessMessageId by remember(sessionId) { mutableStateOf<String?>(null) }
     var roleplayOpeningJumpOpen by remember(sessionId) { mutableStateOf(false) }
     var topMenuOpen by remember(sessionId) { mutableStateOf(false) }
-    var characterBackgroundSettingsOpen by remember(sessionId) { mutableStateOf(false) }
     var variableViewerOpen by rememberSaveable(sessionId) { mutableStateOf(false) }
     val focusDismissRegistry = remember(sessionId) { FocusDismissRegistry() }
     val density = LocalDensity.current
@@ -169,18 +196,6 @@ fun ChatScreen(
         animationSpec = tween(durationMillis = 180),
         label = "chatModalBackdropBlur",
     )
-
-    if (characterBackgroundSettingsOpen && draft != null) {
-        CharacterChatBackgroundDestination(
-            state = state,
-            draft = draft,
-            onIntent = viewModel::onIntent,
-            onBack = {
-                characterBackgroundSettingsOpen = false
-            },
-        )
-        return
-    }
 
     if (variableViewerOpen && draft != null) {
         ChatVariableViewerDestination(
@@ -516,4 +531,3 @@ internal fun shouldSuppressChatContentImePadding(
     editorOpen: Boolean,
     imeBottomPx: Int,
 ): Boolean = editorOpen || (wasSuppressed && imeBottomPx > 0)
-

@@ -13,6 +13,7 @@ internal object CharacterAuthorApi {
                 put("available", runtime.characterId.isNotBlank())
                 put("id", runtime.characterId)
                 put("name", runtime.characterName)
+                put("avatarUrl", runtime.characterAvatarUrl)
             }
         },
     )

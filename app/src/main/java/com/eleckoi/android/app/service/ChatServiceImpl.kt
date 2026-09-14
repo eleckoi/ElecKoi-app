@@ -36,6 +36,7 @@ import com.eleckoi.android.feature.chat.model.ChatDraft
 import com.eleckoi.android.feature.chat.model.ChatListItem
 import com.eleckoi.android.feature.chat.model.ChatMessage
 import com.eleckoi.android.feature.chat.model.ChatUserImageAttachment
+import com.eleckoi.android.feature.chat.model.MessageRole
 import com.eleckoi.android.feature.modelconfig.model.ChatModelSelection
 import com.eleckoi.android.feature.chat.model.ChatSession
 import com.eleckoi.android.feature.settings.data.appearance.AppearanceRepository
@@ -318,6 +319,32 @@ internal class ChatServiceImpl(
         )
         sessions.updateMetadata(session)
         return draftFromSession(session)
+    }
+
+    override suspend fun editChatMessage(
+        sessionId: String,
+        messageId: String,
+        content: String,
+    ): ChatDraft {
+        val replacement = content.trim()
+        if (replacement.isBlank()) throw ElecKoiDataException("消息内容不能为空")
+        val session = sessionCoordinator.loadChat(sessionId, touch = false)
+        sessionCoordinator.requireCurrentCharacterMode(session)
+        val current = session.messages.firstOrNull { it.id == messageId }
+            ?: throw ElecKoiDataException("要修改的消息不存在")
+        if (current.role == MessageRole.System) {
+            throw ElecKoiDataException("系统消息不能修改")
+        }
+        if (current.pending) throw ElecKoiDataException("消息仍在生成中，暂时不能修改")
+        val updatedMessage = current.copy(content = replacement)
+        val updatedSession = session.copy(
+            messages = session.messages.map { message ->
+                if (message.id == messageId) updatedMessage else message
+            },
+            updatedAt = nowIso(),
+        )
+        sessions.updateMessage(updatedSession, updatedMessage)
+        return draftFromSession(updatedSession)
     }
 
     override fun saveModelConfig(config: ModelConfig): ModelConfig = settings.saveModelConfig(config)

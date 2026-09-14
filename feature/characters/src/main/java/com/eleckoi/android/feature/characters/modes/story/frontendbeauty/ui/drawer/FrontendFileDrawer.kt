@@ -36,6 +36,8 @@ internal fun FrontendFileDrawer(
     selectedProjectId: String?,
     appearance: AppearanceTheme,
     onClose: () -> Unit,
+    onCreateHtmlTheme: () -> Unit,
+    onEdit: (String) -> Unit,
     onImport: () -> Unit,
     onDelete: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -100,11 +102,12 @@ internal fun FrontendFileDrawer(
 
             FrontendFileToolbar(
                 appearance = appearance,
+                onCreateHtmlTheme = onCreateHtmlTheme,
                 onImport = onImport,
             )
 
             Text(
-                text = "导入的前端",
+                text = "前端项目",
                 modifier = Modifier.padding(start = 22.dp, top = 20.dp, bottom = 8.dp),
                 color = appearance.mobileMuted,
                 fontSize = 12.sp,
@@ -119,6 +122,7 @@ internal fun FrontendFileDrawer(
                         project = project,
                         selected = project.id == selectedProjectId,
                         appearance = appearance,
+                        onEdit = { onEdit(project.id) },
                         onDelete = { onDelete(project.id) },
                     )
                 }
@@ -158,6 +162,7 @@ private fun EmptyFrontendFiles(appearance: AppearanceTheme) {
 @Composable
 private fun FrontendFileToolbar(
     appearance: AppearanceTheme,
+    onCreateHtmlTheme: () -> Unit,
     onImport: () -> Unit,
 ) {
     Row(
@@ -168,6 +173,13 @@ private fun FrontendFileToolbar(
             .padding(6.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
+        FrontendFileToolButton(
+            icon = AppIconPaths.Pencil,
+            label = "编写 HTML",
+            appearance = appearance,
+            onClick = onCreateHtmlTheme,
+            modifier = Modifier.weight(1f),
+        )
         FrontendFileToolButton(
             icon = AppIconPaths.Import,
             label = "导入 HTML / ZIP",
@@ -183,6 +195,7 @@ private fun FrontendProjectFiles(
     project: FrontendProject,
     selected: Boolean,
     appearance: AppearanceTheme,
+    onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
     Column(
@@ -210,6 +223,14 @@ private fun FrontendProjectFiles(
                 if (selected) {
                     Text("当前使用", color = appearance.mobileBlue, fontSize = 10.sp)
                 }
+            }
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .noRippleClickable(onClick = onEdit),
+                contentAlignment = Alignment.Center,
+            ) {
+                StrokeSvgIcon(AppIconPaths.Pencil, appearance.mobileMuted, iconSize = 17.dp)
             }
             Box(
                 modifier = Modifier

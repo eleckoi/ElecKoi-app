@@ -1,0 +1,778 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>自定义聊天主题</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --canvas: #101214;
+      --surface: #181b1e;
+      --surface-raised: #202428;
+      --line: #30363b;
+      --text: #f4f2ed;
+      --muted: #9da5aa;
+      --accent: #63d3b1;
+      --accent-strong: #31b98f;
+      --warm: #ef8f70;
+      --danger: #ff7b72;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: var(--canvas);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+
+    button, textarea { font: inherit; }
+
+    button {
+      color: inherit;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    #app {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+    }
+
+    header {
+      min-height: 64px;
+      padding: max(10px, env(safe-area-inset-top)) 16px 10px;
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+    }
+
+    .avatar {
+      width: 38px;
+      height: 38px;
+      flex: 0 0 auto;
+      display: grid;
+      place-items: center;
+      border: 1px solid #3b4549;
+      border-radius: 50%;
+      background: #25312f;
+      color: var(--accent);
+      font-size: 14px;
+      font-weight: 750;
+      overflow: hidden;
+    }
+
+    .avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+    .agent-activity {
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .agent-activity-dot {
+      width: 7px;
+      height: 7px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .agent-activity.running .agent-activity-dot { animation: pulse 1.1s ease-in-out infinite; }
+
+    .identity { min-width: 0; flex: 1; }
+
+    .identity h1 {
+      margin: 0;
+      overflow: hidden;
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 680;
+      line-height: 1.25;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .status {
+      margin-top: 3px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    .status.busy .status-dot {
+      animation: pulse 1.1s ease-in-out infinite;
+      background: var(--warm);
+    }
+
+    @keyframes pulse {
+      50% { opacity: .3; transform: scale(.72); }
+    }
+
+    #messages {
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding: 20px 14px 28px;
+      scroll-behavior: smooth;
+    }
+
+    .empty {
+      height: 100%;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .message {
+      width: min(88%, 720px);
+      margin: 0 auto 16px 0;
+    }
+
+    .message.user { margin-left: auto; margin-right: 0; }
+
+    .message-meta {
+      margin: 0 3px 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 10px;
+    }
+
+    .message.user .message-meta { justify-content: flex-end; }
+
+    .bubble {
+      padding: 12px 13px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-raised);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, .14);
+    }
+
+    .user .bubble {
+      border-color: #3c6459;
+      background: #1c3932;
+    }
+
+    .content {
+      margin: 0;
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.68;
+      overflow-wrap: anywhere;
+      white-space: pre-wrap;
+    }
+
+    details {
+      margin-bottom: 9px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 8px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    details pre {
+      margin: 8px 0 0;
+      font: inherit;
+      line-height: 1.55;
+      white-space: pre-wrap;
+    }
+
+    .message-actions {
+      height: 30px;
+      margin-top: 3px;
+      display: flex;
+      justify-content: flex-end;
+      gap: 2px;
+      opacity: .72;
+    }
+
+    .icon-button {
+      width: 34px;
+      height: 30px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 18px;
+    }
+
+    .icon-button:active { background: var(--surface-raised); color: var(--text); }
+
+    #error {
+      display: none;
+      margin: 0 14px 8px;
+      padding: 8px 10px;
+      border: 1px solid rgba(185, 73, 73, 0.38);
+      border-radius: 6px;
+      background: rgba(185, 73, 73, 0.08);
+      color: var(--danger);
+      font-size: 11px;
+    }
+
+    #composer {
+      padding: 10px 12px max(10px, env(safe-area-inset-bottom));
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 42px;
+      gap: 8px;
+      align-items: end;
+      border-top: 1px solid var(--line);
+      background: var(--surface);
+    }
+
+    #input {
+      width: 100%;
+      min-height: 42px;
+      max-height: 132px;
+      resize: none;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      outline: none;
+      padding: 10px 11px;
+      background: var(--canvas);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 20px;
+    }
+
+    #input:focus { border-color: var(--accent-strong); }
+    #input::placeholder { color: #747d82; }
+
+    #submit {
+      width: 42px;
+      height: 42px;
+      border: 0;
+      border-radius: 8px;
+      background: var(--accent);
+      color: #09231b;
+      font-size: 19px;
+      font-weight: 800;
+    }
+
+    #submit.stop { background: var(--warm); color: #2b120b; }
+    #submit:disabled { opacity: .4; }
+
+    /* Avoid native <dialog> layout differences in Android WebView. */
+    .edit-sheet {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding: 12px 12px max(12px, env(safe-area-inset-bottom));
+      background: rgba(0, 0, 0, .66);
+      animation: sheet-scrim-in .18s ease-out both;
+    }
+
+    .edit-sheet[hidden] { display: none; }
+
+    .edit-panel {
+      width: min(100%, 560px);
+      height: var(--edit-panel-height, 228px);
+      min-height: 0;
+      max-height: var(--edit-max-height, 9999px);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 12px 12px 5px 5px;
+      padding: 14px;
+      background: var(--surface);
+      color: var(--text);
+      animation: sheet-in .24s ease-out both;
+    }
+
+    @keyframes sheet-scrim-in { from { opacity: 0; } }
+    @keyframes sheet-in { from { opacity: 0; transform: translateY(26px); } }
+
+    .edit-panel h2 { margin: 0 0 11px; font-size: 15px; }
+
+    #edit-text {
+      width: 100%;
+      height: 96px;
+      min-height: 96px;
+      max-height: none;
+      flex: 0 1 auto;
+      resize: none;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      outline: none;
+      padding: 10px;
+      background: var(--canvas);
+      color: var(--text);
+      line-height: 1.55;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      overflow-x: hidden;
+      overflow-y: hidden;
+    }
+
+
+    .dialog-actions {
+      margin-top: 12px;
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .dialog-actions button {
+      min-width: 68px;
+      height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: transparent;
+    }
+
+    .dialog-actions .primary {
+      border-color: var(--accent-strong);
+      background: var(--accent);
+      color: #09231b;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <header>
+      <div class="avatar" id="avatar"><img id="avatar-image" alt="" hidden><span id="avatar-text">AI</span></div>
+      <div class="identity">
+        <h1 id="character-name">ElecKoi</h1>
+        <div class="status" id="status"><span class="status-dot"></span><span id="status-text">已连接</span></div>
+      </div>
+    </header>
+
+    <main id="messages" aria-live="polite"></main>
+    <div id="error" role="alert"></div>
+
+    <form id="composer">
+      <textarea id="input" rows="1" placeholder="输入消息…" enterkeyhint="send"></textarea>
+      <button id="submit" type="submit" aria-label="发送">↑</button>
+    </form>
+  </div>
+
+  <section id="edit-sheet" class="edit-sheet" hidden role="dialog" aria-modal="true" aria-labelledby="edit-title">
+    <div class="edit-panel">
+      <h2 id="edit-title">修改消息</h2>
+      <textarea id="edit-text"></textarea>
+      <div class="dialog-actions">
+        <button id="edit-cancel" type="button">取消</button>
+        <button id="edit-regenerate" type="button">保存并重试</button>
+        <button id="edit-save" class="primary" type="button">修改</button>
+      </div>
+    </div>
+  </section>
+
+  <script src="/eleckoi-runtime/eleckoi.js"></script>
+  <script>
+    (() => {
+      const api = window.ElecKoi;
+      const messagesNode = document.querySelector("#messages");
+      const nameNode = document.querySelector("#character-name");
+      const avatarNode = document.querySelector("#avatar");
+      const avatarImage = document.querySelector("#avatar-image");
+      const avatarText = document.querySelector("#avatar-text");
+      const statusNode = document.querySelector("#status");
+      const statusTextNode = document.querySelector("#status-text");
+      const errorNode = document.querySelector("#error");
+      const composer = document.querySelector("#composer");
+      const input = document.querySelector("#input");
+      const submit = document.querySelector("#submit");
+      const editSheet = document.querySelector("#edit-sheet");
+      const editPanel = document.querySelector(".edit-panel");
+      const editText = document.querySelector("#edit-text");
+      const editCancel = document.querySelector("#edit-cancel");
+      const editRegenerate = document.querySelector("#edit-regenerate");
+      const editSave = document.querySelector("#edit-save");
+      const editTitle = document.querySelector("#edit-title");
+
+      let messages = [];
+      let generating = false;
+      let editingMessage = null;
+      const messageNodes = new Map();
+      const pendingStreamMessages = new Map();
+      let streamFrame = 0;
+
+      function showError(error) {
+        errorNode.textContent = error?.message || String(error || "操作失败");
+        errorNode.style.display = "block";
+      }
+
+      function clearError() {
+        errorNode.textContent = "";
+        errorNode.style.display = "none";
+      }
+
+      function setGenerating(value) {
+        generating = Boolean(value);
+        statusNode.classList.toggle("busy", generating);
+        statusTextNode.textContent = generating ? "正在回复" : "已连接";
+        submit.classList.toggle("stop", generating);
+        submit.textContent = generating ? "■" : "↑";
+        submit.setAttribute("aria-label", generating ? "停止生成" : "发送");
+      }
+
+      function nearBottom() {
+        return messagesNode.scrollHeight - messagesNode.scrollTop - messagesNode.clientHeight < 96;
+      }
+
+      function messageTime(value) {
+        if (!value) return "";
+        const date = new Date(value);
+        return Number.isNaN(date.valueOf()) ? "" : date.toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      }
+
+      function actionButton(label, title, action) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "icon-button";
+        button.textContent = label;
+        button.title = title;
+        button.setAttribute("aria-label", title);
+        button.addEventListener("click", action);
+        return button;
+      }
+
+      function renderMessageActions(message) {
+        const actions = document.createElement("div");
+        actions.className = "message-actions";
+        if (!message.pending && message.role !== "system") {
+          if (message.role !== "user") {
+            actions.append(actionButton("↻", "重新生成", () => regenerate(message.id)));
+          }
+          actions.append(actionButton("✎", message.role === "user" ? "修改输入" : "修改输出", () => openEditor(message)));
+        }
+        return actions;
+      }
+
+      function setIdentity(name, avatarUrl = "") {
+        const resolved = name || "ElecKoi";
+        nameNode.textContent = resolved;
+        avatarText.textContent = Array.from(resolved).slice(0, 2).join("").toUpperCase();
+        avatarImage.hidden = true;
+        avatarText.hidden = false;
+        avatarImage.removeAttribute("src");
+        if (avatarUrl) {
+          avatarImage.onload = () => { avatarImage.hidden = false; avatarText.hidden = true; };
+          avatarImage.onerror = () => { avatarImage.hidden = true; avatarText.hidden = false; };
+          avatarImage.src = avatarUrl;
+        }
+      }
+
+      function updateAgentActivity(bubble, message, beforeNode) {
+        let activity = bubble.querySelector(".agent-activity");
+        if (!message.agentActivity) {
+          activity?.remove();
+          return;
+        }
+        if (!activity) {
+          activity = document.createElement("div");
+          activity.className = "agent-activity";
+          activity.append(document.createElement("span"), document.createElement("span"));
+          activity.firstElementChild.className = "agent-activity-dot";
+          if (beforeNode.parentNode === bubble) bubble.insertBefore(activity, beforeNode);
+          else bubble.append(activity);
+        }
+        activity.classList.toggle("running", Boolean(message.agentActivity.running));
+        activity.lastElementChild.textContent = message.agentActivity.label || "正在思考";
+      }
+
+      function renderMessage(message) {
+        const article = document.createElement("article");
+        article.className = `message ${message.role || "assistant"}`;
+        article.dataset.id = message.id;
+
+        const meta = document.createElement("div");
+        meta.className = "message-meta";
+        const author = document.createElement("span");
+        author.textContent = message.role === "user" ? "我" : nameNode.textContent;
+        const time = document.createElement("span");
+        time.textContent = messageTime(message.createdAt);
+        meta.append(author, time);
+
+        const bubble = document.createElement("div");
+        bubble.className = "bubble";
+        if (message.reasoningContent) {
+          const details = document.createElement("details");
+          const summary = document.createElement("summary");
+          const reasoning = document.createElement("pre");
+          summary.textContent = "思考过程";
+          reasoning.textContent = message.reasoningContent;
+          details.append(summary, reasoning);
+          bubble.append(details);
+        }
+        const content = document.createElement("p");
+        content.className = "content";
+        updateAgentActivity(bubble, message, content);
+        content.textContent = message.content || (message.pending && !message.agentActivity ? "…" : "");
+        bubble.append(content);
+
+        article.append(meta, bubble, renderMessageActions(message));
+        return article;
+      }
+
+      function updateMessageNode(article, message) {
+        article.className = `message ${message.role || "assistant"}`;
+        const bubble = article.querySelector(".bubble");
+        const content = article.querySelector(".content");
+        let reasoning = bubble.querySelector("details");
+        if (message.reasoningContent) {
+          if (!reasoning) {
+            reasoning = document.createElement("details");
+            const summary = document.createElement("summary");
+            const text = document.createElement("pre");
+            summary.textContent = "思考过程";
+            reasoning.append(summary, text);
+            bubble.insertBefore(reasoning, content);
+          }
+          reasoning.querySelector("pre").textContent = message.reasoningContent;
+        } else if (reasoning) {
+          reasoning.remove();
+        }
+        updateAgentActivity(bubble, message, content);
+        content.textContent = message.content || (message.pending && !message.agentActivity ? "…" : "");
+        article.querySelector(".message-actions")?.replaceWith(renderMessageActions(message));
+      }
+
+      function upsertStreamingMessage(message) {
+        const index = messages.findIndex((item) => item.id === message.id);
+        if (index >= 0) messages[index] = message;
+        else messages.push(message);
+
+        let article = messageNodes.get(message.id);
+        if (!article) {
+          messagesNode.querySelector(".empty")?.remove();
+          article = renderMessage(message);
+          messageNodes.set(message.id, article);
+          messagesNode.append(article);
+          return;
+        }
+        updateMessageNode(article, message);
+      }
+
+      function flushStreamingMessages() {
+        streamFrame = 0;
+        const shouldFollow = nearBottom();
+        pendingStreamMessages.forEach(upsertStreamingMessage);
+        pendingStreamMessages.clear();
+        setGenerating(true);
+        if (shouldFollow) messagesNode.scrollTop = messagesNode.scrollHeight;
+      }
+
+      function scheduleStreamingMessage(message) {
+        pendingStreamMessages.set(message.id, message);
+        if (!streamFrame) streamFrame = requestAnimationFrame(flushStreamingMessages);
+      }
+
+      function cancelPendingStreamRender() {
+        if (streamFrame) cancelAnimationFrame(streamFrame);
+        streamFrame = 0;
+        pendingStreamMessages.clear();
+      }
+
+      function renderMessages(forceBottom = false) {
+        const shouldFollow = forceBottom || nearBottom();
+        messagesNode.replaceChildren();
+        messageNodes.clear();
+        if (messages.length === 0) {
+          const empty = document.createElement("div");
+          empty.className = "empty";
+          empty.textContent = "开始一段新对话";
+          messagesNode.append(empty);
+        } else {
+          messages.forEach((message) => {
+            const article = renderMessage(message);
+            messageNodes.set(message.id, article);
+            messagesNode.append(article);
+          });
+        }
+        if (shouldFollow) messagesNode.scrollTop = messagesNode.scrollHeight;
+      }
+
+      async function refreshMessages(forceBottom = false) {
+        cancelPendingStreamRender();
+        try {
+          const result = await api.messages.list();
+          messages = result.items || [];
+          renderMessages(forceBottom);
+        } catch (error) {
+          showError(error);
+        }
+      }
+
+      async function bootstrap() {
+        if (!api) {
+          showError("ElecKoi 作者 API 不可用");
+          return;
+        }
+        try {
+          const [context, generation] = await Promise.all([
+            api.context.current(),
+            api.chat.getGenerationState(),
+          ]);
+          setIdentity(context.characterName, context.characterAvatarUrl);
+          setGenerating(generation.isGenerating);
+          await refreshMessages(true);
+        } catch (error) {
+          showError(error);
+        }
+      }
+
+      async function regenerate(id) {
+        clearError();
+        try {
+          await api.messages.regenerate(id);
+        } catch (error) {
+          showError(error);
+        }
+      }
+
+      function resizeEditor() {
+        if (editSheet.hidden) return;
+        editText.style.height = "96px";
+        const viewportHeight = Math.max(320, window.innerHeight || 720);
+        const maxPanelHeight = Math.floor(viewportHeight * 0.5);
+        const chromeHeight = 132;
+        const maxTextHeight = Math.max(96, maxPanelHeight - chromeHeight);
+        const targetHeight = Math.min(editText.scrollHeight, maxTextHeight);
+        const textHeight = Math.max(96, targetHeight);
+        editText.style.height = `${textHeight}px`;
+        const panelHeight = Math.max(180, Math.min(maxPanelHeight, textHeight + chromeHeight));
+        editPanel.style.setProperty("--edit-max-height", `${maxPanelHeight}px`);
+        editPanel.style.setProperty("--edit-panel-height", `${panelHeight}px`);
+        editText.style.overflowY = editText.scrollHeight > targetHeight ? "auto" : "hidden";
+      }
+
+      function syncEditViewport() {
+        if (editSheet.hidden) return;
+        // Keep the fixed scrim governed by `inset: 0`. On some Android WebViews
+        // visualViewport.height is briefly 0/1 while the sheet is entering, which
+        // collapses the whole editor to the one-pixel line seen on the device.
+        editSheet.style.removeProperty("top");
+        editSheet.style.removeProperty("bottom");
+        editSheet.style.removeProperty("height");
+        resizeEditor();
+      }
+
+      function openEditor(message) {
+        editingMessage = message;
+        editText.value = message.content || "";
+        editTitle.textContent = message.role === "user" ? "修改输入" : "修改输出";
+        editRegenerate.hidden = message.role !== "user";
+        editSheet.hidden = false;
+        requestAnimationFrame(() => {
+          editText.setSelectionRange(editText.value.length, editText.value.length);
+          syncEditViewport();
+        });
+      }
+
+      function closeEditor() {
+        editSheet.hidden = true;
+        editingMessage = null;
+      }
+
+      editCancel.addEventListener("click", closeEditor);
+      editText.addEventListener("input", resizeEditor);
+      editSheet.addEventListener("click", (event) => {
+        if (event.target === editSheet) closeEditor();
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !editSheet.hidden) closeEditor();
+      });
+      editText.addEventListener("focus", syncEditViewport);
+      window.visualViewport?.addEventListener("resize", syncEditViewport);
+      window.visualViewport?.addEventListener("scroll", syncEditViewport);
+      async function saveEdit(regenerateAfterSave) {
+        const text = editText.value.trim();
+        if (!text || !editingMessage) return;
+        clearError();
+        try {
+          if (regenerateAfterSave) {
+            await api.messages.editAndRegenerate(editingMessage.id, text);
+          } else {
+            await api.messages.edit(editingMessage.id, text);
+          }
+          closeEditor();
+        } catch (error) {
+          showError(error);
+        }
+      }
+      editSave.addEventListener("click", () => saveEdit(false));
+      editRegenerate.addEventListener("click", () => saveEdit(true));
+
+      composer.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        clearError();
+        try {
+          if (generating) {
+            await api.chat.stopGeneration();
+            return;
+          }
+          const text = input.value.trim();
+          if (!text) return;
+          await api.chat.send(text);
+          input.value = "";
+          input.style.height = "auto";
+        } catch (error) {
+          showError(error);
+        }
+      });
+
+      input.addEventListener("input", () => {
+        input.style.height = "auto";
+        input.style.height = `${Math.min(input.scrollHeight, 132)}px`;
+      });
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && !event.shiftKey) {
+          event.preventDefault();
+          composer.requestSubmit();
+        }
+      });
+
+      if (api) {
+        api.events.on("message.delta", (payload) => {
+          scheduleStreamingMessage(payload);
+        });
+        api.events.on("messages.changed", () => refreshMessages());
+        api.events.on("chat.changed", () => refreshMessages(true));
+        api.events.on("generation.started", () => setGenerating(true));
+        api.events.on("generation.completed", () => { setGenerating(false); refreshMessages(); });
+        api.events.on("generation.stopped", () => { setGenerating(false); refreshMessages(); });
+        api.events.on("generation.failed", (payload) => {
+          setGenerating(false);
+          showError(payload.message || "生成失败");
+          refreshMessages();
+        });
+      }
+
+      bootstrap();
+    })();
+  </script>
+</body>
+</html>

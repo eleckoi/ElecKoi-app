@@ -24,6 +24,80 @@ import org.junit.Test
 
 class ChatGenerationCoordinatorTest {
     @Test
+    fun `saving an assistant edit persists it without starting generation`() {
+        val originalReply = ChatMessage(
+            id = "assistant-1",
+            role = MessageRole.Assistant,
+            content = "旧回复",
+        )
+        val session = ChatSession(
+            id = "session-1",
+            title = "",
+            characterId = "",
+            characterName = "",
+            characterAvatar = "",
+            characterPersona = CharacterCard(),
+            messages = listOf(originalReply),
+            updatedAt = "",
+        )
+        val originalDraft = ChatDraft(
+            session = session,
+            selectedModelConfig = ModelConfig(),
+            selectedModel = "test-model",
+        )
+        val editedReply = originalReply.copy(content = "新回复")
+        val updatedDraft = originalDraft.copy(
+            session = session.copy(messages = listOf(editedReply)),
+        )
+        val updatedPublished = CountDownLatch(1)
+        val service = Proxy.newProxyInstance(
+            ChatService::class.java.classLoader,
+            arrayOf(ChatService::class.java),
+        ) { _, method, arguments ->
+            when (method.name) {
+                "editChatMessage" -> {
+                    assertEquals(session.id, arguments?.get(0))
+                    assertEquals(originalReply.id, arguments?.get(1))
+                    assertEquals(editedReply.content, arguments?.get(2))
+                    updatedDraft
+                }
+                else -> error("Unexpected ChatService call in test: ${method.name}")
+            }
+        } as ChatService
+        val state = AtomicReference(
+            ChatUiState(
+                draft = originalDraft,
+                editingMessage = originalReply,
+                editInput = editedReply.content,
+            ),
+        )
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val coordinator = ChatGenerationCoordinator(
+            scope = scope,
+            chatService = service,
+            state = state::get,
+            updateState = { transform ->
+                state.updateAndGet(transform).also { next ->
+                    if (next.draft == updatedDraft) updatedPublished.countDown()
+                }
+            },
+            showModeConflictIfNeeded = { _, _ -> false },
+            onStopRequested = {},
+        )
+
+        try {
+            coordinator.saveEditedMessage()
+
+            assertTrue("修改后的回复没有发布", updatedPublished.await(2, TimeUnit.SECONDS))
+            assertEquals(updatedDraft, state.get().draft)
+            assertEquals(null, state.get().editingMessage)
+            assertEquals("", state.get().editInput)
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
     fun `stale pending reply can regenerate when no request is active`() {
         val user = ChatMessage(id = "user-1", role = MessageRole.User, content = "重写")
         val oldReply = ChatMessage(
