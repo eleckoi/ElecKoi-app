@@ -120,37 +120,27 @@ class CreatorWorkspaceRepositoryTest {
     }
 
     @Test
-    fun `character modes keep separate persistent workspaces`() = runBlocking {
-        val root = temporaryFolder.newFolder("character-modes")
+    fun `one character keeps one persistent story workspace`() = runBlocking {
+        val root = temporaryFolder.newFolder("character-workspace")
         val repository = repository(root)
 
-        val agent = repository.ensureCharacterModeWorkspace("character-1", "agent", "角色 · 智能体")
-        val sameAgent = repository.ensureCharacterModeWorkspace("character-1", "agent", "重命名不应新建")
-        val story = repository.ensureCharacterModeWorkspace("character-1", "story", "角色 · 剧情小说")
+        val workspace = repository.ensureCharacterWorkspace("character-1", "角色 · 剧情小说")
+        val sameWorkspace = repository.ensureCharacterWorkspace("character-1", "重命名不应新建")
 
-        assertEquals(agent.id, sameAgent.id)
-        assertTrue(agent.id != story.id)
-        assertEquals("character-1", agent.linkedCharacterId)
-        assertEquals("agent", agent.linkedCharacterMode)
-        assertEquals("story", story.linkedCharacterMode)
-        assertEquals(2, repository.list().size)
-        assertTrue(repository.listFiles(agent.id).isEmpty())
-        assertTrue(repository.listFiles(story.id).isEmpty())
-        assertTrue(File(root, "characters/character-1/智能体/project").isDirectory)
+        assertEquals(workspace.id, sameWorkspace.id)
+        assertEquals("character-1", workspace.linkedCharacterId)
+        assertTrue(workspace.characterOwned)
+        assertEquals(1, repository.list().size)
+        assertTrue(repository.listFiles(workspace.id).isEmpty())
         assertTrue(File(root, "characters/character-1/剧情小说/project").isDirectory)
-        assertFalse(File(root, "workspaces/${agent.id}").exists())
-        assertFalse(File(root, "workspaces/${story.id}").exists())
-        assertEquals(
-            "characters/character-1/智能体/project",
-            repository.runtimeProjectPath(agent),
-        )
+        assertFalse(File(root, "workspaces/${workspace.id}").exists())
         assertEquals(
             "characters/character-1/剧情小说/project",
-            repository.runtimeProjectPath(story),
+            repository.runtimeProjectPath(workspace),
         )
 
         val reloaded = repository(root).list()
-        assertEquals(setOf(agent.id, story.id), reloaded.map { it.id }.toSet())
+        assertEquals(listOf(workspace.id), reloaded.map { it.id })
     }
 
     @Test
@@ -167,15 +157,15 @@ class CreatorWorkspaceRepositoryTest {
     }
 
     @Test
-    fun `unsupported character workspace is discarded instead of blocking the catalog`() {
-        val root = temporaryFolder.newFolder("unsupported-character-mode")
+    fun `missing character workspace directory is rejected`() {
+        val root = temporaryFolder.newFolder("missing-character-workspace")
         val paths = WorkspacePathGuard(root)
         paths.initialize()
         val unsupported = CreatorWorkspace(
             id = "retired-workspace",
             name = "已停用工作区",
             linkedCharacterId = "character-1",
-            linkedCharacterMode = "retired",
+            characterOwned = true,
             createdAt = "2026-08-28T00:00:00Z",
             updatedAt = "2026-08-28T00:00:00Z",
         )

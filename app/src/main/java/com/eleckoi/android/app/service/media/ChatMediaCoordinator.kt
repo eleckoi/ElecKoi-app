@@ -3,13 +3,13 @@ package com.eleckoi.android.app.service
 import android.graphics.BitmapFactory
 import com.eleckoi.android.engine.generation.config.ModelConfigRepository
 import com.eleckoi.android.engine.agent.tools.AgentToolRequestPolicy
-import com.eleckoi.android.engine.agent.tools.AgentToolScopes
 import com.eleckoi.android.engine.generation.image.ReplyImageGenerator
 import com.eleckoi.android.engine.generation.image.SceneImagePrompt
 import com.eleckoi.android.engine.generation.image.parseSceneImagePrompts
 import com.eleckoi.android.engine.generation.model.isImageGenerationConfig
 import com.eleckoi.android.feature.characters.data.CharacterRepository
 import com.eleckoi.android.feature.characters.model.CharacterSlot
+import com.eleckoi.android.feature.characters.presets.model.AgentPreset
 import com.eleckoi.android.feature.chat.data.ChatSessionStore
 import com.eleckoi.android.feature.chat.data.GenerationAttemptRepository
 import com.eleckoi.android.feature.chat.model.ChatDraft
@@ -30,7 +30,7 @@ internal class ChatMediaCoordinator(
     private val appearance: AppearanceRepository,
     private val replyImageGenerator: ReplyImageGenerator,
     private val generationAttempts: GenerationAttemptRepository,
-    private val toolModelConfigId: (scopeId: String, groupId: String) -> String,
+    private val activeAgentPreset: suspend () -> AgentPreset,
     private val projectDraft: (ChatSession) -> ChatDraft,
 ) {
     suspend fun regenerateImage(
@@ -51,10 +51,13 @@ internal class ChatMediaCoordinator(
         if (previous.status == ChatImageStatus.Generating) {
             throw ElecKoiDataException("这张图片已经在生成")
         }
-        val selectedImageConfigId = toolModelConfigId(
-            AgentToolScopes.character(session.characterId),
-            AgentToolRequestPolicy.BuiltInAutoIllustration,
-        )
+        val toolConfiguration = activeAgentPreset().toolConfiguration.normalized()
+        val selectedImageConfigId = toolConfiguration.toolModelConfigIds[
+            AgentToolRequestPolicy.BuiltInAutoIllustration
+        ].orEmpty()
+        if (AgentToolRequestPolicy.BuiltInAutoIllustration !in toolConfiguration.enabledGroupIds) {
+            throw ElecKoiDataException("当前预设没有启用配图工具")
+        }
         val imageConfig = settings.loadModelConfigCollection().configs.firstOrNull {
             it.id == selectedImageConfigId && it.isImageGenerationConfig()
         }

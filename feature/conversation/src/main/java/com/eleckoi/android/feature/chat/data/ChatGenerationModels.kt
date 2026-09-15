@@ -9,6 +9,19 @@ data class ChatSendResult(
     val draft: ChatDraft,
 )
 
+data class ChatDeleteMessagesResult(
+    val draft: ChatDraft,
+    val deletedMessageIds: List<String>,
+    val remainingMessageCount: Int,
+)
+
+data class ChatStoredSuffixDeletion(
+    val session: ChatSession,
+    val deletedMessageIds: List<String>,
+    val remainingMessageCount: Int,
+    val obsoleteRuntimeThreadIds: Set<String>,
+)
+
 /**
  * A destructive regeneration commit followed by its cancellable model turn.
  *

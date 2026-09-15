@@ -25,7 +25,6 @@ internal data class RoleplayTranscriptMessage(
     val selectedOpeningIndex: Int,
     val hasAgentProcess: Boolean,
     val regenerateEnabled: Boolean,
-    val showAvatarInitial: Boolean,
     val liveStatus: RoleplayTranscriptLiveStatus? = null,
 ) {
     val contentRevision: String = contentParts.hashCode().toString()
@@ -92,7 +91,7 @@ internal data class RoleplayTranscriptStyle(
     val line: String,
     val jumpSurface: String,
     val avatarBackground: String,
-    val avatarInitial: String,
+    val avatarPlaceholder: String,
     val fontSizePx: Float,
     val lineHeightPx: Float,
     val letterSpacingPx: Float,

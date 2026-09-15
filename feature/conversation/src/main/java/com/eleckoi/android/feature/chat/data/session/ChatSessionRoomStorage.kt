@@ -5,17 +5,22 @@ import com.eleckoi.android.engine.agent.eleckoi.conversation.PagedConversationTu
 import com.eleckoi.android.engine.agent.eleckoi.conversation.RoomConversationLedger
 import com.eleckoi.android.feature.chat.data.chatSessionFromRoom
 import com.eleckoi.android.feature.chat.data.ChatSessionNotFoundException
+import com.eleckoi.android.feature.chat.data.ChatGenerationStatsStore
 import com.eleckoi.android.feature.chat.data.toChatMessage
 import com.eleckoi.android.feature.chat.data.toRoomRecord
 import com.eleckoi.android.feature.chat.data.toLedgerMessage
 import com.eleckoi.android.feature.chat.model.ChatMessage
 import com.eleckoi.android.feature.chat.model.ChatSession
+import com.eleckoi.android.feature.chat.model.MessageRole
 import com.eleckoi.android.foundation.storage.room.ChatSessionRecord
 import com.eleckoi.android.foundation.storage.room.ElecKoiDatabase
 import kotlinx.coroutines.flow.Flow
 
 /** The single Room/ledger boundary for persisted raw conversation messages. */
-internal class ChatSessionRoomStorage(private val database: ElecKoiDatabase) {
+internal class ChatSessionRoomStorage(
+    private val database: ElecKoiDatabase,
+    private val generationStats: ChatGenerationStatsStore? = null,
+) {
     val dao = database.chatDao()
     val ledger = RoomConversationLedger(database)
 
@@ -24,6 +29,10 @@ internal class ChatSessionRoomStorage(private val database: ElecKoiDatabase) {
 
     fun databaseTransaction(block: () -> Unit) {
         database.runInTransaction { block() }
+    }
+
+    fun persistGenerationStats(session: ChatSession) {
+        generationStats?.persist(session.id, session.generationStats)
     }
 
     fun activeMessages(sessionId: String): List<ChatMessage> {
@@ -71,12 +80,16 @@ internal class ChatSessionRoomStorage(private val database: ElecKoiDatabase) {
     }
 
     /** Persist only changed session components plus the small ledger-derived metadata row. */
-    fun upsertMetadataWithHistoryInTransaction(session: ChatSession, summaryCandidate: String) {
+    fun upsertMetadataWithHistoryInTransaction(
+        session: ChatSession,
+        summaryCandidate: String,
+        replaceBlankSummary: Boolean = false,
+    ) {
         check(database.inTransaction())
         val current = dao.sessionById(session.id)
         val updated = session.toRoomRecord().let { record ->
             record.copy(session = record.session.copy(
-                historySummary = summaryCandidate.takeIf(String::isNotBlank)
+                historySummary = summaryCandidate.takeIf { replaceBlankSummary || it.isNotBlank() }
                     ?.take(42)
                     ?: current?.session?.historySummary.orEmpty(),
                 historyMessageCount = ledger.activeMessageCount(session.id),
@@ -92,22 +105,41 @@ internal class ChatSessionRoomStorage(private val database: ElecKoiDatabase) {
     ): ChatSession {
         ensureLedger(entity)
         if (includeAllMessages) {
-            return chatSessionFromRoom(
-                record = entity,
-                messages = ledger.allMessages(entity.session.id).map { it.toChatMessage() },
+            return withGenerationStats(
+                chatSessionFromRoom(
+                    record = entity,
+                    messages = ledger.allMessages(entity.session.id).map { it.toChatMessage() },
+                ),
             )
         }
         ledger.displayCache(entity.session.id)?.let { cached ->
-            return chatSessionFromRoom(
-                record = entity,
-                messages = cached.map { it.toChatMessage() },
+            return withGenerationStats(
+                chatSessionFromRoom(
+                    record = entity,
+                    messages = cached.map { it.toChatMessage() },
+                ),
             )
         }
         val page = ledger.page(entity.session.id, beforeSequence = null, limit = DisplayPageTurns)
-        return chatSessionFromRoom(
-            record = entity,
-            messages = page.messages.map { it.toChatMessage() },
+        return withGenerationStats(
+            chatSessionFromRoom(
+                record = entity,
+                messages = page.messages.map { it.toChatMessage() },
+            ),
         )
+    }
+
+    private fun withGenerationStats(session: ChatSession): ChatSession {
+        val runtimeThreadId = session.messages.asReversed()
+            .firstOrNull { message ->
+                message.role == MessageRole.Assistant &&
+                    message.runtimeThreadId.isNotBlank()
+            }
+            ?.runtimeThreadId
+            .orEmpty()
+        val stats = generationStats?.load(session.id, runtimeThreadId)
+            ?: return session
+        return session.copy(generationStats = stats)
     }
 
     fun ensureLedger(entity: ChatSessionRecord) {
@@ -129,9 +161,6 @@ internal class ChatSessionRoomStorage(private val database: ElecKoiDatabase) {
         if (next.session != current?.session) dao.upsertSession(next.session)
         if (next.characterSnapshot != current?.characterSnapshot) {
             next.characterSnapshot?.let(dao::upsertCharacterSnapshot)
-        }
-        if (next.modelSettings != current?.modelSettings) {
-            next.modelSettings?.let(dao::upsertModelSettings)
         }
         val currentVariableStates = current?.variableStates.orEmpty().associateBy { it.kind }
         val changedVariableStates = next.variableStates.filter { it != currentVariableStates[it.kind] }

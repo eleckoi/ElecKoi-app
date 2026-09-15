@@ -10,24 +10,16 @@ internal data class ActiveChatSessionSelection(
         return sessionIdsByContext[key].orEmpty()
     }
 
-    fun sessionIdFor(characterId: String, characterMode: String): String {
-        return sessionIdsByContext[modeKey(characterId, characterMode)].orEmpty()
-    }
-
     fun remember(
         characterId: String,
-        characterMode: String,
         sessionId: String,
     ): ActiveChatSessionSelection {
         val characterKey = characterId.trim()
-        val contextKey = modeKey(characterId, characterMode)
         val normalizedSessionId = sessionId.trim()
-        if (characterKey.isBlank() || contextKey.isBlank() || normalizedSessionId.isBlank()) return this
+        if (characterKey.isBlank() || normalizedSessionId.isBlank()) return this
         return copy(
             lastSessionId = normalizedSessionId,
-            sessionIdsByContext = sessionIdsByContext +
-                (characterKey to normalizedSessionId) +
-                (contextKey to normalizedSessionId),
+            sessionIdsByContext = sessionIdsByContext + (characterKey to normalizedSessionId),
         )
     }
 
@@ -41,12 +33,5 @@ internal data class ActiveChatSessionSelection(
             lastSessionId = lastSessionId.takeUnless { it in deleted }.orEmpty(),
             sessionIdsByContext = sessionIdsByContext.filterValues { it !in deleted },
         )
-    }
-
-    private fun modeKey(characterId: String, characterMode: String): String {
-        val normalizedCharacterId = characterId.trim()
-        val normalizedMode = characterMode.trim()
-        if (normalizedCharacterId.isBlank() || normalizedMode.isBlank()) return ""
-        return "$normalizedCharacterId:$normalizedMode"
     }
 }

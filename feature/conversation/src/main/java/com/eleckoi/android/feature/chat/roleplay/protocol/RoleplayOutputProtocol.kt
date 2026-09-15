@@ -4,7 +4,7 @@ import com.eleckoi.android.engine.agent.protocol.AssistantActionCallCloseTag
 import com.eleckoi.android.engine.agent.protocol.AssistantFinalCloseTag
 import com.eleckoi.android.engine.agent.protocol.AssistantFinalOpenTag
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.DefaultHiddenToolTimelineContent
-import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.normalizeRoleplayPlanItems
+import com.eleckoi.android.feature.characters.presets.model.AgentPresetRoleplayPlan
 
 internal object RoleplayPhaseMarker {
     const val Final = AssistantFinalOpenTag
@@ -62,7 +62,7 @@ internal fun effectiveRoleplayPlanItems(
     imageActionEnabled: Boolean = false,
 ): List<String> {
     if (items.isEmpty()) return emptyList()
-    val normalized = normalizeRoleplayPlanItems(items)
+    val normalized = AgentPresetRoleplayPlan(items).normalized().steps
     if (normalized.isEmpty() || !imageActionEnabled) return normalized
     return normalized.toMutableList().apply {
         this[lastIndex] = ImageEnabledDefaultRoleplayPlanFinalTask

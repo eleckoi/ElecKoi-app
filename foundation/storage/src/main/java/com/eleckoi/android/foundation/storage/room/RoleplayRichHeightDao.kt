@@ -6,6 +6,8 @@ import androidx.room.Upsert
 
 @Dao
 interface RoleplayRichHeightDao {
+    @Query("DELETE FROM roleplay_rich_heights WHERE sessionId = :sessionId AND messageId IN (:messageIds)")
+    fun deleteForMessages(sessionId: String, messageIds: List<String>)
     @Query("SELECT * FROM roleplay_rich_heights WHERE sessionId = :sessionId")
     suspend fun heightsForSession(sessionId: String): List<RoleplayRichHeightEntity>
 

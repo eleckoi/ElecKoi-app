@@ -4,6 +4,7 @@ import com.eleckoi.android.feature.chat.data.ChatSessionStore
 import com.eleckoi.android.feature.chat.model.ChatListItem
 import com.eleckoi.android.feature.preferences.UiPreferences
 import com.eleckoi.android.feature.preferences.UiPreferencesRepository
+import com.eleckoi.android.feature.preferences.ListCharacterArtwork
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -30,14 +31,7 @@ internal class ShellServiceImpl(
         return uiPreferences.setSearchHistory(terms)
     }
 
-    override suspend fun setOptionalCommonPage(
-        tabKey: String?,
-        order: List<String>,
-    ): UiPreferences {
-        return uiPreferences.setOptionalCommonPage(tabKey, order)
-    }
-
-    override suspend fun setCommonPageOrder(order: List<String>): UiPreferences {
-        return uiPreferences.setCommonPageOrder(order)
+    override suspend fun setListCharacterArtwork(artwork: ListCharacterArtwork): UiPreferences {
+        return uiPreferences.setListCharacterArtwork(artwork)
     }
 }

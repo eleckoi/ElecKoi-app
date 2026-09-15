@@ -10,10 +10,17 @@ import com.eleckoi.android.feature.chat.ui.roleplay.web.document.runtime.Rolepla
 import com.eleckoi.android.feature.chat.ui.roleplay.web.document.runtime.RoleplayTranscriptTurns
 import com.eleckoi.android.feature.chat.ui.roleplay.web.document.runtime.RoleplayTranscriptUpdates
 
-internal fun buildRoleplayTranscriptDocument(authorSdkSource: String): String {
+internal fun buildRoleplayTranscriptDocument(
+    authorSdkSource: String,
+    authorLibrariesHead: String = "",
+): String {
     val encodedSdk = java.util.Base64.getEncoder()
         .encodeToString(authorSdkSource.toByteArray(Charsets.UTF_8))
-    return RoleplayTranscriptDocument.replace("__ELECKOI_AUTHOR_SDK_BASE64__", encodedSdk)
+    val encodedLibraries = java.util.Base64.getEncoder()
+        .encodeToString(authorLibrariesHead.toByteArray(Charsets.UTF_8))
+    return RoleplayTranscriptDocument
+        .replace("__ELECKOI_AUTHOR_SDK_BASE64__", encodedSdk)
+        .replace("__ELECKOI_AUTHOR_LIBRARIES_BASE64__", encodedLibraries)
 }
 
 private val RoleplayTranscriptDocument = buildString {

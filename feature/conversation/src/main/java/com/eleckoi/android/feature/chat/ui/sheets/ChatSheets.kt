@@ -52,7 +52,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.feature.chat.model.ChatListItem
-import com.eleckoi.android.feature.modelconfig.model.ModelParameters
 import com.eleckoi.android.engine.generation.model.ModelConfig
 import com.eleckoi.android.engine.generation.model.ModelOption
 import com.eleckoi.android.feature.modelconfig.ui.configVersionName

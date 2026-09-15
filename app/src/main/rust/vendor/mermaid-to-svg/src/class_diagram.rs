@@ -7,19 +7,17 @@ use dagre_rust::layout::layout as dagre_layout;
 use dagre_rust::{GraphConfig, GraphEdge, GraphNode};
 use graphlib_rust::Graph;
 
-// --- Constants matching Mermaid 11.12.2 class diagram styles ---
-// Ported from: classBox.ts (PADDING = config.class.padding ?? 12, GAP = PADDING)
-// and shapeUtil.ts (textHelper positions sections with GAP*2 and GAP*4 spacing)
+// --- Class diagram style constants ---
 
 const PADDING: f64 = 12.0; // outer padding around the box content
-const GAP: f64 = 12.0; // inter-section gap (same as PADDING in mermaid)
+const GAP: f64 = 12.0; // inter-section gap
 const TEXT_PADDING: f64 = 3.0; // per-line text padding (non-HTML mode: 3px)
 const LINE_HEIGHT: f64 = 24.0;
 const TITLE_FONT_SIZE: f64 = 18.0;
 const MEMBER_FONT_SIZE: f64 = 14.0;
 const NODE_FILL: &str = "#ECECFF";
 const NODE_STROKE: &str = "#9370DB";
-const NODE_STROKE_WIDTH: f64 = 1.0; // mermaid CSS: stroke-width: 1px
+const NODE_STROKE_WIDTH: f64 = 1.0;
 const EDGE_COLOR: &str = "#333333";
 const TEXT_COLOR: &str = "#333";
 const GRAPH_MARGIN: f64 = 8.0;
@@ -469,9 +467,7 @@ fn compute_class_box_size(info: &ClassInfo) -> (f64, f64, f64, f64, f64, f64, f6
     // Returns (width, height, title_y, attr_divider_y, method_divider_y,
     //          attr_start_y, method_start_y, annotation_y)
     //
-    // Ported from Mermaid 11.12.2 shapeUtil.ts (textHelper) + classBox.ts:
-    //   - textHelper accumulates group positions with GAP*2 / GAP*4 spacing
-    //   - classBox adds PADDING on all sides of the bbox
+    // Section positions use GAP*2 / GAP*4 spacing with PADDING around the bounding box.
 
     let mut max_text_width: f64 = 0.0;
 
@@ -555,10 +551,7 @@ fn compute_class_box_size(info: &ClassInfo) -> (f64, f64, f64, f64, f64, f64, f6
 
     let title_y = content_top + annotation_height + label_height / 2.0;
 
-    // Divider positions ported from classBox.ts lines 44377-44397:
-    //   First divider at:  annotH + labelH + (-h/2) + PADDING  (in box-local coords)
-    //   Second divider at: annotH + labelH + membersH + (-h/2) + GAP*2 + PADDING
-    // Since content_top = -half_h + PADDING, divider1 = content_top + annotH + labelH.
+    // Divider positions are derived from the content top and section heights.
     let attr_divider_y = content_top + annotation_height + label_height;
 
     // Second divider: members_height + GAP*2 below first divider

@@ -34,6 +34,8 @@ class DeepSeekHarnessEventMapperTest {
             """{"type":"assistant/chunk","seq":3,"time":103,"data":{"turn":2,"step":1,"chunk":{"type":"reasoning-delta","index":1,"text":"检查"}}}""",
         ).single() as AgentSessionEvent.ReasoningTextDelta
         assertEquals("检查", reasoning.delta)
+        assertEquals(1, reasoning.step)
+        assertEquals(103L, reasoning.observedAtMillis)
 
         val usage = map(
             """{"type":"assistant/chunk","seq":4,"time":104,"data":{"turn":2,"step":1,"chunk":{"type":"usage","usage":{"inputTokens":10,"cacheReadTokens":3,"outputTokens":4,"reasoningTokens":2}}}}""",
@@ -43,14 +45,21 @@ class DeepSeekHarnessEventMapperTest {
         assertTrue(usage.last.cacheUsageReported)
         assertEquals(2, usage.last.reasoningOutputTokens)
 
+        val nativeToolToken = map(
+            """{"type":"assistant/chunk","seq":5,"time":105,"data":{"turn":2,"step":1,"chunk":{"type":"tool-call-delta","index":2,"id":"call-1","name":"read","argumentsDelta":""}}}""",
+        ).single() as AgentSessionEvent.AssistantDelta
+        assertTrue(!nativeToolToken.visible)
+        assertTrue(nativeToolToken.tokenObserved)
+        assertEquals(105L, nativeToolToken.observedAtMillis)
+
         val stepCompleted = map(
-            """{"type":"step/end","seq":5,"time":105,"data":{"turn":2,"step":1}}""",
+            """{"type":"step/end","seq":6,"time":106,"data":{"turn":2,"step":1}}""",
         ).single() as AgentSessionEvent.StepCompleted
         assertEquals(1, stepCompleted.step)
-        assertEquals(105L, stepCompleted.completedAtMillis)
+        assertEquals(106L, stepCompleted.completedAtMillis)
 
         val completed = map(
-            """{"type":"turn/end","seq":6,"time":106,"data":{"turn":2,"reason":{"kind":"completed"}}}""",
+            """{"type":"turn/end","seq":7,"time":107,"data":{"turn":2,"reason":{"kind":"completed"}}}""",
         ).single() as AgentSessionEvent.TurnCompleted
         assertEquals(AgentWorkStatus.Completed, completed.status)
     }
@@ -140,7 +149,12 @@ class DeepSeekHarnessEventMapperTest {
         val reasoningOnly = map(
             """{"type":"assistant/message","seq":1,"time":101,"data":{"turn":1,"step":1,"message":{"id":"message-1","role":"assistant","content":[{"type":"reasoning","text":"reasoning detail"},{"type":"tool-call","id":"call-1","name":"bash","arguments":"{}"}]}}}""",
         )
-        assertTrue(reasoningOnly.isEmpty())
+        val reasoningBoundary = reasoningOnly
+            .filterIsInstance<AgentSessionEvent.WorkItemCompleted>()
+            .single()
+        assertEquals(AgentWorkItemType.AssistantMessage, reasoningBoundary.type)
+        assertTrue(reasoningBoundary.summary.isBlank())
+        assertTrue(reasoningOnly.none { it is AgentSessionEvent.ModelHistoryItemCompleted })
 
         val mixed = map(
             """{"type":"assistant/message","seq":2,"time":102,"data":{"turn":1,"step":2,"message":{"id":"message-2","role":"assistant","content":[{"type":"reasoning","text":"more reasoning detail"},{"type":"text","text":"<FINAL>visible answer</FINAL>"}]}}}""",

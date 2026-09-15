@@ -87,6 +87,15 @@ class UserProfileRepository(
         }
     }
 
+    fun clearCover(): UserProfile {
+        val current = load()
+        if (current.userCover.isBlank()) return current
+        val saved = current.copy(userCover = "")
+        dao.upsert(saved.toEntity())
+        cleanupUserFiles("cover")
+        return saved
+    }
+
     /** Same persistence path as the document-picker variant, for app-level backup restore. */
     fun saveCoverFile(coverFile: File): UserProfile {
         val target = store.file("user", "cover-${newId(10)}.jpg")
@@ -109,13 +118,16 @@ class UserProfileRepository(
     // 清理旧文件时就会互删。这里给头像单独一套前缀。
     private val AvatarSlot.userFilePrefix: String get() = "user-${name.lowercase()}"
 
-    private fun cleanupUserFiles(prefix: String, keep: File) {
+    private fun cleanupUserFiles(prefix: String, keep: File? = null) {
         val dir = store.dir("user")
         val rootPath = dir.canonicalPath
-        val keepPath = keep.canonicalPath
+        val keepPath = keep?.canonicalPath
         dir.listFiles { file -> file.isFile && file.name.startsWith("$prefix-") }
             .orEmpty()
-            .filter { it.canonicalPath != keepPath && it.canonicalPath.startsWith(rootPath) }
+            .filter { file ->
+                val filePath = file.canonicalPath
+                filePath != keepPath && filePath.startsWith(rootPath)
+            }
             .forEach { it.delete() }
     }
 }

@@ -28,21 +28,24 @@ internal fun mobileCoreRouteEntry(
                 models = currentModelsState.value.models,
                 user = currentProfileState.value.user,
                 appearance = currentThemeState.value.appearance,
-                isCreatorAssistantRunning = currentAiCreationAssistantState.value.isRunning,
                 shellViewModel = shellViewModel,
                 charactersViewModel = charactersViewModel,
                 modelsViewModel = modelsViewModel,
                 chatViewModel = chatViewModel,
+                presetEditorOpen = currentAgentPresetState.value.editorPreset != null,
+                presetPage = {
+                    AgentPresetPageContent(
+                        showRootBackButton = false,
+                        onOpenSidebar = {
+                            shellViewModel.onIntent(ShellIntent.SetMoreOpen(true))
+                        },
+                    )
+                },
                 activeCharacter = activeCharacter,
                 onImportCharacterCard = onOpenCharacterImportSource,
                 onNavigate = navigateTo,
                 rootSearchOpen = rootSearchOpen.value,
                 onRootSearchOpenChange = onRootSearchOpenChange,
-                bottomTabs = BottomTab.visibleTabs(
-                    presetsPinned = currentShellState.value.presetPagePinned,
-                    pluginsPinned = currentShellState.value.pluginPagePinned,
-                    order = currentShellState.value.commonPageOrder,
-                ),
                 onChangeBottomTab = selectBottomTab,
             )
         }
@@ -50,17 +53,10 @@ internal fun mobileCoreRouteEntry(
                 ChatScreen(
                     viewModel = chatViewModel,
                     onBack = goBackInsideApp,
-                    onOpenPlugins = {
-                        val characterId = chatState.draft?.session?.characterId
-                            .orEmpty()
-                            .ifBlank { chatState.chatCharacterId }
-                        if (characterId.isNotBlank()) {
-                            navigateTo(MobileRoute.AgentTools(characterId))
-                        }
-                    },
+                    onOpenTools = onOpenPresetToolsDialog,
                     onOpenPresets = {
-                        storyPresetViewModel.closeEditor()
-                        navigateTo(MobileRoute.StoryPresets())
+                        agentPresetViewModel.closeEditor()
+                        navigateTo(MobileRoute.AgentPresets)
                     },
                     dynamicSettingsSessionIds = currentSettingLibraryState.value.conversationLibraries
                         .mapTo(mutableSetOf()) { it.sessionId },
@@ -75,6 +71,13 @@ internal fun mobileCoreRouteEntry(
                     },
                     onOpenCharacterSettings = { characterId ->
                         navigateTo(MobileRoute.CharacterSettings(characterId))
+                    },
+                    newCharacterBackground = currentThemeState.value.newCharacterBackground,
+                    onNewCharacterBackgroundChange = { background ->
+                        themeViewModel.onIntent(
+                            com.eleckoi.android.feature.settings.ui.personalization.theme.ThemeIntent
+                                .SaveNewCharacterBackground(background),
+                        )
                     },
                 )
         }
@@ -122,8 +125,12 @@ internal fun mobileCoreRouteEntry(
                     appearance = pageAppearance,
                     saving = pageCharacterSaving,
                     onBack = goBackInsideApp,
-                    onSavePersona = { persona ->
-                        charactersViewModel.onIntent(CharactersIntent.SaveCharacterPersona(currentRoute.characterId, persona))
+                    onSavePersona = { persona, onResult ->
+                        charactersViewModel.saveCharacterPersona(
+                            characterId = currentRoute.characterId,
+                            persona = persona,
+                            onResult = onResult,
+                        )
                     },
                     onSaveAvatars = { files ->
                         charactersViewModel.onIntent(
@@ -141,34 +148,20 @@ internal fun mobileCoreRouteEntry(
                             ),
                         )
                     },
-                    onSendMessage = { persona, characterMode ->
-                        charactersViewModel.saveCharacterMode(
+                    onSendMessage = { persona ->
+                        charactersViewModel.saveCharacterPersona(
                             characterId = currentRoute.characterId,
-                            mode = characterMode,
-                            onSaved = {
-                                charactersViewModel.saveCharacterPersona(
-                                    characterId = currentRoute.characterId,
-                                    persona = persona,
-                                    onSaved = {
-                                        chatViewModel.openCharacterChat(
-                                            currentRoute.characterId,
-                                            characterMode,
-                                        )
-                                        navigateTo(MobileRoute.Chat)
-                                    },
-                                )
+                            persona = persona,
+                            onResult = { result ->
+                                result.onSuccess {
+                                    chatViewModel.openCharacterChat(currentRoute.characterId)
+                                    replaceTop(MobileRoute.Chat)
+                                }
                             },
                         )
                     },
-                    onModeChange = { mode ->
-                        charactersViewModel.onIntent(CharactersIntent.SaveCharacterMode(currentRoute.characterId, mode))
-                    },
                     onOpenAiCreationAssistant = {
                         navigateTo(MobileRoute.AiCreationAssistant)
-                    },
-                    onOpenPresetConfig = {
-                        storyPresetViewModel.closeEditor()
-                        navigateTo(MobileRoute.StoryPresets())
                     },
                     onOpenSettingLibrary = {
                         settingLibraryViewModel.onIntent(SettingLibraryIntent.Load(currentRoute.characterId))
@@ -190,9 +183,6 @@ internal fun mobileCoreRouteEntry(
                         variableConfigViewModel.onIntent(VariableConfigIntent.Load(currentRoute.characterId))
                         navigateTo(MobileRoute.FrontendBeauty(currentRoute.characterId))
                     },
-                    onOpenAgentTools = {
-                        navigateTo(MobileRoute.AgentTools(currentRoute.characterId))
-                    },
                     onExport = {
                         charactersViewModel.onIntent(
                             CharactersIntent.PrepareCharacterExport(currentRoute.characterId),
@@ -202,6 +192,73 @@ internal fun mobileCoreRouteEntry(
                         charactersViewModel.onIntent(CharactersIntent.DeleteCharacters(listOf(currentRoute.characterId)))
                     },
                 )
+        }
+        is MobileRoute.CharacterDraft -> NavEntry(currentRoute) {
+                val pageAppearance = currentThemeState.value.appearance
+                val draft = currentCharactersState.value.characterDraft
+                    ?.takeIf { it.id == currentRoute.characterId }
+                if (draft == null) {
+                    LaunchedEffect(currentRoute.characterId) { goBackInsideApp() }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(pageAppearance.mobileBg),
+                    )
+                } else {
+                    CharacterSettingsPage(
+                        character = draft,
+                        appearance = pageAppearance,
+                        saving = currentCharactersState.value.saving,
+                        isDraft = true,
+                        onBack = {
+                            charactersViewModel.discardCharacterDraft(currentRoute.characterId)
+                            goBackInsideApp()
+                        },
+                        onSavePersona = { _, onResult ->
+                            onResult(Result.failure(IllegalStateException("角色草稿尚未创建")))
+                        },
+                        onCreateCharacter = { persona, avatarFiles, onResult ->
+                            charactersViewModel.commitCharacterDraft(
+                                persona = persona,
+                                avatarFiles = avatarFiles,
+                                onResult = onResult,
+                            )
+                        },
+                        onCharacterCreated = { characterId ->
+                            replaceTop(MobileRoute.CharacterSettings(characterId))
+                        },
+                        onSaveAvatars = {},
+                        onClearAvatar = {},
+                        onSendMessage = {},
+                        onOpenAiCreationAssistant = {
+                            navigateTo(MobileRoute.AiCreationAssistant)
+                        },
+                        onOpenSettingLibrary = {
+                            settingLibraryViewModel.onIntent(SettingLibraryIntent.Load(currentRoute.characterId))
+                            navigateTo(MobileRoute.SettingLibrary(currentRoute.characterId))
+                        },
+                        onOpenDynamicSettings = {
+                            settingLibraryViewModel.onIntent(
+                                SettingLibraryIntent.LoadConversationLibraries(currentRoute.characterId),
+                            )
+                            navigateTo(MobileRoute.DynamicSettings(currentRoute.characterId))
+                        },
+                        onOpenVariableConfig = {
+                            variableConfigViewModel.onIntent(VariableConfigIntent.Load(currentRoute.characterId))
+                            navigateTo(MobileRoute.VariableConfig(currentRoute.characterId))
+                        },
+                        onOpenRegexRules = {
+                            regexRulesViewModel.load(currentRoute.characterId)
+                            navigateTo(MobileRoute.RegexRules(currentRoute.characterId))
+                        },
+                        onOpenFrontendBeauty = {
+                            variableConfigViewModel.onIntent(VariableConfigIntent.Load(currentRoute.characterId))
+                            navigateTo(MobileRoute.FrontendBeauty(currentRoute.characterId))
+                        },
+                        onExport = {},
+                        onDelete = {},
+                    )
+                }
         }
         else -> null
     }

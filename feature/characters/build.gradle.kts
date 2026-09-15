@@ -10,6 +10,7 @@ android {
 dependencies {
     implementation(project(":compatibility:mvu"))
     implementation(project(":engine"))
+    implementation(project(":feature:modelconfig"))
     implementation(project(":foundation:design"))
     implementation(project(":foundation:serialization"))
     implementation(project(":foundation:storage"))

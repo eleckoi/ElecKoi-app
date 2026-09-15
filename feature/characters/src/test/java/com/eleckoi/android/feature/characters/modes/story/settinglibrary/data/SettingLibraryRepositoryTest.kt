@@ -1,12 +1,9 @@
 package com.eleckoi.android.feature.characters.modes.story.settinglibrary.data
 
 import com.eleckoi.android.feature.characters.model.CharacterCard
-import com.eleckoi.android.feature.characters.model.CharacterMode
 import com.eleckoi.android.feature.characters.model.CharacterSlot
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibrary
-import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.DefaultRoleplayPlanContent
-import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.DefaultRoleplayPlanReadTask
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryAgentReadStrategy
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryGroup
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryOpeningMessage
@@ -14,8 +11,6 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.S
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPromptPosition
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryTriggerMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isOpeningEntry
-import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isRoleplayPlanEntry
-import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.withRoleplayPlanEnabled
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.withOpeningMessages
 import com.eleckoi.android.foundation.storage.room.ConversationSettingChangeDao
 import com.eleckoi.android.foundation.storage.room.ConversationSettingChangeEntity
@@ -127,45 +122,20 @@ class SettingLibraryRepositoryTest {
     }
 
     @Test
-    fun `roleplay plan switch changes only the fixed plan entry`() {
-        val original = SettingLibraryRepository(
-            FakeSettingLibraryDao(),
-            FakeConversationSettingChangeDao(),
-            { testCharacter() },
-        ).load(testCharacter().id)
-        val updated = original.withRoleplayPlanEnabled(false)
-
-        assertFalse(updated.entries.single(SettingLibraryEntry::isRoleplayPlanEntry).enabled)
-        assertEquals(
-            original.entries.filterNot(SettingLibraryEntry::isRoleplayPlanEntry),
-            updated.entries.filterNot(SettingLibraryEntry::isRoleplayPlanEntry),
-        )
-    }
-
-    @Test
-    fun `new character exposes fixed entries without creating workspace files`() {
+    fun `new character exposes only the opening fixed entry without creating workspace files`() {
         val dao = FakeSettingLibraryDao()
         val character = testCharacter()
         val repository = SettingLibraryRepository(dao, FakeConversationSettingChangeDao(), { character })
 
         val library = repository.load(character.id)
 
-        assertTrue(library.entries.any(SettingLibraryEntry::isOpeningEntry))
-        assertTrue(library.entries.any(SettingLibraryEntry::isRoleplayPlanEntry))
-        assertFalse(library.entries.single(SettingLibraryEntry::isRoleplayPlanEntry).enabled)
-        assertEquals(
-            DefaultRoleplayPlanContent,
-            library.entries.single(SettingLibraryEntry::isRoleplayPlanEntry).content,
-        )
-        assertEquals(
-            "必须先并行调用工具调研阅读设定，这里不扮演回复，禁止未阅读设定直接回复",
-            DefaultRoleplayPlanReadTask,
-        )
+        assertEquals(1, library.entries.size)
+        assertTrue(library.entries.single().isOpeningEntry())
         assertNull(dao.library(character.id))
     }
 
     @Test
-    fun `imported library without ElecKoi plan gets a disabled plan entry`() {
+    fun `imported library keeps imported entries without adding preset tool configuration`() {
         val dao = FakeSettingLibraryDao()
         val character = testCharacter()
         val repository = SettingLibraryRepository(dao, FakeConversationSettingChangeDao(), { character })
@@ -185,20 +155,9 @@ class SettingLibraryRepositoryTest {
 
         val saved = repository.save(character.id, imported.copy(characterId = character.id))
 
-        assertFalse(saved.entries.single(SettingLibraryEntry::isRoleplayPlanEntry).enabled)
+        assertEquals(2, saved.entries.size)
+        assertTrue(saved.entries.any(SettingLibraryEntry::isOpeningEntry))
         assertTrue(saved.entries.single { it.id == "tavern-world-entry" }.enabled)
-    }
-
-    @Test
-    fun `explicit imported ElecKoi plan switch is preserved`() {
-        val dao = FakeSettingLibraryDao()
-        val character = testCharacter()
-        val repository = SettingLibraryRepository(dao, FakeConversationSettingChangeDao(), { character })
-        val imported = repository.load(character.id).withRoleplayPlanEnabled(true)
-
-        val saved = repository.save(character.id, imported)
-
-        assertTrue(saved.entries.single(SettingLibraryEntry::isRoleplayPlanEntry).enabled)
     }
 
     @Test
@@ -211,15 +170,15 @@ class SettingLibraryRepositoryTest {
         repository.save(
             character.id,
             initial.copy(
-                name = "鸣潮世界",
+                name = "示例世界",
                 groups = listOf(
                     SettingLibraryGroup(id = "world", name = "世界观"),
                 ),
                 entries = initial.entries + SettingLibraryEntry(
                     id = "tacet",
-                    title = "无音区",
+                    title = "禁入区",
                     groupId = "world",
-                    content = "无音区会残留异常频率。",
+                    content = "禁入区会残留异常频率。",
                     agentReadStrategy = SettingLibraryAgentReadStrategy.Required,
                     triggerMode = SettingLibraryTriggerMode.AgentTool,
                     position = SettingLibraryPosition.BeforeHistory,
@@ -228,15 +187,15 @@ class SettingLibraryRepositoryTest {
         )
 
         val loaded = repository.load(character.id)
-        assertEquals("鸣潮世界", loaded.name)
-        assertEquals("无音区会残留异常频率。", loaded.entries.single { it.id == "tacet" }.content)
+        assertEquals("示例世界", loaded.name)
+        assertEquals("禁入区会残留异常频率。", loaded.entries.single { it.id == "tacet" }.content)
         assertEquals(
             SettingLibraryAgentReadStrategy.Required,
             loaded.entries.single { it.id == "tacet" }.agentReadStrategy,
         )
         assertEquals("世界观", loaded.groups.single().name)
         val persistedEntry = dao.library(character.id)?.entries?.single { it.entryId == "tacet" }
-        assertTrue(persistedEntry?.payloadJson?.contains("无音区") == true)
+        assertTrue(persistedEntry?.payloadJson?.contains("禁入区") == true)
         assertFalse(persistedEntry?.payloadJson?.contains("insertion_timing") == true)
     }
 
@@ -338,7 +297,7 @@ class SettingLibraryRepositoryTest {
         val context = repository.loadAgentTurnContext(
             characterId = character.id,
             additionalLibrary = SettingLibrary(
-                characterId = "story-preset",
+                characterId = "agent-preset",
                 entries = listOf(
                     SettingLibraryEntry(
                         id = "preset-always",
@@ -805,12 +764,11 @@ class SettingLibraryRepositoryTest {
 
     private fun testCharacter() = CharacterSlot(
         id = "character-1",
-        name = "守岸人",
+        name = "测试角色",
         avatar = "",
         group = "",
         folder = "character-1",
-        characterMode = CharacterMode.Story.storageValue,
-        persona = CharacterCard(characterId = "character-1", characterName = "守岸人"),
+        persona = CharacterCard(characterId = "character-1", characterName = "测试角色"),
     )
 }
 

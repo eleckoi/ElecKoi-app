@@ -10,6 +10,7 @@ import com.eleckoi.android.engine.generation.model.configuredTemperature
 import com.eleckoi.android.engine.generation.model.configuredTopP
 import com.eleckoi.android.engine.generation.model.effectiveApiFormat
 import com.eleckoi.android.engine.generation.model.usesChatThinkingToggleContract
+import com.eleckoi.android.engine.generation.reasoning.DshModelCapabilities
 import com.eleckoi.android.engine.generation.reasoning.DshReasoningEfforts
 import com.eleckoi.android.foundation.serialization.ElecKoiJson
 import java.io.OutputStream
@@ -32,7 +33,7 @@ import kotlinx.serialization.json.put
 internal class DshProviderBridgeEndpoint(
     private val routeRegistry: ResponsesAdapterRouteRegistry,
     private val streamProxy: ResponsesAdapterStreamProxy,
-    private val toolRequestFilter: (String, JsonObject) -> JsonObject,
+    private val toolRequestFilter: (Set<String>, JsonObject) -> JsonObject,
     tokenFactory: () -> String = { UUID.randomUUID().toString().replace("-", "") },
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
@@ -85,7 +86,7 @@ internal class DshProviderBridgeEndpoint(
             else -> route.projectDshRequest(request, requestIndex, isCompactionRequest = false)
         }
         val routed = if (isCompaction) projected else projected.withAdditionalSystem(route.systemInstructions)
-        val filtered = runCatching { toolRequestFilter(route.toolScopeId, routed) }.getOrElse { error ->
+        val filtered = runCatching { toolRequestFilter(route.enabledToolGroupIds, routed) }.getOrElse { error ->
             writeJsonError(output, 400, error.message ?: "DSH 工具过滤失败")
             return
         }
@@ -99,6 +100,7 @@ internal class DshProviderBridgeEndpoint(
         val requestWithLimits = buildJsonObject {
             filtered.forEach { (key, value) -> put(key, value) }
             routeConfig.configuredTemperature()?.let { put("temperature", it) }
+            routeConfig.configuredTopP()?.let { put("topP", it) }
             if (!isCompaction) {
                 routeConfig.configuredMaxOutputTokens()?.let { put("maxTokens", it) }
             }
@@ -125,11 +127,9 @@ internal class DshProviderBridgeEndpoint(
                 put("requestToken", requestToken)
                 put("api", routeConfig.piApiFor(wireFormat))
                 put("model", routeConfig.model.trim())
-                val reasoningEffort = if (isCompaction) {
-                    "off"
-                } else {
-                    DshReasoningEfforts.selected(routeConfig)
-                }
+                put("wireProfile", DshModelCapabilities.active(routeConfig).wireProfile)
+                val reasoningEffort = DshReasoningEfforts.selected(routeConfig)
+                    .takeUnless { isCompaction }
                 reasoningEffort?.let { put("reasoningEffort", it) }
                 put("request", requestWithLimits)
             },
@@ -205,22 +205,8 @@ internal class DshProviderBridgeEndpoint(
             format = prepared.format,
             modelConfig = config,
         )
-        val withTopP = when (prepared.format) {
-            ProviderWireFormat.GoogleGemini -> buildJsonObject {
-                projected.forEach { (key, value) -> put(key, value) }
-                val generationConfig = projected["generationConfig"] as? JsonObject
-                put("generationConfig", buildJsonObject {
-                    generationConfig?.forEach { (key, value) -> put(key, value) }
-                    config.configuredTopP()?.let { put("topP", it) }
-                })
-            }
-            else -> buildJsonObject {
-                projected.forEach { (key, value) -> put(key, value) }
-                config.configuredTopP()?.let { put("top_p", it) }
-            }
-        }
         return buildJsonObject {
-            withTopP.forEach { (key, value) -> put(key, value) }
+            projected.forEach { (key, value) -> put(key, value) }
             if (prepared.format != ProviderWireFormat.GoogleGemini) {
                 put("model", config.model.trim())
             }

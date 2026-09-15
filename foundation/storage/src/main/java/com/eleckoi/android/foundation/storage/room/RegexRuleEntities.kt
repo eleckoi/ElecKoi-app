@@ -37,6 +37,36 @@ data class CharacterRegexRuleEntity(
     @Embedded val rule: RegexRuleFields,
 )
 
+/**
+ * Lightweight projection used before reading rule bodies in bounded pieces. SQLite can store a
+ * very large TEXT value, but Android's CursorWindow cannot materialize that value as one result
+ * row. Lengths let the DAO reconstruct the exact fields without ever selecting the full body.
+ */
+data class RegexRuleReadMetadata(
+    val id: String,
+    val enabled: Boolean,
+    val displayOnly: Boolean,
+    val promptOnly: Boolean,
+    val runOnEdit: Boolean,
+    val sortIndex: Int,
+    val nameLength: Int,
+    val patternLength: Int,
+    val replacementLength: Int,
+    val targetsJsonLength: Int,
+)
+
+data class CharacterRegexRuleReadMetadata(
+    val characterId: String,
+    @Embedded val metadata: RegexRuleReadMetadata,
+)
+
+data class RegexRuleTextChunk(
+    val nameChunk: String,
+    val patternChunk: String,
+    val replacementChunk: String,
+    val targetsJsonChunk: String,
+)
+
 /** A named enablement selection, not a historical copy of rule content. */
 @Entity(tableName = "regex_enablement_versions", primaryKeys = ["id"])
 data class RegexEnablementVersionEntity(

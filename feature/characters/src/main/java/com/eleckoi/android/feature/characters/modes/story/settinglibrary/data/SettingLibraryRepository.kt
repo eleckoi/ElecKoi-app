@@ -14,10 +14,7 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.S
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryVersion
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isFixedEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isOpeningEntry
-import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isRoleplayPlanEntry
-import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.roleplayPlanItems
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.settingLibraryOpeningEntry
-import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.settingLibraryRoleplayPlanEntry
 import com.eleckoi.android.foundation.storage.ElecKoiDataException
 import com.eleckoi.android.foundation.storage.newId
 import com.eleckoi.android.foundation.storage.nowIso

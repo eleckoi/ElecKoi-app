@@ -7,11 +7,14 @@ import com.eleckoi.android.feature.chat.ui.ChatIntent
 import com.eleckoi.android.feature.chat.ui.ChatUiState
 import com.eleckoi.android.feature.chat.ui.background.CharacterChatBackgroundPage
 import com.eleckoi.android.feature.chat.ui.variables.VariableViewerPage
+import com.eleckoi.android.feature.preferences.NewCharacterBackground
 
 @Composable
 internal fun CharacterChatBackgroundDestination(
     state: ChatUiState,
     draft: ChatDraft,
+    newCharacterBackground: NewCharacterBackground,
+    onNewCharacterBackgroundChange: (NewCharacterBackground) -> Unit,
     onIntent: (ChatIntent) -> Unit,
     onBack: () -> Unit,
 ) {
@@ -23,6 +26,7 @@ internal fun CharacterChatBackgroundDestination(
         backgroundOpacity = persona.chatBackgroundOpacity,
         backgroundBlur = persona.chatBackgroundBlur,
         backgroundScrim = persona.chatBackgroundScrim,
+        newCharacterBackground = newCharacterBackground,
         appearance = state.appearance,
         errorMessage = state.chatBackgroundErrorMessage,
         // The page autosaves, so committing must not also navigate away.
@@ -36,6 +40,7 @@ internal fun CharacterChatBackgroundDestination(
         onUseCharacterCard = { onIntent(ChatIntent.UseCharacterCardChatBackground) },
         onUseCustom = { onIntent(ChatIntent.UseCustomChatBackground) },
         onUseGlobal = { onIntent(ChatIntent.UseExistingGlobalChatBackground) },
+        onNewCharacterBackgroundChange = onNewCharacterBackgroundChange,
         onDismissError = { onIntent(ChatIntent.DismissChatBackgroundError) },
         onBack = {
             onIntent(ChatIntent.DismissChatBackgroundError)

@@ -27,8 +27,8 @@ internal class ChatGenerationCoordinator(
     private val chatService: ChatService,
     private val state: () -> ChatUiState,
     private val updateState: ((ChatUiState) -> ChatUiState) -> Unit,
-    private val showModeConflictIfNeeded: (ChatUiState, ChatDraft) -> Boolean,
     private val onStopRequested: () -> Unit,
+    private val onMessagesChanged: (String, String, List<String>) -> Unit = { _, _, _ -> },
     private val onGenerationCompleted: (ChatDraft, assistantMessageId: String?) -> Unit = { _, _ -> },
 ) {
     private var generationJob: Job? = null
@@ -43,8 +43,6 @@ internal class ChatGenerationCoordinator(
             updateState { it.copy(errorMessage = "聊天还没有加载完成") }
             return
         }
-        if (showModeConflictIfNeeded(snapshot, draft)) return
-
         val sessionId = draft.session.id
         val existingMessageIds = draft.session.messages.mapTo(hashSetOf(), ChatMessage::id)
         val epoch = begin()
@@ -67,6 +65,10 @@ internal class ChatGenerationCoordinator(
                         draft = draft,
                         message = content,
                         inputImages = inputImages,
+                        onUserTurnPersisted = { persistedDraft, userMessageId ->
+                            publishDraftIfCurrent(epoch, sessionId, persistedDraft, null)
+                            onMessagesChanged(sessionId, "sent", listOf(userMessageId))
+                        },
                         onDelta = { nextDraft ->
                             publishDraftIfCurrent(
                                 epoch = epoch,
@@ -125,8 +127,6 @@ internal class ChatGenerationCoordinator(
         val draft = snapshot.draft ?: return
         val replacement = snapshot.editInput.trim()
         if (replacement.isEmpty() || snapshot.isSending) return
-        if (showModeConflictIfNeeded(snapshot, draft)) return
-
         updateState { it.copy(editingMessage = null, editInput = "") }
         regenerate(
             draft = draft,
@@ -141,7 +141,6 @@ internal class ChatGenerationCoordinator(
         // isSending is the live request authority. A persisted pending bit can outlive a killed or
         // interrupted process and must never permanently disable recovery by regeneration.
         if (message.role == MessageRole.System || snapshot.isSending) return
-        if (showModeConflictIfNeeded(snapshot, draft)) return
         regenerate(draft = draft, target = message, replacement = null)
     }
 
@@ -198,11 +197,18 @@ internal class ChatGenerationCoordinator(
                         pendingMessageId = pendingMessageId,
                     )
                 }.onSuccess { prepared ->
+                    val retainedUserId = prepared.session.messages.lastOrNull { it.role == MessageRole.User }?.id
+                        ?: error("重新生成后缺少保留的用户消息")
                     if (isCurrent(epoch, sessionId)) {
                         preparedForTurn = prepared
                         updateState { current ->
                             if (current.draft?.session?.id == sessionId) {
-                                current.copy(draft = prepared.truncatedDraft)
+                                current.copy(
+                                    draft = prepared.truncatedDraft,
+                                    generationPresentation = current.generationPresentation
+                                        ?.takeIf { it.generation == epoch && it.sessionId == sessionId }
+                                        ?.copy(assistantMessageId = prepared.pendingMessageId),
+                                )
                             } else {
                                 current
                             }
@@ -222,6 +228,11 @@ internal class ChatGenerationCoordinator(
                             }
                         }
                     }
+                    onMessagesChanged(
+                        sessionId,
+                        if (replacement == null) "regenerated" else "edited",
+                        listOf(retainedUserId, prepared.pendingMessageId),
+                    )
                 }.onFailure { error ->
                     if (isCurrent(epoch, sessionId)) {
                         updateState {

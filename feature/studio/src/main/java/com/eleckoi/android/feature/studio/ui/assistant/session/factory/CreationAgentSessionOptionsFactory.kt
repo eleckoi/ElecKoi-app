@@ -7,6 +7,7 @@ import com.eleckoi.android.engine.agent.api.AgentPrompt
 import com.eleckoi.android.engine.agent.api.AgentSessionOptions
 import com.eleckoi.android.engine.agent.api.AgentThreadStart
 import com.eleckoi.android.engine.agent.creator.CreatorMetaTools
+import com.eleckoi.android.engine.agent.tools.AgentToolRequestPolicy
 import com.eleckoi.android.feature.studio.api.CreatorAssistantService
 import com.eleckoi.android.feature.studio.authoring.CreationWorkspaceAgentInstructions
 import com.eleckoi.android.feature.studio.authoring.CreatorAuthoringContext
@@ -37,6 +38,7 @@ internal class CreationAgentSessionOptionsFactory(
         return AgentSessionOptions(
             workspaceId = workspaceId,
             conversationId = conversationId,
+            enabledToolGroupIds = setOf(AgentToolRequestPolicy.BuiltInCreator),
             modelConfigId = modelConfigId.ifBlank { null },
             model = model.ifBlank { null },
             developerInstructions = CreationWorkspaceAgentInstructions.Value,

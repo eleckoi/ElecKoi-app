@@ -32,8 +32,6 @@ internal fun AvatarBubble(
     appearance: AppearanceTheme,
     size: Float,
     shape: ChatAvatarShape,
-    fallbackImage: Any? = null,
-    showInitialWhenEmpty: Boolean = true,
     onClick: (() -> Unit)? = null,
 ) {
     val modifier = if (onClick == null) Modifier else Modifier.noRippleClickable(onClick = onClick)
@@ -47,8 +45,6 @@ internal fun AvatarBubble(
         fontSize = (size * 0.39f).coerceIn(10f, 18f).roundToInt(),
         appearance = appearance,
         modifier = modifier,
-        fallbackImage = fallbackImage,
-        showInitialWhenEmpty = showInitialWhenEmpty,
     )
 }
 

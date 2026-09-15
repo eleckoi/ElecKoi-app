@@ -3,7 +3,6 @@ package com.eleckoi.android.app.service
 import com.eleckoi.android.engine.generation.config.ModelConfigCollection
 import com.eleckoi.android.engine.generation.model.ModelConfig
 import com.eleckoi.android.feature.modelconfig.model.ChatModelSelection
-import com.eleckoi.android.feature.modelconfig.model.ModelParameters
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -63,24 +62,6 @@ class ChatModelSelectionPolicyTest {
                 model = configured.model,
             ),
             ChatModelSelectionPolicy.bootstrap(collection),
-        )
-    }
-
-    @Test
-    fun `global selection ignores the model stored by an individual chat`() {
-        val global = ChatModelSelection(
-            configId = "global",
-            model = "global-model",
-        )
-        val session = ChatModelSelection(
-            configId = "old-chat-config",
-            model = "old-chat-model",
-            parameters = ModelParameters(stream = false),
-        )
-
-        assertEquals(
-            global.copy(parameters = ModelParameters(stream = false)),
-            ChatModelSelectionPolicy.withSessionParameters(global, session),
         )
     }
 }

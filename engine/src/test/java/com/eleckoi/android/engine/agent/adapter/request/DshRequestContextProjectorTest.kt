@@ -41,14 +41,14 @@ class DshRequestContextProjectorTest {
             injections = listOf(
                 injection(
                     id = "built-in-hidden-tool-timeline",
-                    anchor = AgentContextAnchor.AfterHistory,
+                    anchor = AgentContextAnchor.BeforeToolFlow,
                     role = AgentContextRole.User,
                     content = "隐藏工具时间线",
                     order = 1,
                 ),
                 injection(
                     id = "000-test-setting",
-                    anchor = AgentContextAnchor.AfterHistory,
+                    anchor = AgentContextAnchor.BeforeToolFlow,
                     role = AgentContextRole.Assistant,
                     content = "测试设定",
                     order = 2,
@@ -63,6 +63,31 @@ class DshRequestContextProjectorTest {
             messages.map { it.text() },
         )
         assertEquals(listOf("user", "user", "assistant"), messages.map { it.string("role") })
+    }
+
+    @Test
+    fun `keeps history latest-input and tool-flow boundaries in product order`() {
+        val request = dshRequest(
+            message("old-user", "user", "旧问题", "user"),
+            message("old-assistant", "assistant", "旧回答", "model"),
+            message("current", "user", "最新问题", "user"),
+        )
+        val context = context(
+            injections = listOf(
+                injection("after-history", AgentContextAnchor.AfterHistory, AgentContextRole.User, "历史之后", order = 1),
+                injection("before-latest", AgentContextAnchor.BeforeLatestUserInput, AgentContextRole.User, "最新输入之前", order = 2),
+                injection("after-latest", AgentContextAnchor.AfterLatestUserInput, AgentContextRole.User, "最新输入之后", order = 3),
+                injection("before-tools", AgentContextAnchor.BeforeToolFlow, AgentContextRole.User, "工具流程之前", order = 4),
+            ),
+            userMessage = "最新问题",
+        )
+
+        val messages = DshRequestContextProjector.project(request, context, 1).messages()
+
+        assertEquals(
+            listOf("旧问题", "旧回答", "历史之后", "最新输入之前", "最新问题", "最新输入之后", "工具流程之前"),
+            messages.map { it.text() },
+        )
     }
 
     @Test
@@ -196,10 +221,11 @@ class DshRequestContextProjectorTest {
 
     private fun context(
         injections: List<AgentContextInjection>,
-    ) = AgentTurnRequestContext(
-        userMessage = "查一下天气".takeIf { injections.any { it.id == "after-weather" } }
+        userMessage: String = "查一下天气".takeIf { injections.any { it.id == "after-weather" } }
             ?: "create".takeIf { injections.any { it.id == "night-rule" } }
             ?: "现在的问题",
+    ) = AgentTurnRequestContext(
+        userMessage = userMessage,
         history = emptyList(),
         injections = injections,
         historyProjection = AgentHistoryProjection.Native,

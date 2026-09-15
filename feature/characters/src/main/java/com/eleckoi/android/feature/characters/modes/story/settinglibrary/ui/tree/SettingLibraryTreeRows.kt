@@ -4,7 +4,6 @@ import android.os.SystemClock
 import android.view.ViewConfiguration
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ScrollState
@@ -24,7 +23,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.FormatListBulleted
 import androidx.compose.material.icons.rounded.ChatBubble
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.Link
@@ -40,7 +38,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -49,10 +46,9 @@ import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isOpeningEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isPinnedEntry
-import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isRoleplayPlanEntry
-import com.eleckoi.android.foundation.design.components.AppIconPaths
 import com.eleckoi.android.foundation.design.components.DshFolderGlyph
-import com.eleckoi.android.foundation.design.components.StrokeSvgIcon
+import com.eleckoi.android.foundation.design.components.DshTreeDisclosureGlyph
+import com.eleckoi.android.foundation.design.components.dshTreeRowEntrance
 import com.eleckoi.android.foundation.design.components.noRippleClickable
 import com.eleckoi.android.foundation.design.components.themedListRowClickable
 
@@ -81,6 +77,7 @@ internal fun SettingTreeNodeRow(
     val contentAlpha = if (fileEnabled) 1f else 0.42f
     Row(
         modifier = modifier
+            .dshTreeRowEntrance(enabled = node.depth > 0)
             .horizontalScroll(horizontalScrollState)
             .padding(horizontal = 8.dp, vertical = 1.dp)
             .fillMaxWidth()
@@ -123,25 +120,16 @@ internal fun SettingTreeNodeRow(
     ) {
         when (node) {
             is SettingTreeNode.Folder -> {
-                val chevronRotation by animateFloatAsState(
-                    targetValue = if (expanded) 90f else 0f,
-                    animationSpec = tween(durationMillis = 150),
-                    label = "setting_tree_chevron_rotation",
-                )
                 Box(
                     modifier = Modifier
                         .size(24.dp)
                         .noRippleClickable(onClick = onToggle),
                     contentAlignment = Alignment.Center,
                 ) {
-                    // One glyph turned, not two swapped. A swap is a cut; the folder either is or
-                    // is not open, and the turn is what carries you across.
-                    StrokeSvgIcon(
-                        AppIconPaths.ChevronRight,
-                        appearance.mobileMuted,
-                        modifier = Modifier.rotate(chevronRotation),
+                    DshTreeDisclosureGlyph(
+                        expanded = expanded,
+                        tint = appearance.mobileMuted,
                         iconSize = 14.dp,
-                        strokeWidth = 1.75f,
                     )
                 }
                 Spacer(modifier = Modifier.width(3.dp))
@@ -187,7 +175,6 @@ internal fun SettingTreeNodeRow(
                         dynamic = false,
                         enabled = node.entry.enabled,
                         opening = node.entry.isOpeningEntry(),
-                        roleplayPlan = node.entry.isRoleplayPlanEntry(),
                         externalPresetSource = externalPresetSource,
                         appearance = appearance,
                         modifier = Modifier.alpha(contentAlpha),
@@ -268,7 +255,6 @@ private fun SettingFileGlyph(
     dynamic: Boolean,
     enabled: Boolean,
     opening: Boolean,
-    roleplayPlan: Boolean,
     externalPresetSource: Boolean,
     appearance: AppearanceTheme,
     modifier: Modifier = Modifier,
@@ -282,12 +268,6 @@ private fun SettingFileGlyph(
     when {
         opening -> Icon(
             imageVector = Icons.Rounded.ChatBubble,
-            contentDescription = null,
-            tint = tint,
-            modifier = modifier.size(19.dp),
-        )
-        roleplayPlan -> Icon(
-            imageVector = Icons.AutoMirrored.Rounded.FormatListBulleted,
             contentDescription = null,
             tint = tint,
             modifier = modifier.size(19.dp),

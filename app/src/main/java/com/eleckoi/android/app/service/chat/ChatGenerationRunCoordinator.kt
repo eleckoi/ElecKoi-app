@@ -21,6 +21,7 @@ internal class ChatGenerationRunCoordinator(
         message: String,
         inputImages: List<ChatUserImageAttachment>,
         onDelta: (ChatDraft) -> Unit,
+        onUserTurnPersisted: (ChatDraft, String) -> Unit,
     ): ChatSendResult {
         val generation = characterAgent()
         return agentRuns().run(
@@ -28,7 +29,7 @@ internal class ChatGenerationRunCoordinator(
             onStop = { generation.cancelActiveStream() },
         ) {
             running("正在生成角色回复")
-            val result = generation.sendMessage(draft, message, inputImages, onDelta)
+            val result = generation.sendMessage(draft, message, inputImages, onDelta, onUserTurnPersisted)
             completed(result.notificationSummary())
             result
         }

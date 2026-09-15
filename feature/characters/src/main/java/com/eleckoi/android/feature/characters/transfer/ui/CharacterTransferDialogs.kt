@@ -35,6 +35,7 @@ import com.eleckoi.android.foundation.design.components.StrokeSvgIcon
 import com.eleckoi.android.foundation.design.components.noRippleClickable
 import com.eleckoi.android.feature.characters.transfer.model.CharacterImportPreview
 import com.eleckoi.android.feature.characters.transfer.model.CharacterImportPreviewItem
+import com.eleckoi.android.feature.characters.transfer.model.CharacterExportFormat
 import com.eleckoi.android.feature.characters.transfer.model.ExportedCharacterCard
 import com.eleckoi.android.foundation.design.AppearanceTheme
 
@@ -50,13 +51,13 @@ fun CharacterImportSourceDialog(
         title = { Text("选择导入来源", color = appearance.mobileText) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                CharacterImportSourceRow(
+                CharacterTransferOptionRow(
                     title = "本项目角色卡",
                     description = "导入 ElecKoi 导出的角色卡",
                     appearance = appearance,
                     onClick = onImportElecKoi,
                 )
-                CharacterImportSourceRow(
+                CharacterTransferOptionRow(
                     title = "酒馆角色卡",
                     description = "导入 SillyTavern 角色卡并转换",
                     appearance = appearance,
@@ -71,7 +72,7 @@ fun CharacterImportSourceDialog(
 }
 
 @Composable
-private fun CharacterImportSourceRow(
+private fun CharacterTransferOptionRow(
     title: String,
     description: String,
     appearance: AppearanceTheme,
@@ -109,6 +110,37 @@ private fun CharacterImportSourceRow(
             )
         }
     }
+}
+
+@Composable
+fun CharacterExportFormatDialog(
+    appearance: AppearanceTheme,
+    onDismiss: () -> Unit,
+    onSelect: (CharacterExportFormat) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("选择导出格式", color = appearance.mobileText) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                CharacterTransferOptionRow(
+                    title = "PNG 角色卡",
+                    description = "可预览图片，内含完整 ElecKoi 数据",
+                    appearance = appearance,
+                    onClick = { onSelect(CharacterExportFormat.Png) },
+                )
+                CharacterTransferOptionRow(
+                    title = "JSON 角色卡",
+                    description = "完整原始数据，适合跨端传输与检查",
+                    appearance = appearance,
+                    onClick = { onSelect(CharacterExportFormat.Json) },
+                )
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+        containerColor = appearance.mobileSurface,
+    )
 }
 
 @Composable
@@ -237,8 +269,8 @@ fun CharacterExportDialog(
             Column {
                 CharacterCardSummary(
                     name = card.name,
-                    summary = "PNG 角色卡",
-                    imageModel = card.file,
+                    summary = if (card.format == CharacterExportFormat.Png) "PNG 角色卡" else "JSON 角色卡",
+                    imageModel = card.file.takeIf { card.format == CharacterExportFormat.Png },
                     appearance = appearance,
                 )
                 Spacer(Modifier.height(14.dp))
@@ -249,7 +281,7 @@ fun CharacterExportDialog(
                     onClick = onShareOriginal,
                 )
                 TransferActionRow(
-                    label = "保存图片",
+                    label = if (card.format == CharacterExportFormat.Png) "保存图片" else "保存 JSON",
                     icon = AppIconPaths.Import,
                     appearance = appearance,
                     onClick = onSave,
@@ -279,15 +311,29 @@ fun CharacterBatchExportDialog(
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(cards, key = ExportedCharacterCard::characterId) { card ->
                         Column(modifier = Modifier.width(82.dp)) {
-                            AsyncImage(
-                                model = card.file,
-                                contentDescription = "${card.name} 角色卡预览",
-                                modifier = Modifier
-                                    .size(width = 82.dp, height = 110.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(appearance.mobileBg),
-                                contentScale = ContentScale.Crop,
-                            )
+                            if (card.format == CharacterExportFormat.Png) {
+                                AsyncImage(
+                                    model = card.file,
+                                    contentDescription = "${card.name} 角色卡预览",
+                                    modifier = Modifier
+                                        .size(width = 82.dp, height = 110.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(appearance.mobileBg),
+                                    contentScale = ContentScale.Crop,
+                                )
+                            } else {
+                                StrokeSvgIcon(
+                                    paths = AppIconPaths.Export,
+                                    color = appearance.mobileMuted,
+                                    iconSize = 32.dp,
+                                    strokeWidth = 1.5f,
+                                    modifier = Modifier
+                                        .size(width = 82.dp, height = 110.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(appearance.mobileBg)
+                                        .padding(25.dp),
+                                )
+                            }
                             Spacer(Modifier.height(5.dp))
                             Text(
                                 card.name,
@@ -331,15 +377,29 @@ private fun CharacterCardSummary(
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AsyncImage(
-            model = imageModel,
-            contentDescription = "$name 角色卡预览",
-            modifier = Modifier
-                .size(width = 72.dp, height = 96.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(appearance.mobileBg),
-            contentScale = ContentScale.Crop,
-        )
+        if (imageModel != null) {
+            AsyncImage(
+                model = imageModel,
+                contentDescription = "$name 角色卡预览",
+                modifier = Modifier
+                    .size(width = 72.dp, height = 96.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(appearance.mobileBg),
+                contentScale = ContentScale.Crop,
+            )
+        } else {
+            StrokeSvgIcon(
+                paths = AppIconPaths.Export,
+                color = appearance.mobileMuted,
+                iconSize = 30.dp,
+                strokeWidth = 1.5f,
+                modifier = Modifier
+                    .size(width = 72.dp, height = 96.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(appearance.mobileBg)
+                    .padding(21.dp),
+            )
+        }
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 name,

@@ -81,18 +81,19 @@ internal fun ChatGenerationStatsPreview(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 9.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     val statColor = if (enabled) appearance.mobileMuted else appearance.mobileSoft
-                    listOf("第 3 轮", "4.2s", "38 tok/s", "缓存 82%", "1,240 tok").forEach { stat ->
-                        Text(
-                            text = stat,
-                            color = statColor,
-                            fontSize = 9.sp,
-                            maxLines = 1,
-                        )
-                    }
+                    Text(
+                        text = "3 轮 · 5 步  |  LLM 4.2s · 工具调用 1.1s  |  " +
+                            "首 token 平均 0.8s · 38 tok/s  |  缓存命中 82%  |  " +
+                            "输入 6.7K tok · 输出 1.2K tok",
+                        color = statColor,
+                        fontSize = 9.sp,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Clip,
+                    )
                 }
             }
         }

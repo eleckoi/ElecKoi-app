@@ -7,8 +7,6 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.S
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryGroup
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryTriggerMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isFixedEntry
-import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isRoleplayPlanEntry
-import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.roleplayPlanItems
 
 internal object SettingLibraryAgentContextProjector {
     fun project(
@@ -59,10 +57,6 @@ internal object SettingLibraryAgentContextProjector {
                 path = settingLibraryGroupPath(group, groupsById),
             )
         }
-        val fixedRoleplayPlanItems = library.entries
-            .firstOrNull(SettingLibraryEntry::isRoleplayPlanEntry)
-            ?.roleplayPlanItems()
-            .orEmpty()
         return SettingLibraryAgentTurnContext(
             automaticLibrary = SettingLibrary(
                 characterId = characterId,
@@ -80,7 +74,6 @@ internal object SettingLibraryAgentContextProjector {
                     entry.content.isNotBlank()
             },
             groups = agentGroups,
-            fixedRoleplayPlanItems = fixedRoleplayPlanItems,
         )
     }
 }

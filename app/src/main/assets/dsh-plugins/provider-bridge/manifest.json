@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "eleckoi-provider-bridge",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "cordisConfig": "cordis.yml",
   "files": [
     "cordis.yml",

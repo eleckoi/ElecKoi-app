@@ -8,6 +8,10 @@ internal val RoleplayTranscriptRuntimeCore = """
     const authorSdkSource = new TextDecoder().decode(
       Uint8Array.from(atob(authorSdkBase64), character => character.charCodeAt(0)),
     );
+    const authorLibrariesBase64 = '__ELECKOI_AUTHOR_LIBRARIES_BASE64__';
+    const authorLibrariesHead = new TextDecoder().decode(
+      Uint8Array.from(atob(authorLibrariesBase64), character => character.charCodeAt(0)),
+    );
     const topSpacer = document.getElementById('top-spacer');
     const turns = document.getElementById('turns');
     const bottomSpacer = document.getElementById('bottom-spacer');
@@ -146,6 +150,7 @@ internal val RoleplayTranscriptRuntimeCore = """
       },
     };
     let deliverEmbeddedAuthorResponse = () => false;
+    let deliverEmbeddedAuthorEvent = () => {};
     window.ElecKoiNative = authorTransport;
     if (native) {
       native.onmessage = event => {
@@ -156,6 +161,18 @@ internal val RoleplayTranscriptRuntimeCore = """
           if (typeof authorTransport.onmessage === 'function') {
             authorTransport.onmessage({ data: message.response });
           }
+          return;
+        }
+        if (message.type === 'authorEvent') {
+          const eventMessage = JSON.stringify({
+            type: 'event',
+            event: String(message.event || ''),
+            payload: message.payload ?? null,
+          });
+          if (typeof authorTransport.onmessage === 'function') {
+            authorTransport.onmessage({ data: eventMessage });
+          }
+          deliverEmbeddedAuthorEvent(eventMessage);
           return;
         }
         if (message.type === 'nativeCommand') {
@@ -301,7 +318,7 @@ internal val RoleplayTranscriptRuntimeCore = """
         '--eleckoi-foreground': style.bodyText, '--eleckoi-muted': style.muted,
         '--eleckoi-accent': style.accent,
         '--jump-surface': style.jumpSurface,
-        '--avatar-background': style.avatarBackground, '--avatar-initial': style.avatarInitial,
+        '--avatar-background': style.avatarBackground, '--avatar-placeholder': style.avatarPlaceholder,
         '--code-foreground': style.codeForeground, '--code-background': style.codeBackground,
         '--code-border': style.codeBorder, '--code-header': style.codeHeaderBackground,
         '--font-size': style.fontSizePx + 'px', '--line-height': style.lineHeightPx + 'px',
@@ -313,6 +330,7 @@ internal val RoleplayTranscriptRuntimeCore = """
         '--reply-gap': style.replySpacingPx + 'px', '--turn-gap': style.turnSpacingPx + 'px',
       };
       Object.entries(properties).forEach(([key, value]) => root.setProperty(key, value));
+      root.setProperty('--roleplay-text-shadow', style.dark ? '0 0 1px rgba(0,0,0,.3)' : 'none');
       document.documentElement.style.colorScheme = style.dark ? 'dark' : 'light';
       state.cardPanel = !!style.cardPanel; state.style = style;
     };

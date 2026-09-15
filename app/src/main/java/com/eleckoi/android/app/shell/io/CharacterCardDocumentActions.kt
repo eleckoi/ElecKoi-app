@@ -16,6 +16,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.FileProvider
 import com.eleckoi.android.feature.characters.transfer.model.ExportedCharacterCard
+import com.eleckoi.android.feature.characters.transfer.model.CharacterExportFormat
 import com.eleckoi.android.feature.characters.transfer.model.CharacterImportSource
 import java.io.File
 import kotlinx.coroutines.Dispatchers
@@ -88,8 +89,30 @@ internal fun rememberCharacterCardDocumentActions(
             }
         }
     }
-    val saveLauncher = rememberLauncherForActivityResult(
+    val savePngLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("image/png"),
+    ) { uri ->
+        val card = pendingSave
+        pendingSave = null
+        if (uri == null || card == null) return@rememberLauncherForActivityResult
+        scope.launch(Dispatchers.IO) {
+            runCatching {
+                context.contentResolver.openOutputStream(uri)?.use { output ->
+                    card.file.inputStream().use { input -> input.copyTo(output) }
+                } ?: error("无法保存角色卡")
+            }.onFailure { error ->
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        context,
+                        error.message ?: "保存角色卡失败",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+            }
+        }
+    }
+    val saveJsonLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json"),
     ) { uri ->
         val card = pendingSave
         pendingSave = null
@@ -126,12 +149,12 @@ internal fun rememberCharacterCardDocumentActions(
                     val outputUri = DocumentsContract.createDocument(
                         context.contentResolver,
                         directoryUri,
-                        "image/png",
-                        "${safeCardName(card.name)}.png",
-                    ) ?: error("无法创建 ${card.name}.png")
+                        card.format.mediaType,
+                        "${safeCardName(card.name)}.${card.format.extension}",
+                    ) ?: error("无法创建 ${card.name}.${card.format.extension}")
                     context.contentResolver.openOutputStream(outputUri)?.use { output ->
                         card.file.inputStream().use { input -> input.copyTo(output) }
-                    } ?: error("无法写入 ${card.name}.png")
+                    } ?: error("无法写入 ${card.name}.${card.format.extension}")
                 }.exceptionOrNull()
             }
             withContext(Dispatchers.Main) {
@@ -146,7 +169,7 @@ internal fun rememberCharacterCardDocumentActions(
         }
     }
 
-    return remember(importLauncher, saveLauncher, saveFolderLauncher, context) {
+    return remember(importLauncher, savePngLauncher, saveJsonLauncher, saveFolderLauncher, context) {
         CharacterCardDocumentActions(
             importCard = {
                 pendingImportSource = CharacterImportSource.ElecKoi
@@ -156,11 +179,15 @@ internal fun rememberCharacterCardDocumentActions(
             },
             importSillyTavernCard = {
                 pendingImportSource = CharacterImportSource.SillyTavern
-                importLauncher.launch(arrayOf("image/png"))
+                importLauncher.launch(arrayOf("image/png", "application/json", "application/octet-stream"))
             },
             saveCard = { card ->
                 pendingSave = card
-                saveLauncher.launch("${safeCardName(card.name)}.png")
+                val fileName = "${safeCardName(card.name)}.${card.format.extension}"
+                when (card.format) {
+                    CharacterExportFormat.Png -> savePngLauncher.launch(fileName)
+                    CharacterExportFormat.Json -> saveJsonLauncher.launch(fileName)
+                }
             },
             saveCards = { cards ->
                 if (cards.isNotEmpty()) {
@@ -196,7 +223,7 @@ private fun shareCharacterCards(
     val send = Intent(
         if (uris.size == 1) Intent.ACTION_SEND else Intent.ACTION_SEND_MULTIPLE,
     ).apply {
-        type = "application/octet-stream"
+        type = cards.map { it.format.mediaType }.distinct().singleOrNull() ?: "application/octet-stream"
         if (uris.size == 1) {
             putExtra(Intent.EXTRA_STREAM, uris.first())
         } else {
@@ -214,5 +241,5 @@ private fun safeCardName(name: String): String = name
     .trim()
     .ifBlank { "角色" }
 
-private const val MaxCharacterCardBytes = 64L * 1024 * 1024
+private const val MaxCharacterCardBytes = 96L * 1024 * 1024
 private const val MaxCharacterCardCount = 50

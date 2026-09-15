@@ -1,7 +1,6 @@
 package com.eleckoi.android.feature.characters.transfer.format.sillytavern
 
 import com.eleckoi.android.compatibility.mvu.importer.MvuCharacterImportAdapter
-import com.eleckoi.android.feature.characters.model.CharacterMode
 import com.eleckoi.android.feature.characters.modes.story.regex.data.RegexRuleImportCodec
 import com.eleckoi.android.feature.characters.modes.story.regex.data.RegexRuleProcessor
 import com.eleckoi.android.feature.characters.modes.story.regex.model.RegexRule
@@ -31,15 +30,21 @@ import org.json.JSONObject
 /** Converts the small, explicit SillyTavern subset supported by ElecKoi. */
 internal object SillyTavernCharacterCardFormat {
     fun decode(bytes: ByteArray): DecodedCharacterCard {
-        require(PngTextChunkCodec.isPng(bytes)) { "酒馆角色卡必须是 PNG 图片" }
-        val textChunks = PngTextChunkCodec.readText(bytes)
-        val encoded = sequenceOf(Ccv3Keyword, CharacterKeyword)
-            .mapNotNull { keyword -> textChunks[keyword]?.trim()?.takeIf(String::isNotBlank) }
-            .firstOrNull()
-            ?: error("图片里没有酒馆角色卡数据")
-        val json = runCatching {
-            Base64.getMimeDecoder().decode(encoded).toString(StandardCharsets.UTF_8)
-        }.getOrElse { throw IllegalArgumentException("酒馆角色卡数据无法解码", it) }
+        val isPng = PngTextChunkCodec.isPng(bytes)
+        val json = if (isPng) {
+            val textChunks = PngTextChunkCodec.readText(bytes)
+            val encoded = sequenceOf(Ccv3Keyword, CharacterKeyword)
+                .mapNotNull { keyword -> textChunks[keyword]?.trim()?.takeIf(String::isNotBlank) }
+                .firstOrNull()
+                ?: error("图片里没有酒馆角色卡数据")
+            runCatching {
+                Base64.getMimeDecoder().decode(encoded).toString(StandardCharsets.UTF_8)
+            }.getOrElse { throw IllegalArgumentException("酒馆角色卡数据无法解码", it) }
+        } else {
+            bytes.toString(StandardCharsets.UTF_8).trim().also { text ->
+                require(text.startsWith("{")) { "酒馆角色卡必须是 PNG 或 JSON 文件" }
+            }
+        }
         val root = runCatching { JSONObject(json) }
             .getOrElse { throw IllegalArgumentException("酒馆角色卡 JSON 已损坏", it) }
         val data = root.optJSONObject("data") ?: error("酒馆角色卡缺少角色数据")
@@ -78,9 +83,7 @@ internal object SillyTavernCharacterCardFormat {
                 character = PortableCharacter(
                     name = name,
                     group = "",
-                    characterMode = CharacterMode.Story.storageValue,
                     frontendBeautyEnabled = false,
-                    assistantPrompt = "",
                     profileAge = "",
                     profileSex = "",
                     profileHeight = "",
@@ -89,12 +92,9 @@ internal object SillyTavernCharacterCardFormat {
                     imagePrompt = "",
                     opening = openings.firstOrNull().orEmpty(),
                     showOpening = openings.isNotEmpty(),
-                    chatBackgroundOpacity = 1f,
-                    chatBackgroundBlur = 0f,
-                    chatBackgroundScrim = 0f,
                 ),
             ),
-            sourceImage = bytes,
+            sourceImage = bytes.takeIf { isPng },
             complete = false,
             summary = summary,
             settingLibrary = convertedLibrary,

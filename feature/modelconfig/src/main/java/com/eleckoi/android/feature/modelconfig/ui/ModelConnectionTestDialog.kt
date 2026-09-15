@@ -157,7 +157,7 @@ internal fun ModelConnectionTestDialog(
             ) {
                 Text(
                     text = when {
-                        !state.finished -> "检测完成后会把结果写进这个配置。"
+                        !state.finished -> "正在按当前接口格式验证连接和工具调用。"
                         state.formatFallbackSuggested -> "当前接口格式未通过测试，请尝试其他接口格式。"
                         state.completionMessage.isNotBlank() -> state.completionMessage
                         state.toolsSupported == true -> "这个配置支持工具调用，可以用于 Agent。"

@@ -210,25 +210,8 @@ class UiPreferencesRepository(context: Context) {
         return read()
     }
 
-    suspend fun setOptionalCommonPage(tabKey: String?, order: List<String>): UiPreferences {
-        dataStore.edit { preferences ->
-            preferences[PresetPagePinned] = tabKey == "presets"
-            preferences[PluginPagePinned] = tabKey == "plugins"
-            preferences[CommonPageOrderJson] = encodeStringList(order)
-        }
-        return read()
-    }
-
-    suspend fun setCommonPageOrder(order: List<String>): UiPreferences {
-        dataStore.edit { preferences ->
-            preferences[CommonPageOrderJson] = encodeStringList(order)
-        }
-        return read()
-    }
-
     suspend fun setActiveChatSessionId(
         characterId: String,
-        characterMode: String,
         sessionId: String,
     ): UiPreferences {
         dataStore.edit { preferences ->
@@ -237,7 +220,7 @@ class UiPreferencesRepository(context: Context) {
                 sessionIdsByContext = preferences[ActiveChatSessionIdsJson]
                     ?.let(::decodeStringMap)
                     .orEmpty(),
-            ).remember(characterId, characterMode, sessionId)
+            ).remember(characterId, sessionId)
             preferences[LastActiveChatSessionId] = next.lastSessionId
             preferences[ActiveChatSessionIdsJson] = encodeStringMap(next.sessionIdsByContext)
         }
@@ -271,10 +254,6 @@ class UiPreferencesRepository(context: Context) {
 
     suspend fun activeChatSessionId(characterId: String): String {
         return read().activeChatSessionId(characterId)
-    }
-
-    suspend fun activeChatSessionId(characterId: String, characterMode: String): String {
-        return read().activeChatSessionId(characterId, characterMode)
     }
 
     suspend fun lastActiveChatSessionId(): String = read().lastActiveChatSessionId
@@ -332,6 +311,25 @@ class UiPreferencesRepository(context: Context) {
         return read()
     }
 
+    suspend fun setListCharacterArtwork(artwork: ListCharacterArtwork): UiPreferences {
+        dataStore.edit { preferences ->
+            preferences[SidebarCharacterArtwork] = artwork.storageKey
+        }
+        return read()
+    }
+
+    suspend fun setAppearanceMode(mode: AppearanceMode): UiPreferences {
+        dataStore.edit { preferences -> preferences[AppearanceModeKey] = mode.storageKey }
+        return read()
+    }
+
+    suspend fun setNewCharacterBackground(background: NewCharacterBackground): UiPreferences {
+        dataStore.edit { preferences ->
+            preferences[NewCharacterBackgroundKey] = background.storageKey
+        }
+        return read()
+    }
+
     suspend fun setAssistantBubbleEnabled(enabled: Boolean): UiPreferences {
         dataStore.edit { preferences ->
             val mode = currentLayoutMode(preferences)
@@ -381,7 +379,6 @@ class UiPreferencesRepository(context: Context) {
             )
             if (mode == ChatLayoutMode.Roleplay) {
                 preferences.remove(ChatRoleplayCardPanel)
-                preferences.remove(ChatRoleplayScrim)
             }
         }
         return read()
@@ -480,11 +477,6 @@ class UiPreferencesRepository(context: Context) {
 
     suspend fun setChatRoleplayCardPanel(enabled: Boolean): UiPreferences {
         dataStore.edit { preferences -> preferences[ChatRoleplayCardPanel] = enabled }
-        return read()
-    }
-
-    suspend fun setChatRoleplayScrim(value: Float): UiPreferences {
-        dataStore.edit { preferences -> preferences[ChatRoleplayScrim] = value.coerceIn(0f, 1f) }
         return read()
     }
 

@@ -51,7 +51,7 @@ import com.eleckoi.android.foundation.design.ElecKoiDanger
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import com.eleckoi.android.feature.characters.ui.list.*
-import com.eleckoi.android.feature.characters.ui.list.components.ManagerAction
+import com.eleckoi.android.feature.characters.ui.list.components.CharacterGroupAction
 
 private const val CharacterGroupRowHeight = 54
 
@@ -158,17 +158,17 @@ internal fun CharacterGroupManagerPage(
             modifier = Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 18.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            ManagerAction("添加分组", AppIconPaths.Plus, appearance, Modifier.weight(1f)) {
+            CharacterGroupAction("添加分组", AppIconPaths.Plus, appearance, Modifier.weight(1f)) {
                 openAddGroup()
             }
-            ManagerAction(if (deleteMode) "完成删除" else "删除分组", AppIconPaths.Trash, appearance, Modifier.weight(1f).padding(start = 10.dp)) {
+            CharacterGroupAction(if (deleteMode) "完成删除" else "删除分组", AppIconPaths.Trash, appearance, Modifier.weight(1f).padding(start = 10.dp)) {
                 toggleDeleteMode()
             }
         }
         DividerLine(appearance)
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
             item(key = "all") {
-                CharacterAllGroupRow(characters.items.size, appearance)
+                CharacterAllGroupRow(characters.items.size, appearance) { openSort(ALL_CHARACTERS) }
             }
             items(orderedGroups, key = { it }) { group ->
                 val count = characters.items.count { characterGroup(it) == group }
@@ -270,15 +270,16 @@ internal fun CharacterGroupManagerPage(
 }
 
 @Composable
-private fun CharacterAllGroupRow(count: Int, appearance: AppearanceTheme) {
+private fun CharacterAllGroupRow(count: Int, appearance: AppearanceTheme, onSort: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().height(CharacterGroupRowHeight.dp).background(appearance.mobileBg).padding(horizontal = 18.dp),
+        modifier = Modifier.fillMaxWidth().height(CharacterGroupRowHeight.dp).background(appearance.mobileBg).themedListRowClickable(appearance = appearance, onClick = onSort).padding(horizontal = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
             StrokeSvgIcon(AppIconPaths.History, appearance.mobileMuted, iconSize = 20.dp, strokeWidth = 1.7f)
         }
         Text("全部角色 ($count)", modifier = Modifier.weight(1f).padding(start = 12.dp), color = appearance.mobileText, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+        Text("排序", color = appearance.mobileMuted, fontSize = 12.sp)
     }
 }
 

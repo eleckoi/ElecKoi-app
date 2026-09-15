@@ -2,18 +2,21 @@ package com.eleckoi.android.feature.chat.ui.blocks.rich
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.content.Intent
 import android.graphics.Color as AndroidColor
 import android.net.Uri
 import android.view.View
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
-import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.core.net.toUri
+import com.eleckoi.android.feature.chat.ui.web.configureDesktopAlignedAuthorFrontend
+import com.eleckoi.android.feature.chat.ui.web.installDesktopAlignedWindowOpenHandler
+import com.eleckoi.android.feature.chat.ui.web.isDesktopAllowedAuthorFrontendResource
+import com.eleckoi.android.feature.chat.ui.web.openDesktopAlignedExternalUri
 import com.eleckoi.android.sdk.author.AuthorApiRouter
+import com.eleckoi.android.sdk.author.AuthorFrontendSdk
 import com.eleckoi.android.sdk.author.bridge.WebViewAuthorBridge
 import java.io.ByteArrayInputStream
 
@@ -28,6 +31,7 @@ internal class RichMessageWebView(context: Context) : WebView(context) {
     private var allowedOrigin: String = ""
     private var onHeightChanged: (Float) -> Unit = {}
     private var onContentReady: () -> Unit = {}
+    private var authorApiRouter: AuthorApiRouter? = null
     private var authorBridge: WebViewAuthorBridge? = null
     private var heightBridge: RichMessageHeightBridge? = null
 
@@ -40,21 +44,12 @@ internal class RichMessageWebView(context: Context) : WebView(context) {
         isVerticalScrollBarEnabled = false
         isHorizontalScrollBarEnabled = false
         settings.apply {
-            javaScriptEnabled = true
-            domStorageEnabled = true
-            allowFileAccess = false
-            allowContentAccess = false
-            javaScriptCanOpenWindowsAutomatically = false
-            setSupportMultipleWindows(false)
-            setSupportZoom(false)
-            builtInZoomControls = false
-            displayZoomControls = false
-            mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-            mediaPlaybackRequiresUserGesture = true
-            safeBrowsingEnabled = true
-            cacheMode = WebSettings.LOAD_DEFAULT
+            configureDesktopAlignedAuthorFrontend()
             textZoom = 100
             offscreenPreRaster = true
+        }
+        installDesktopAlignedWindowOpenHandler { uri ->
+            context.openDesktopAlignedExternalUri(uri)
         }
         webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(
@@ -62,11 +57,20 @@ internal class RichMessageWebView(context: Context) : WebView(context) {
                 request: WebResourceRequest,
             ): WebResourceResponse? {
                 val uri = request.url
-                if (uri.scheme in InlineResourceSchemes) return null
-                if (uri.scheme == "https" && uri.host == allowedOrigin.toUri().host) return null
+                if (uri.scheme == "https" && uri.host == allowedOrigin.toUri().host) {
+                    val runtimePath = uri.path
+                        ?.takeIf { it.startsWith(AuthorRuntimePath) }
+                        ?.removePrefix(AuthorRuntimePath)
+                    if (runtimePath != null) {
+                        return AuthorFrontendSdk.runtimeResource(context, runtimePath)
+                            ?: authorApiRouter?.runtimeResource(runtimePath)
+                            ?: blockedResourceResponse()
+                    }
+                    return null
+                }
                 // Authored frontends may load the remote resources they declare. Main-frame
                 // navigation is still handled separately.
-                if (uri.scheme in FrontendNetworkResourceSchemes) return null
+                if (isDesktopAllowedAuthorFrontendResource(uri.scheme)) return null
                 return blockedResourceResponse()
             }
 
@@ -118,10 +122,10 @@ internal class RichMessageWebView(context: Context) : WebView(context) {
         this.onContentReady = onContentReady
         this.bindingKey = bindingKey
         allowedOrigin = origin
+        this.authorApiRouter = authorApiRouter
         authorBridge = WebViewAuthorBridge(
             router = authorApiRouter,
             allowedOrigin = origin,
-            events = null,
         ).also { bridge -> bridge.install(this) }
         installHeightBridge()
         loadDataWithBaseURL(
@@ -141,6 +145,7 @@ internal class RichMessageWebView(context: Context) : WebView(context) {
         }
         authorBridge?.destroy()
         authorBridge = null
+        authorApiRouter = null
         installedHeightBridge = false
         heightBridge = null
         expectedReadyRequestId = null
@@ -275,12 +280,7 @@ internal class RichMessageWebView(context: Context) : WebView(context) {
     }
 
     private fun openExternalUri(uri: Uri): Boolean {
-        if (uri.scheme !in ExternalSchemes) return true
-        return runCatching {
-            context.startActivity(
-                Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-            )
-        }.isSuccess
+        return context.openDesktopAlignedExternalUri(uri)
     }
 
     private fun blockedResourceResponse(): WebResourceResponse = WebResourceResponse(
@@ -328,7 +328,5 @@ internal fun parseRichMessageReadyPayload(value: String): RichMessageReadyPayloa
     )
 }
 
-private val ExternalSchemes = setOf("https", "http", "mailto", "tel")
-private val FrontendNetworkResourceSchemes = setOf("https", "http")
-private val InlineResourceSchemes = setOf("data", "blob", "about")
 private const val HeightBridgeName = "ElecKoiRichHost"
+private const val AuthorRuntimePath = "/eleckoi-runtime/"

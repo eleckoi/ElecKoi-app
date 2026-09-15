@@ -12,16 +12,11 @@ import com.eleckoi.android.feature.characters.modes.story.frontendbeauty.ui.Fron
 import com.eleckoi.android.feature.studio.ui.assistant.AiCreationAssistantPage
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.ui.SettingLibraryIntent
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.ui.SettingLibraryPage
-import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.withRoleplayPlanEnabled
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.ui.DynamicSettingsPage
 import com.eleckoi.android.feature.characters.modes.story.variables.ui.VariableConfigPage
 import com.eleckoi.android.feature.characters.modes.story.variables.ui.VariableConfigIntent
 import com.eleckoi.android.feature.characters.modes.story.regex.ui.RegexRulesPage
 import com.eleckoi.android.app.navigation.MobileRoute
-import com.eleckoi.android.engine.agent.tools.AgentToolScopes
-import com.eleckoi.android.engine.agent.tools.AgentToolRequestPolicy
-import com.eleckoi.android.feature.agenttools.ui.tools.AgentToolGroupDetailPage
-import com.eleckoi.android.feature.agenttools.ui.tools.AgentToolsPage
 
 internal fun mobileStoryRouteEntry(
     currentRoute: MobileRoute,
@@ -86,67 +81,15 @@ internal fun mobileStoryRouteEntry(
                     chatGateway = chatViewModel,
                     onBack = goBackInsideApp,
                     // The assistant's own switch set; blank means the shared scope.
-                    onOpenPlugins = { navigateTo(MobileRoute.AgentTools()) },
-                )
-        }
-        is MobileRoute.AgentTools -> NavEntry(currentRoute) {
-                val pageAppearance = currentThemeState.value.appearance
-                Column(modifier = Modifier.fillMaxSize()) {
-                    Box(modifier = Modifier.weight(1f)) {
-                        AgentToolsPage(
-                            appearance = pageAppearance,
-                            viewModel = agentToolsViewModel,
-                            toolScopeId = AgentToolScopes.character(currentRoute.characterId),
-                            title = if (currentRoute.rootTab) "插件" else "工具",
-                            showRootBackButton = !currentRoute.rootTab,
-                            onBack = goBackInsideApp,
-                            onOpenGroup = { groupId ->
-                                navigateTo(
-                                    MobileRoute.AgentToolGroup(currentRoute.characterId, groupId),
-                                )
-                            },
-                            onOpenWebSearch = { navigateTo(MobileRoute.WebSearchSettings) },
-                            onOpenRemoteDsh = {
-                                navigateTo(
-                                    MobileRoute.RemoteDshSettings(
-                                        AgentToolScopes.character(currentRoute.characterId),
-                                    ),
-                                )
-                            },
-                        )
-                    }
-                    if (currentRoute.rootTab) {
-                        MobileTabBar(
-                            activeTab = BottomTab.Plugins,
-                            tabs = BottomTab.visibleTabs(
-                                presetsPinned = currentShellState.value.presetPagePinned,
-                                pluginsPinned = currentShellState.value.pluginPagePinned,
-                                order = currentShellState.value.commonPageOrder,
-                            ),
-                            appearance = pageAppearance,
-                            onChange = selectBottomTab,
-                        )
-                    }
-                }
-        }
-        is MobileRoute.AgentToolGroup -> NavEntry(currentRoute) {
-                val pageAppearance = currentThemeState.value.appearance
-                AgentToolGroupDetailPage(
-                    appearance = pageAppearance,
-                    viewModel = agentToolsViewModel,
-                    toolScopeId = AgentToolScopes.character(currentRoute.characterId),
-                    groupId = currentRoute.groupId,
-                    onBack = goBackInsideApp,
+                    onOpenTools = onOpenPresetToolsDialog,
                 )
         }
         is MobileRoute.SettingLibrary -> NavEntry(currentRoute) {
                 val pageAppearance = currentThemeState.value.appearance
                 val pageLibrary = currentSettingLibraryState.value.library
+                val activePreset = currentAgentPresetState.value.activePreset
                 val toolContext = toolContextSnapshotProvider(
-                    AgentToolScopes.character(currentRoute.characterId),
-                )
-                val roleplayPlanEnabled = toolContext.isEnabled(
-                    AgentToolRequestPolicy.BuiltInRoleplayWorkflow,
+                    activePreset?.toolConfiguration?.enabledGroupIds.orEmpty(),
                 )
                 LaunchedEffect(currentRoute.characterId) {
                     if (pageLibrary?.characterId != currentRoute.characterId) {
@@ -157,10 +100,7 @@ internal fun mobileStoryRouteEntry(
                 SettingLibraryPage(
                     characterName = character?.name.orEmpty(),
                     characterAvatar = character?.avatar.orEmpty(),
-                    library = pageLibrary
-                        ?.takeIf { it.characterId == currentRoute.characterId }
-                        ?.withRoleplayPlanEnabled(roleplayPlanEnabled),
-                    activePreset = currentStoryPresetState.value.activePreset,
+                    library = pageLibrary?.takeIf { it.characterId == currentRoute.characterId },
                     appearance = pageAppearance,
                     toolContextNames = toolContext.groups
                         .filter { it.enabled }
@@ -168,21 +108,6 @@ internal fun mobileStoryRouteEntry(
                     onBack = goBackInsideApp,
                     onSave = { library ->
                         settingLibraryViewModel.onIntent(SettingLibraryIntent.Save(currentRoute.characterId, library))
-                    },
-                    onUpdateActivePreset = storyPresetViewModel::update,
-                    onOpenActivePreset = { presetId ->
-                        storyPresetViewModel.openPreset(presetId)
-                        navigateTo(MobileRoute.StoryPresets())
-                    },
-                    onOpenActivePresetEntry = { presetId, entryId ->
-                        storyPresetViewModel.openPresetEntry(presetId, entryId)
-                        navigateTo(MobileRoute.StoryPresets())
-                    },
-                    onRoleplayPlanEnabledChange = { enabled ->
-                        agentToolsViewModel.setRoleplayPlanEnabledFromSettingLibrary(
-                            scopeId = AgentToolScopes.character(currentRoute.characterId),
-                            enabled = enabled,
-                        )
                     },
                     onImport = {
                         documentActions.importSettingLibrary(currentRoute.characterId)

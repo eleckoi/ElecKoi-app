@@ -54,6 +54,5 @@ data class RegexRuleImportResult(
     val collection: RegexRuleCollection,
     val importedFileCount: Int,
     val importedRuleCount: Int,
-    val skippedDepthRuleCount: Int = 0,
     val failedFileNames: List<String> = emptyList(),
 )

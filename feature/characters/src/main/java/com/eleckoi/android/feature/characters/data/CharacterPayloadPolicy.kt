@@ -1,6 +1,5 @@
 package com.eleckoi.android.feature.characters.data
 
-import com.eleckoi.android.feature.characters.model.CharacterMode
 import com.eleckoi.android.feature.characters.model.CharacterSlot
 import com.eleckoi.android.foundation.storage.newId
 import com.eleckoi.android.foundation.storage.safeId
@@ -20,7 +19,6 @@ internal fun normalizeCharacter(slot: CharacterSlot): CharacterSlot {
         order = slot.order,
         groupViewOrder = slot.groupViewOrder,
         folder = folder,
-        characterMode = normalizeCharacterMode(slot.characterMode),
         persona = slot.persona.copy(
             characterId = id,
             characterName = name,
@@ -51,10 +49,6 @@ internal fun folderNameForCharacter(characterId: String): String {
         .takeLast(8)
         .ifBlank { newId(8) }
     return "character_$suffix"
-}
-
-internal fun normalizeCharacterMode(value: String): String {
-    return CharacterMode.fromStorage(value).storageValue
 }
 
 internal fun String.toSqlLikePattern(): String {

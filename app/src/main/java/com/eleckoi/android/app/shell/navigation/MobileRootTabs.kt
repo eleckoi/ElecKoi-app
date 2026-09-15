@@ -37,6 +37,7 @@ import com.eleckoi.android.feature.modelconfig.ui.ModelProviderPickerSheet
 import com.eleckoi.android.feature.modelconfig.ui.ModelsRootPage
 import com.eleckoi.android.feature.modelconfig.ui.ModelsViewModel
 import com.eleckoi.android.foundation.design.AppearanceTheme
+import com.eleckoi.android.feature.preferences.ListCharacterArtwork
 
 @Composable
 internal fun MobileRootTabs(
@@ -45,23 +46,22 @@ internal fun MobileRootTabs(
     models: ModelConfigCollection?,
     user: UserProfile,
     appearance: AppearanceTheme,
-    isCreatorAssistantRunning: Boolean,
     shellViewModel: ShellViewModel,
     charactersViewModel: CharactersViewModel,
     modelsViewModel: ModelsViewModel,
     chatViewModel: ChatViewModel,
+    presetEditorOpen: Boolean,
+    presetPage: @Composable () -> Unit,
     activeCharacter: (String) -> CharacterSlot?,
     onImportCharacterCard: () -> Unit,
     onNavigate: (MobileRoute) -> Unit,
     rootSearchOpen: Boolean,
     onRootSearchOpenChange: (Boolean) -> Unit,
-    bottomTabs: List<BottomTab>,
     onChangeBottomTab: (BottomTab) -> Unit,
 ) {
-    // The character manager is a full-screen sheet living inside the Characters tab's content, so
-    // the tab bar has to step out of the layout for it — a sheet cannot paint over its own sibling.
-    var charactersManagerOpen by rememberSaveable { mutableStateOf(false) }
+    val useCoverArtwork = shell.listCharacterArtwork == ListCharacterArtwork.Cover
     var characterAddMenuOpen by rememberSaveable { mutableStateOf(false) }
+    var characterGroupManagerOpen by rememberSaveable { mutableStateOf(false) }
     var modelProviderPickerOpen by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(shell.activeTab) {
         onRootSearchOpenChange(false)
@@ -104,21 +104,18 @@ internal fun MobileRootTabs(
                 Box(modifier = Modifier.weight(1f)) {
                     when (shell.activeTab) {
                 RootTab.Messages -> MessagesRootPage(
-                    user = user,
                     chats = shell.chats,
                     pinnedChatIds = shell.pinnedChatIds,
                     hiddenChatIds = shell.hiddenChatIds,
                     activeChatSessionIds = shell.activeChatSessionIds,
-                    characterModesById = characters?.items.orEmpty().associate { character ->
-                        character.id to character.characterMode
-                    },
+                    useCoverArtwork = useCoverArtwork,
                     appearance = appearance,
                     onSearch = { onRootSearchOpenChange(true) },
                     onAdd = {
                         chatViewModel.loadInitialDraft()
                         onNavigate(MobileRoute.Chat)
                     },
-                    onOpenProfile = {
+                    onOpenSidebar = {
                         shellViewModel.onIntent(ShellIntent.SetMoreOpen(true))
                     },
                     onOpenChat = { sessionId ->
@@ -140,25 +137,12 @@ internal fun MobileRootTabs(
                     characters = characters,
                     appearance = appearance,
                     onSearch = { onRootSearchOpenChange(true) },
-                    managerOpen = charactersManagerOpen,
-                    onManagerOpenChange = { charactersManagerOpen = it },
-                    isAssistantRunning = isCreatorAssistantRunning,
-                    onOpenAiCreationAssistant = {
-                        onNavigate(MobileRoute.AiCreationAssistant)
-                    },
+                    groupManagerOpen = characterGroupManagerOpen,
+                    onGroupManagerOpenChange = { characterGroupManagerOpen = it },
                     onAdd = { group ->
                         charactersViewModel.onIntent(CharactersIntent.CreateCharacter(group))
                     },
-                    onCreateGroup = { name ->
-                        charactersViewModel.onIntent(CharactersIntent.CreateCharacterGroup(name))
-                    },
-                    onToggleAllCharactersExpanded = {
-                        charactersViewModel.onIntent(CharactersIntent.ToggleAllCharactersExpanded)
-                    },
-                    onToggleCharacterGroupExpanded = { group ->
-                        charactersViewModel.onIntent(CharactersIntent.ToggleCharacterGroupExpanded(group))
-                    },
-                    onOpenProfile = {
+                    onOpenSidebar = {
                         shellViewModel.onIntent(ShellIntent.SetMoreOpen(true))
                     },
                     onOpenCharacter = { characterId ->
@@ -180,14 +164,14 @@ internal fun MobileRootTabs(
                     onAddMenuExpandedChange = { characterAddMenuOpen = it },
                 )
 
+                RootTab.Presets -> presetPage()
+
                 RootTab.Models -> ModelsRootPage(
-                    userName = user.userName,
-                    userAvatarPath = user.userAvatar,
                     models = models,
                     appearance = appearance,
                     onSearch = { onRootSearchOpenChange(true) },
                     onAdd = { modelProviderPickerOpen = true },
-                    onOpenProfile = {
+                    onOpenSidebar = {
                         shellViewModel.onIntent(ShellIntent.SetMoreOpen(true))
                     },
                     onOpenModel = { providerId, configId ->
@@ -200,12 +184,17 @@ internal fun MobileRootTabs(
                 )
                     }
                 }
-                if (!charactersManagerOpen && !rootSearchOpen && !modelProviderPickerOpen) {
+                if (
+                    !characterGroupManagerOpen &&
+                    !rootSearchOpen &&
+                    !modelProviderPickerOpen &&
+                    !(shell.activeTab == RootTab.Presets && presetEditorOpen)
+                ) {
                     MobileTabBar(
                         activeTab = BottomTab.from(shell.activeTab),
-                        tabs = bottomTabs,
                         appearance = appearance,
                         onChange = onChangeBottomTab,
+                        onCenterAction = { onNavigate(MobileRoute.AiCreationAssistant) },
                     )
                 }
             }
@@ -228,6 +217,7 @@ internal fun MobileRootTabs(
             modelConfigs = models?.configs.orEmpty(),
             history = shell.searchHistory,
             appearance = appearance,
+            useCoverArtwork = useCoverArtwork,
             onDismiss = { onRootSearchOpenChange(false) },
             onCommitTerm = { term ->
                 shellViewModel.onIntent(ShellIntent.RememberSearch(term))

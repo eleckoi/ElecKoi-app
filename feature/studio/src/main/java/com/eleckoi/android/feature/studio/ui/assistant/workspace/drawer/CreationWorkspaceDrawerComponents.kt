@@ -27,6 +27,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,7 +44,9 @@ import com.eleckoi.android.engine.workspace.model.CreatorWorkspace
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.foundation.design.components.DshFolderGlyph
 import com.eleckoi.android.foundation.design.components.DshIconPaths
+import com.eleckoi.android.foundation.design.components.DshTreeDisclosureGlyph
 import com.eleckoi.android.foundation.design.components.FilledSvgIcon
+import com.eleckoi.android.foundation.design.components.dshTreeRowEntrance
 
 @Composable
 internal fun DrawerSearchField(
@@ -132,11 +135,17 @@ internal fun DrawerProjectGroup(
                 tint = appearance.mobileText,
                 modifier = Modifier.size(21.dp),
             )
+            Box(modifier = Modifier.size(20.dp), contentAlignment = Alignment.Center) {
+                DshTreeDisclosureGlyph(
+                    expanded = expanded,
+                    tint = appearance.mobileMuted,
+                )
+            }
             Text(
                 workspace.name,
                 modifier = Modifier
                     .weight(1f)
-                    .padding(start = 11.dp),
+                    .padding(start = 7.dp),
                 color = appearance.mobileText,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
@@ -197,17 +206,20 @@ internal fun DrawerProjectGroup(
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 visible.forEach { conversation ->
-                    DrawerConversationRow(
-                        conversation = conversation,
-                        active = activeConversationId == conversation.id,
-                        menuExpanded = conversationMenuId == conversation.id,
-                        appearance = appearance,
-                        onOpen = { onOpenConversation(conversation) },
-                        onOpenMenu = { onOpenConversationMenu(conversation.id) },
-                        onDismissMenu = onDismissConversationMenu,
-                        onRename = { onRenameConversation(conversation) },
-                        onDelete = { onDeleteConversation(conversation) },
-                    )
+                    key(conversation.id) {
+                        DrawerConversationRow(
+                            conversation = conversation,
+                            active = activeConversationId == conversation.id,
+                            menuExpanded = conversationMenuId == conversation.id,
+                            appearance = appearance,
+                            modifier = Modifier.dshTreeRowEntrance(),
+                            onOpen = { onOpenConversation(conversation) },
+                            onOpenMenu = { onOpenConversationMenu(conversation.id) },
+                            onDismissMenu = onDismissConversationMenu,
+                            onRename = { onRenameConversation(conversation) },
+                            onDelete = { onDeleteConversation(conversation) },
+                        )
+                    }
                 }
             }
             if (conversations.size > 5) {
@@ -255,6 +267,7 @@ private fun DrawerConversationRow(
     active: Boolean,
     menuExpanded: Boolean,
     appearance: AppearanceTheme,
+    modifier: Modifier = Modifier,
     onOpen: () -> Unit,
     onOpenMenu: () -> Unit,
     onDismissMenu: () -> Unit,
@@ -262,13 +275,13 @@ private fun DrawerConversationRow(
     onDelete: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .height(40.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(if (active) appearance.mobileText.copy(alpha = 0.065f) else Color.Transparent)
             .clickable(onClick = onOpen)
-            .padding(start = 42.dp, end = 37.dp),
+            .padding(start = 58.dp, end = 37.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(

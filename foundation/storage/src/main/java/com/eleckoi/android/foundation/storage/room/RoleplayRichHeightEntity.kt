@@ -25,5 +25,4 @@ data class RoleplayRichHeightEntity(
     val rootIndex: Int,
     val viewportWidthPx: Int,
     val heightPx: Int,
-    val measuredAtEpochMs: Long,
 )

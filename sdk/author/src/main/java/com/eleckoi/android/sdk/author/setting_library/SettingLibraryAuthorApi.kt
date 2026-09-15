@@ -8,21 +8,24 @@ import kotlinx.serialization.json.put
 
 internal object SettingLibraryAuthorApi {
     val routes = listOf(
+        AuthorApiRoute(AuthorApiCatalog.require("settingLibrary.current")) { environment, _ ->
+            environment.runtime.chatGateway?.snapshot()?.draft?.settingLibrary
+                ?.document
+                ?: environment.runtime.settingLibrary?.document
+                ?: JsonNull
+        },
         AuthorApiRoute(AuthorApiCatalog.require("settingLibrary.getSummary")) { environment, _ ->
-            val library = environment.runtime.settingLibrary
-            buildJsonObject {
-                put("available", library != null)
-                put("summary", library?.let {
-                    buildJsonObject {
+            val library = environment.runtime.chatGateway?.snapshot()?.draft?.settingLibrary
+                ?: environment.runtime.settingLibrary
+            library?.let {
+                buildJsonObject {
                         put("characterId", it.characterId)
                         put("name", it.name)
                         put("entryCount", it.entryCount)
                         put("groupCount", it.groupCount)
-                        put("versionCount", it.versionCount)
                         put("activeVersionId", it.activeVersionId)
-                    }
-                } ?: JsonNull)
-            }
+                }
+            } ?: JsonNull
         },
     )
 }

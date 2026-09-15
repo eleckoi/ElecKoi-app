@@ -8,24 +8,24 @@ import org.junit.Test
 class MvuMessageDisplayAdapterTest {
     private val state = """
         {
-          "游戏模式": "剧情",
-          "原创主角模式": "原作",
-          "user": {"名字": "", "当前位置": "墓地山教堂"},
-          "Panty": {"好感度": 0, "${'$'}internal": "hidden"}
+          "场景模式": "测试",
+          "叙事模式": "默认",
+          "user": {"名字": "", "当前位置": "示例地点"},
+          "character": {"好感度": 0, "${'$'}internal": "hidden"}
         }
     """.trimIndent()
 
     @Test
     fun resolvesInlineStatusBoardScalarsFromStatData() {
         val source = """
-            <span>{{format_message_variable::stat_data.游戏模式}} | {{format_message_variable::stat_data.原创主角模式}}</span>
+            <span>{{format_message_variable::stat_data.场景模式}} | {{format_message_variable::stat_data.叙事模式}}</span>
             <span>{{format_message_variable::stat_data.user.当前位置}}</span>
         """.trimIndent()
 
         assertEquals(
             """
-                <span>剧情 | 原作</span>
-                <span>墓地山教堂</span>
+                <span>测试 | 默认</span>
+                <span>示例地点</span>
             """.trimIndent(),
             MvuMessageDisplayAdapter.resolveVariableMacros(source, state),
         )
@@ -42,7 +42,7 @@ class MvuMessageDisplayAdapterTest {
             """
                 当前状态:
                   名字: ""
-                  当前位置: 墓地山教堂
+                  当前位置: 示例地点
             """.trimIndent(),
             resolved,
         )
@@ -53,12 +53,12 @@ class MvuMessageDisplayAdapterTest {
         assertEquals(
             "0",
             MvuMessageDisplayAdapter.resolveVariableMacros(
-                "{{get_message_variable::stat_data.Panty.好感度}}",
+                "{{get_message_variable::stat_data.character.好感度}}",
                 state,
             ),
         )
         val formatted = MvuMessageDisplayAdapter.resolveVariableMacros(
-            "{{format_message_variable::stat_data.Panty}}",
+            "{{format_message_variable::stat_data.character}}",
             state,
         )
         assertEquals("好感度: 0", formatted)

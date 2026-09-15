@@ -2,7 +2,6 @@ package com.eleckoi.android.feature.chat.ui
 
 import com.eleckoi.android.engine.generation.model.ModelConfig
 import com.eleckoi.android.engine.generation.model.isImageGenerationConfig
-import com.eleckoi.android.feature.characters.model.CharacterMode
 import com.eleckoi.android.feature.chat.api.ChatService
 import com.eleckoi.android.feature.chat.model.ChatListItem
 import kotlinx.coroutines.CoroutineScope
@@ -38,9 +37,7 @@ internal class ChatSupportDataController(
                     imageModelConfigs = models.configs.filter(ModelConfig::isImageGenerationConfig),
                     historySaveMode = preferences.historySaveMode,
                     activeChatSessionIds = preferences.activeChatSessionIds,
-                    characterModesById = characters.items.associate { character ->
-                        character.id to CharacterMode.fromStorage(character.characterMode).storageValue
-                    },
+                    characterIds = characters.items.mapTo(hashSetOf()) { it.id },
                 )
             }.catch { error ->
                 updateState { it.copy(errorMessage = error.message ?: "刷新聊天支持数据失败") }
@@ -65,13 +62,13 @@ internal data class ChatSupportData(
     val imageModelConfigs: List<ModelConfig>,
     val historySaveMode: String,
     val activeChatSessionIds: Map<String, String>,
-    val characterModesById: Map<String, String>,
+    val characterIds: Set<String>,
 )
 
 internal fun ChatUiState.hasRemovedSelectedCharacter(data: ChatSupportData): Boolean =
     draft?.session?.characterId
         ?.takeIf(String::isNotBlank)
-        ?.let { characterId -> characterId !in data.characterModesById }
+        ?.let { characterId -> characterId !in data.characterIds }
         ?: false
 
 internal fun ChatUiState.withSupportData(
@@ -82,14 +79,8 @@ internal fun ChatUiState.withSupportData(
     isDraftLoading = if (removedCharacterSelected) false else isDraftLoading,
     chatCharacterId = if (removedCharacterSelected) "" else chatCharacterId,
     chatCharacterName = if (removedCharacterSelected) "" else chatCharacterName,
-    chatCharacterMode = if (removedCharacterSelected) {
-        CharacterMode.Agent.storageValue
-    } else {
-        chatCharacterMode
-    },
     sessions = data.sessions,
     modelConfigs = data.modelConfigs,
     imageModelConfigs = data.imageModelConfigs,
     historySaveMode = data.historySaveMode,
-    characterModesById = data.characterModesById,
 )

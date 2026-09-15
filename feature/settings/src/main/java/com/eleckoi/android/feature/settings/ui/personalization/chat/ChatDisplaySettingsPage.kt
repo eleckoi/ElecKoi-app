@@ -39,7 +39,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -70,7 +69,6 @@ internal data class ChatLayoutDraft(
     val assistantBubbleEnabled: Boolean,
     val avatarShape: ChatAvatarShape,
     val roleplayCardPanel: Boolean,
-    val roleplayScrim: Float,
     val cornerRadius: Float,
     val avatarSize: Float,
     val nameFontSize: Float,
@@ -95,7 +93,6 @@ internal data class ChatLayoutDraft(
         assistantBubbleEnabled = preferences.assistantBubbleEnabled,
         avatarShape = preferences.chatAvatarShape,
         roleplayCardPanel = preferences.chatRoleplayCardPanel,
-        roleplayScrim = preferences.chatRoleplayScrim,
         cornerRadius = preferences.chatBubbleCornerRadius,
         avatarSize = preferences.chatAvatarSize,
         nameFontSize = preferences.chatNameFontSize,
@@ -287,7 +284,6 @@ fun ChatDisplaySettingsPage(
                             assistantName = "AI",
                             userName = "我",
                             modifier = Modifier.fillMaxSize(),
-                            backgroundOverride = Color.White,
                         )
                     }
                 }

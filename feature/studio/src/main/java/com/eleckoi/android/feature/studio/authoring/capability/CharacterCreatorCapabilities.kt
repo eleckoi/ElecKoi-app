@@ -232,7 +232,6 @@ internal object CharacterCreatorCapabilities {
                     put("rootId", root.id)
                     put("characterId", root.characterId)
                     put("name", character?.name ?: root.alias.ifBlank { "已删除角色" })
-                    put("mode", character?.characterMode.orEmpty())
                     put("primary", root.id == primaryCharacterRootId)
                     put("access", if (root.access == CreatorWorkspaceRootAccess.ReadWrite) "read_write" else "read_only")
                     put("available", character != null)
@@ -258,7 +257,6 @@ internal object CharacterCreatorCapabilities {
         put("id", id)
         put("name", name)
         put("group", group)
-        put("mode", characterMode)
         put("rootId", rootId.orEmpty())
         put("attached", rootId != null)
     }

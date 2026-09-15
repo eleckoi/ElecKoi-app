@@ -37,7 +37,6 @@ internal fun RoleplayTranscriptMessage.toJson(): JSONObject = JSONObject().apply
     put("selectedOpeningIndex", selectedOpeningIndex)
     put("hasAgentProcess", hasAgentProcess)
     put("regenerateEnabled", regenerateEnabled)
-    put("showAvatarInitial", showAvatarInitial)
     put("liveStatus", liveStatus?.let { status ->
         JSONObject().apply {
             put("label", status.label)
@@ -88,7 +87,7 @@ internal fun RoleplayTranscriptStyle.toJson(): JSONObject = JSONObject().apply {
     put("line", line)
     put("jumpSurface", jumpSurface)
     put("avatarBackground", avatarBackground)
-    put("avatarInitial", avatarInitial)
+    put("avatarPlaceholder", avatarPlaceholder)
     put("fontSizePx", fontSizePx.toDouble())
     put("lineHeightPx", lineHeightPx.toDouble())
     put("letterSpacingPx", letterSpacingPx.toDouble())

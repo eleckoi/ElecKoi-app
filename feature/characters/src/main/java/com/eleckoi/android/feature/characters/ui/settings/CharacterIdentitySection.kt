@@ -62,8 +62,8 @@ internal fun CharacterScrapbookFrame(
     coverPath: String,
     appearance: AppearanceTheme,
     onBack: () -> Unit,
-    onExport: () -> Unit,
-    onDelete: () -> Unit,
+    onExport: (() -> Unit)?,
+    onDelete: (() -> Unit)?,
     onAvatarClick: () -> Unit,
     onCoverClick: () -> Unit,
     onNameChange: (String) -> Unit,
@@ -143,12 +143,14 @@ internal fun CharacterScrapbookFrame(
             onClick = onBack,
             modifier = Modifier.offset(x = u(3f), y = u(3f)),
         )
-        CharacterSettingsOverflow(
-            appearance = appearance,
-            scale = scale,
-            onExport = onExport,
-            onDelete = onDelete,
-            modifier = Modifier.offset(x = maxWidth - 48.dp, y = u(3f)),
-        )
+        if (onExport != null && onDelete != null) {
+            CharacterSettingsOverflow(
+                appearance = appearance,
+                scale = scale,
+                onExport = onExport,
+                onDelete = onDelete,
+                modifier = Modifier.offset(x = maxWidth - 48.dp, y = u(3f)),
+            )
+        }
     }
 }

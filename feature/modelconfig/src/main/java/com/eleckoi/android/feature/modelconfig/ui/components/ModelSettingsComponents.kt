@@ -63,6 +63,7 @@ fun ModelSettingsHeader(
     onBack: (() -> Unit)?,
     actionText: String? = null,
     actionDanger: Boolean = false,
+    actionEnabled: Boolean = true,
     onAction: (() -> Unit)? = null,
 ) {
     Box(
@@ -87,16 +88,25 @@ fun ModelSettingsHeader(
             Box(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
-                    .height(48.dp)
-                    .widthIn(min = 48.dp)
-                    .noRippleClickable(onClick = onAction)
-                    .padding(horizontal = 8.dp),
+                    .height(38.dp)
+                    .widthIn(min = 72.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(
+                        if (actionDanger) {
+                            ElecKoiDanger.copy(alpha = if (actionEnabled) 0.12f else 0.06f)
+                        } else {
+                            appearance.mobileBlue.copy(alpha = if (actionEnabled) 1f else 0.38f)
+                        },
+                    )
+                    .noRippleClickable(enabled = actionEnabled, onClick = onAction)
+                    .padding(horizontal = 14.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     actionText,
-                    color = if (actionDanger) ElecKoiDanger else appearance.mobileBlue,
+                    color = if (actionDanger) ElecKoiDanger else appearance.mobileAccentFg,
                     fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
                 )
             }
         }

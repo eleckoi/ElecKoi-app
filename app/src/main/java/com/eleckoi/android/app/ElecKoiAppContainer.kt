@@ -19,16 +19,14 @@ import com.eleckoi.android.engine.agent.websearch.tavilyWebSearchTool
 import com.eleckoi.android.engine.agent.websearch.nativeWebSearchBridgeTool
 import com.eleckoi.android.engine.agent.tools.AgentToolCatalogStore
 import com.eleckoi.android.engine.agent.tools.AgentToolContextSnapshot
+import com.eleckoi.android.engine.agent.tools.AgentToolGroupSnapshot
 import com.eleckoi.android.engine.agent.tools.AgentToolRequestPolicy
-import com.eleckoi.android.engine.agent.tools.AgentToolScopes
 import com.eleckoi.android.engine.agent.background.AgentRunManager
 import com.eleckoi.android.engine.agent.harness.AgentHarnessBackend
 import com.eleckoi.android.app.background.AndroidAgentForegroundController
 import com.eleckoi.android.app.background.AndroidAgentRunCompletionNotifier
 import com.eleckoi.android.app.background.AgentNotificationCenter
 import com.eleckoi.android.app.background.AgentBackgroundProtection
-import com.eleckoi.android.feature.agenttools.data.AgentToolsRepository
-import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.withRoleplayPlanEnabled
 import com.eleckoi.android.feature.settings.data.websearch.WebSearchSettingsRepository
 import com.eleckoi.android.feature.settings.data.websearch.WebSearchMode
 import com.eleckoi.android.engine.agent.remotedsh.RemoteDshPlugin
@@ -38,6 +36,7 @@ import com.eleckoi.android.engine.agent.remotedsh.RemoteDshTurnImageRegistry
 import com.eleckoi.android.feature.settings.data.remotedsh.RemoteDshSettingsRepository
 import com.eleckoi.android.foundation.storage.room.ElecKoiDatabase
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 
 /** Application-scoped composition root. Data repositories and executable runtimes stay separate. */
 class ElecKoiAppContainer(context: Context) : AutoCloseable {
@@ -45,25 +44,9 @@ class ElecKoiAppContainer(context: Context) : AutoCloseable {
 
     private val runtimePaths = RuntimePaths(applicationContext)
     private val database = ElecKoiDatabase.get(applicationContext)
-    private val agentToolCatalogStore = AgentToolCatalogStore(database)
+    private val agentToolCatalogStore = AgentToolCatalogStore()
     val repository = ElecKoiRepository(
         context = applicationContext,
-        isCreatorCapabilityEnabled = {
-            agentToolCatalogStore.isEnabled(
-                AgentToolScopes.Shared,
-                AgentToolRequestPolicy.BuiltInCreator,
-            )
-        },
-        toolModelConfigId = agentToolCatalogStore::toolModelConfigId,
-        deleteCharacterTools = agentToolCatalogStore::deleteForCharacters,
-        exportToolConfig = agentToolCatalogStore::exportBackupJson,
-        restoreToolConfig = agentToolCatalogStore::restoreBackupJson,
-        initializeCharacterTools = { characterId ->
-            initializeCharacterToolDefaults(
-                characterId = characterId,
-                setGroupEnabled = agentToolCatalogStore::setEnabled,
-            )
-        },
     )
     internal val dataBackupService = repository.dataBackupService
     val localRuntime = LocalRuntimeServiceClient(applicationContext)
@@ -81,42 +64,6 @@ class ElecKoiAppContainer(context: Context) : AutoCloseable {
         applicationContext,
         runtimePaths,
     )
-    internal val agentToolsRepository = AgentToolsRepository(
-        toolCatalogStore = agentToolCatalogStore,
-        modelConfigs = { repository.modelCollection().configs },
-        saveModelConfig = repository::saveModelConfig,
-        refreshModels = repository::refreshModelsForChat,
-        loadCharacterImagePrompt = { scopeId ->
-            AgentToolScopes.characterId(scopeId)
-                ?.let { characterId ->
-                    repository.characterCollection().items
-                        .firstOrNull { it.id == characterId }
-                        ?.persona
-                        ?.imagePrompt
-                }
-                .orEmpty()
-        },
-        persistCharacterImagePrompt = { scopeId, prompt ->
-            val characterId = AgentToolScopes.characterId(scopeId)
-                ?: error("当前插件没有角色上下文")
-            val character = repository.characterCollection().items
-                .firstOrNull { it.id == characterId }
-                ?: error("角色不存在")
-            repository.saveCharacterPersona(
-                characterId,
-                character.persona.copy(imagePrompt = prompt),
-            ).persona.imagePrompt
-        },
-        syncRoleplayPlanEntryEnabled = { scopeId, enabled ->
-            AgentToolScopes.characterId(scopeId)?.let { characterId ->
-                val current = repository.loadSettingLibrary(characterId)
-                val updated = current.withRoleplayPlanEnabled(enabled)
-                if (updated !== current) {
-                    repository.saveSettingLibrary(characterId, updated)
-                }
-            }
-        },
-    )
     private val deepSeekHost = DeepSeekPersistentRuntimeHost(
         runtime = localRuntime,
         runtimePaths = runtimePaths,
@@ -127,7 +74,7 @@ class ElecKoiAppContainer(context: Context) : AutoCloseable {
         backendFactory = deepSeekHost,
     )
     val agentSessions: AgentSessionFactory = AgentSessionFactory { options ->
-        val activeToolContext = agentToolCatalogStore.toolContextSnapshot(options.toolScopeId)
+        val activeToolContext = agentToolCatalogStore.toolContextSnapshot(options.enabledToolGroupIds)
         val existingTools = options.dynamicTools
         val webSearchSettings = webSearchSettingsRepository.settings.value
         // Native mode advertises a function-shaped marker to DSH/pi-ai. The final provider
@@ -158,7 +105,9 @@ class ElecKoiAppContainer(context: Context) : AutoCloseable {
         ) {
             remoteDshTaskTool(
                 plugin = remoteDshPlugin,
-                roleBinding = { remoteDshSettingsRepository.roleBinding(options.toolScopeId) },
+                roleBinding = {
+                    options.presetId?.let(remoteDshSettingsRepository::roleBinding)
+                },
                 ensureConnected = {
                     check(remoteDshSettingsRepository.settings.value.enabled) {
                         "远端 DSH 电脑连接尚未开启；请从当前角色的工具页进入远端 DSH 配置"
@@ -175,12 +124,6 @@ class ElecKoiAppContainer(context: Context) : AutoCloseable {
         deepSeekHarness.create(
             options.copy(
                 harness = AgentHarnessId.DeepSeek,
-                subagentModelConfigId = agentToolCatalogStore
-                    .subagentModelConfigId(options.toolScopeId)
-                    .takeIf(String::isNotBlank),
-                subagentModel = agentToolCatalogStore
-                    .subagentModel(options.toolScopeId)
-                    .takeIf(String::isNotBlank),
                 dynamicTools = existingTools + listOfNotNull(
                     webSearchTool,
                     nativeWebSearchBridge,
@@ -191,6 +134,7 @@ class ElecKoiAppContainer(context: Context) : AutoCloseable {
     }
 
     init {
+        repository.setRuntimeSessionCleanup(runtimePaths::deletePersistentDeepSeekSessions)
         // Provision both user-configurable channels before the Settings row can open Android's
         // notification page. Channel creation is idempotent and does not post a notification.
         AgentNotificationCenter.ensureChannels(applicationContext)
@@ -198,38 +142,39 @@ class ElecKoiAppContainer(context: Context) : AutoCloseable {
             agentSessions,
             localRuntime,
             agentVirtualFileSearch,
-            agentToolCatalogStore::toolContextSnapshot,
+            { enabledGroupIds -> agentToolCatalogStore.toolContextSnapshot(enabledGroupIds) },
             agentRuns,
             remoteDshTurnImages::publish,
         )
     }
 
-    internal fun agentToolContextSnapshot(scopeId: String): AgentToolContextSnapshot =
-        agentToolCatalogStore.toolContextSnapshot(scopeId)
+    internal fun agentToolContextSnapshot(enabledGroupIds: Set<String>): AgentToolContextSnapshot =
+        agentToolCatalogStore.toolContextSnapshot(enabledGroupIds)
+
+    internal fun agentToolGroups(enabledGroupIds: Set<String>): List<AgentToolGroupSnapshot> =
+        agentToolCatalogStore.groups(enabledGroupIds)
 
     internal fun isCharacterSettingLibraryToolEnabled(characterId: String): Boolean =
-        agentToolCatalogStore.isEnabled(
-            AgentToolScopes.character(characterId),
-            AgentToolRequestPolicy.BuiltInSettingLibrary,
-        )
+        runBlocking {
+            AgentToolRequestPolicy.BuiltInSettingLibrary in
+                repository.agentPresetRepository.activePreset().toolConfiguration.enabledGroupIds
+        }
 
     internal suspend fun enableCharacterSettingLibraryTool(characterId: String) {
-        agentToolsRepository.setGroupEnabled(
-            scopeId = AgentToolScopes.character(characterId),
-            groupId = AgentToolRequestPolicy.BuiltInSettingLibrary,
-            enabled = true,
+        val preset = repository.agentPresetRepository.activePreset()
+        repository.agentPresetRepository.update(
+            preset.copy(toolConfiguration = preset.toolConfiguration.copy(
+                includedGroupIds = (preset.toolConfiguration.includedGroupIds +
+                    AgentToolRequestPolicy.BuiltInSettingLibrary).distinct(),
+                enabledGroupIds = preset.toolConfiguration.enabledGroupIds +
+                    AgentToolRequestPolicy.BuiltInSettingLibrary,
+            )),
         )
     }
 
     suspend fun prewarmAgentRuntime() {
         // This is deliberately process-scoped: it connects the local runtime service only and
         // never creates a DSH conversation/session for an arbitrary workspace or model.
-        repository.characterCollection().items.forEach { character ->
-            val scopeId = AgentToolScopes.character(character.id)
-            if (!agentToolCatalogStore.hasExplicitConfiguration(scopeId)) {
-                initializeCharacterToolDefaults(character.id, agentToolCatalogStore::setEnabled)
-            }
-        }
         repository.resumePendingCleanup()
         repository.recoverAbandonedRoleGenerations()
         localRuntime.connect()
@@ -249,28 +194,4 @@ class ElecKoiAppContainer(context: Context) : AutoCloseable {
         deepSeekHost.close()
         localRuntime.close()
     }
-}
-
-/** Every new character can read its own settings and variables without granting unrelated tools. */
-internal fun initializeCharacterToolDefaults(
-    characterId: String,
-    setGroupEnabled: (scopeId: String, groupId: String, enabled: Boolean) -> Unit,
-) {
-    val scopeId = AgentToolScopes.character(characterId)
-    listOf(
-        AgentToolRequestPolicy.BuiltInSettingLibrary,
-        AgentToolRequestPolicy.BuiltInVariables,
-    ).forEach { groupId ->
-        setGroupEnabled(scopeId, groupId, true)
-    }
-}
-
-/** Imported characters have no switch section in older user-visible backups. */
-internal fun initializeMissingCharacterToolDefaults(
-    existingCharacterIds: Collection<String>,
-    savedCharacterIds: Collection<String>,
-    initializeCharacterTools: (characterId: String) -> Unit,
-) {
-    val existing = existingCharacterIds.toSet()
-    savedCharacterIds.distinct().filterNot { it in existing }.forEach(initializeCharacterTools)
 }

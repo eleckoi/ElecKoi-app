@@ -303,21 +303,6 @@ internal fun ChatDisplayHub(
                 appearance = appearance,
                 onSelect = { onDraftChange(draft.copy(roleplayCardPanel = it)) },
             )
-            Spacer(modifier = Modifier.height(18.dp))
-            // Without a bubble the surface itself carries the text, so this is the one dial that
-            // decides whether you can read the scene or see the picture behind it.
-            TunerSliderRow(
-                title = "遮罩浓度",
-                value = draft.roleplayScrim,
-                range = 0f..0.95f,
-                appearance = appearance,
-                step = 0.01f,
-                valueScale = 100f,
-                decimalPlaces = 0,
-                suffix = "%",
-                defaultValue = RoleplayLayoutDefaults.Scrim,
-                onValueChange = { onDraftChange(draft.copy(roleplayScrim = it)) },
-            )
         }
         Spacer(modifier = Modifier.height(10.dp))
     }

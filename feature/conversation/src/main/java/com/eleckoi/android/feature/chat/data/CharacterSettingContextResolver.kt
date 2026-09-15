@@ -181,10 +181,9 @@ internal object CharacterSettingContextResolver {
         SettingLibraryPosition.AfterInstructions -> AgentContextAnchor.BeforeToolContext
         SettingLibraryPosition.BeforeHistory -> AgentContextAnchor.BeforeHistory
         SettingLibraryPosition.AfterHistory -> AgentContextAnchor.AfterHistory
-        // Both labels flank the same item boundary: the current user message has ended and the
-        // tool-call flow has not started yet. Keeping distinct library positions preserves the
-        // author's visual ordering while projecting both into that real provider boundary.
-        SettingLibraryPosition.BeforeToolFlow -> AgentContextAnchor.AfterHistory
+        SettingLibraryPosition.BeforeLatestUserInput -> AgentContextAnchor.BeforeLatestUserInput
+        SettingLibraryPosition.AfterLatestUserInput -> AgentContextAnchor.AfterLatestUserInput
+        SettingLibraryPosition.BeforeToolFlow -> AgentContextAnchor.BeforeToolFlow
         SettingLibraryPosition.AfterToolFlow -> AgentContextAnchor.AfterToolFlow
     }
 

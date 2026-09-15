@@ -3,28 +3,33 @@ package com.eleckoi.android.feature.preferences
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.foundation.design.MarkdownReadingColorOverrides
 import com.eleckoi.android.foundation.design.ScrimStopCeiling
+import com.eleckoi.android.foundation.design.withDarkAppearance
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 
 internal fun appearanceThemeFromPreferences(preferences: androidx.datastore.preferences.core.Preferences): AppearanceTheme {
-    val defaults = AppearanceTheme()
+    val storedDark = preferences[AppearanceIsDark] == true
+    val defaults = AppearanceTheme().withDarkAppearance(storedDark)
+    val legacyFixedDark = storedDark &&
+        preferences[MobileBg] == 0xFF13131A.toInt() &&
+        preferences[MobileSurface] == 0xFF1D1D25.toInt() &&
+        preferences[MobileTopbarBg] == 0xFF1A1A21.toInt() &&
+        preferences[MobileTabbarBg] == 0xFF1A1A21.toInt()
+    val oldFixedLight = !storedDark &&
+        preferences[MobileBg] == 0xFFF0F3F6.toInt() &&
+        preferences[MobileSurface] == Color.White.toArgb()
+    val rootBg = preferences[MobileRootBg]?.let(::Color)
+        ?: if (preferences[AppearanceThemeStored] == true && !legacyFixedDark && !oldFixedLight) {
+            preferences[MobileBg]?.let(::Color) ?: defaults.mobileRootBg
+        } else {
+            defaults.mobileRootBg
+        }
     val textureImagePath = preferences[TextureImagePath].orEmpty()
     val mobileSearchBg = preferences.colorOr(MobileSearchBg, defaults.mobileSearchBg)
-    val storedTopbarBg = preferences[MobileTopbarBg]?.let(::Color)
-    val mobileTopbarBg = if (storedTopbarBg?.toArgb() == LegacyDefaultTopbarBg.toArgb()) {
-        defaults.mobileTopbarBg
-    } else {
-        storedTopbarBg ?: defaults.mobileTopbarBg
-    }
-    val storedTabbarBg = preferences[MobileTabbarBg]?.let(::Color)
-    val mobileTabbarBg = if (storedTabbarBg?.toArgb() == LegacyDefaultTabbarBg.toArgb()) {
-        defaults.mobileTabbarBg
-    } else {
-        storedTabbarBg ?: defaults.mobileTabbarBg
-    }
     val mobileChatBg = preferences.colorOr(MobileChatBg, defaults.mobileChatBg)
-    return defaults.copy(
+    val loaded = defaults.copy(
         mobileBg = preferences.colorOr(MobileBg, defaults.mobileBg),
+        mobileRootBg = rootBg,
         mobilePinnedBg = preferences.colorOr(MobilePinnedBg, defaults.mobilePinnedBg),
         mobileSurface = preferences.colorOr(MobileSurface, defaults.mobileSurface),
         mobileText = preferences.colorOr(MobileText, defaults.mobileText),
@@ -32,8 +37,8 @@ internal fun appearanceThemeFromPreferences(preferences: androidx.datastore.pref
         mobileSoft = preferences.colorOr(MobileSoft, defaults.mobileSoft),
         mobileLine = preferences.colorOr(MobileLine, defaults.mobileLine),
         mobileSearchBg = mobileSearchBg,
-        mobileTopbarBg = mobileTopbarBg,
-        mobileTabbarBg = mobileTabbarBg,
+        mobileTopbarBg = preferences.colorOr(MobileTopbarBg, defaults.mobileTopbarBg),
+        mobileTabbarBg = preferences.colorOr(MobileTabbarBg, defaults.mobileTabbarBg),
         mobileChatBg = mobileChatBg,
         mobileChatHeaderBg = preferences.colorOr(MobileChatHeaderBg, defaults.mobileChatHeaderBg),
         mobileChatMessageBg = preferences.colorOr(MobileChatMessageBg, defaults.mobileChatMessageBg),
@@ -56,7 +61,7 @@ internal fun appearanceThemeFromPreferences(preferences: androidx.datastore.pref
         textureOpacity = (preferences[TextureOpacity] ?: defaults.textureOpacity).coerceIn(0f, 1f),
         textureBlur = (preferences[TextureBlur] ?: defaults.textureBlur).coerceIn(0f, 24f),
         textureScrim = (preferences[TextureScrim] ?: defaults.textureScrim).coerceIn(0f, 1f),
-        isDark = preferences[AppearanceIsDark] ?: defaults.isDark,
+        isDark = storedDark,
         textureScrimAngle = preferences[TextureScrimAngle] ?: defaults.textureScrimAngle,
         textureScrimStart = (preferences[TextureScrimStart] ?: defaults.textureScrimStart).coerceIn(0f, ScrimStopCeiling),
         textureScrimMid = (preferences[TextureScrimMid] ?: defaults.textureScrimMid).coerceIn(0f, ScrimStopCeiling),
@@ -72,11 +77,33 @@ internal fun appearanceThemeFromPreferences(preferences: androidx.datastore.pref
             codeBackground = preferences.optionalColor(MarkdownCodeBackgroundColor),
         ),
     )
+    // Previous fixed dark defaults were stored as explicit colours. Treat that exact palette as the
+    // old default, not as a deliberate user-picked image palette, while retaining wallpaper state.
+    return if (legacyFixedDark) loaded.copy(
+        mobileBg = defaults.mobileBg,
+        mobileRootBg = defaults.mobileRootBg,
+        mobileSurface = defaults.mobileSurface,
+        mobileText = defaults.mobileText,
+        mobileMuted = defaults.mobileMuted,
+        mobileSoft = defaults.mobileSoft,
+        mobileSearchBg = defaults.mobileSearchBg,
+        mobileTopbarBg = defaults.mobileTopbarBg,
+        mobileTabbarBg = defaults.mobileTabbarBg,
+        mobileChatBg = defaults.mobileChatBg,
+        mobileChatHeaderBg = defaults.mobileChatHeaderBg,
+        mobileChatMessageBg = defaults.mobileChatMessageBg,
+        mobileChatMessageFg = defaults.mobileChatMessageFg,
+        mobileChatUserBg = defaults.mobileChatUserBg,
+        mobileChatUserFg = defaults.mobileChatUserFg,
+        mobileComposerBg = defaults.mobileComposerBg,
+        mobileInputBg = defaults.mobileInputBg,
+    ) else loaded
 }
 
 internal fun androidx.datastore.preferences.core.MutablePreferences.writeAppearanceTheme(theme: AppearanceTheme) {
     this[AppearanceThemeStored] = true
     this[MobileBg] = theme.mobileBg.toArgb()
+    this[MobileRootBg] = theme.mobileRootBg.toArgb()
     this[MobilePinnedBg] = theme.mobilePinnedBg.toArgb()
     this[MobileSurface] = theme.mobileSurface.toArgb()
     this[MobileText] = theme.mobileText.toArgb()
@@ -119,9 +146,6 @@ internal fun androidx.datastore.preferences.core.MutablePreferences.writeAppeara
     writeOptionalColor(MarkdownCodeForegroundColor, theme.markdownReadingColors.codeForeground)
     writeOptionalColor(MarkdownCodeBackgroundColor, theme.markdownReadingColors.codeBackground)
 }
-
-private val LegacyDefaultTopbarBg = Color(0xFFEEF4FE)
-private val LegacyDefaultTabbarBg = Color(0xFFF5F5F9)
 
 private fun androidx.datastore.preferences.core.Preferences.colorOr(
     key: androidx.datastore.preferences.core.Preferences.Key<Int>,

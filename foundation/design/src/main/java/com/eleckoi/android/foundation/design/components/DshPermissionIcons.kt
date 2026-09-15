@@ -7,7 +7,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
 
-/** Permission glyphs ported from DSH Web's `PermissionSelect` design set. */
+/** Permission glyph vectors for the permission selector. */
 object DshPermissionIcons {
     val ReadOnly: ImageVector by lazy {
         permissionIcon("DshPermissionReadOnly") {

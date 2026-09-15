@@ -18,7 +18,7 @@ class VariableJsonTreeImporterTest {
     fun `nested json becomes a deterministic object and variable tree`() {
         val result = importer.replaceChildren(
             targetObjectId = "target",
-            rawJson = """{"profile":{"name":"Ada","age":2},"tags":["friend"],"ready":true}""",
+            rawJson = """{"profile":{"name":"sample","age":2},"tags":["friend"],"ready":true}""",
             objects = listOf(VariableObjectConfig(id = "target", name = "目标")),
             variables = emptyList(),
             expandedObjectIds = emptySet(),

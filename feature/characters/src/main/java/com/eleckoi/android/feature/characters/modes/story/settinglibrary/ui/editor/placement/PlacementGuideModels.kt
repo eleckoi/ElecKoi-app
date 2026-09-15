@@ -30,6 +30,11 @@ internal enum class FixedPlacementNode(
     val after: SettingLibraryPosition,
 ) {
     History("聊天记录", SettingLibraryPosition.BeforeHistory, SettingLibraryPosition.AfterHistory),
+    LatestUserInput(
+        "用户最新输入",
+        SettingLibraryPosition.BeforeLatestUserInput,
+        SettingLibraryPosition.AfterLatestUserInput,
+    ),
     ToolFlow("工具调用流程", SettingLibraryPosition.BeforeToolFlow, SettingLibraryPosition.AfterToolFlow),
 }
 
@@ -52,6 +57,9 @@ internal fun placementGuideRows(
         customAt(SettingLibraryPosition.BeforeHistory)
         add(PlacementGuideRow.FixedGroup(FixedPlacementNode.History))
         customAt(SettingLibraryPosition.AfterHistory)
+        customAt(SettingLibraryPosition.BeforeLatestUserInput)
+        add(PlacementGuideRow.FixedGroup(FixedPlacementNode.LatestUserInput))
+        customAt(SettingLibraryPosition.AfterLatestUserInput)
         customAt(SettingLibraryPosition.BeforeToolFlow)
         add(PlacementGuideRow.FixedGroup(FixedPlacementNode.ToolFlow))
         customAt(SettingLibraryPosition.AfterToolFlow)

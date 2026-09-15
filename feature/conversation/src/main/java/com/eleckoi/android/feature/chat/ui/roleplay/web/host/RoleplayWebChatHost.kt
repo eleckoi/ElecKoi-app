@@ -2,17 +2,19 @@ package com.eleckoi.android.feature.chat.ui.roleplay.web.host
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.content.Intent
 import android.graphics.Color as AndroidColor
 import android.net.Uri
 import android.webkit.MimeTypeMap
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
-import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.core.net.toUri
+import com.eleckoi.android.feature.chat.ui.web.configureDesktopAlignedAuthorFrontend
+import com.eleckoi.android.feature.chat.ui.web.installDesktopAlignedWindowOpenHandler
+import com.eleckoi.android.feature.chat.ui.web.isDesktopAllowedAuthorFrontendResource
+import com.eleckoi.android.feature.chat.ui.web.openDesktopAlignedExternalUri
 import com.eleckoi.android.feature.chat.ui.roleplay.web.document.buildRoleplayTranscriptDocument
 import com.eleckoi.android.feature.chat.ui.roleplay.web.model.RoleplayTranscriptAssetPath
 import com.eleckoi.android.feature.chat.ui.roleplay.web.model.RoleplayTranscriptMediaPath
@@ -21,7 +23,10 @@ import com.eleckoi.android.feature.chat.ui.roleplay.web.model.RoleplayTranscript
 import com.eleckoi.android.feature.chat.ui.roleplay.web.model.toBootstrapJson
 import com.eleckoi.android.feature.chat.ui.roleplay.web.surface.RoleplayWebChatCallbacks
 import com.eleckoi.android.sdk.author.AuthorFrontendSdk
-import com.eleckoi.android.sdk.author.AuthorInlineMessageGateway
+import com.eleckoi.android.sdk.author.AuthorApiEnvironment
+import com.eleckoi.android.sdk.author.AuthorApiRouter
+import com.eleckoi.android.sdk.author.AuthorApiRuntimeState
+import com.eleckoi.android.sdk.author.AuthorChatGateway
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -35,7 +40,7 @@ import java.io.FileInputStream
 internal class RoleplayWebChatHost(
     context: Context,
     initialCallbacks: RoleplayWebChatCallbacks,
-    messageGateway: AuthorInlineMessageGateway,
+    messageGateway: AuthorChatGateway,
 ) {
     private val appContext = context.applicationContext
     private var callbacks = initialCallbacks
@@ -54,6 +59,17 @@ internal class RoleplayWebChatHost(
     private var richHeightLoadingSessionId = ""
     private var richHeightReadySessionId = ""
     private var restoredRichHeights = JSONObject()
+    private val authorRuntimeRouter = AuthorApiRouter(
+        AuthorApiEnvironment.forChat(
+            appContext = appContext,
+            runtime = AuthorApiRuntimeState(
+                surface = "chat-ui",
+                characterId = messageGateway.snapshot().draft?.session?.characterId.orEmpty(),
+                characterName = messageGateway.snapshot().draft?.session?.characterName.orEmpty(),
+            ),
+            gateway = messageGateway,
+        ),
+    )
     private val bridge = RoleplayTranscriptBridge(
         appContext = appContext,
         messageProvider = { id -> latestModel?.messages?.firstOrNull { it.source.id == id }?.source },
@@ -64,7 +80,10 @@ internal class RoleplayWebChatHost(
         onTransactionRejected = ::onTransactionRejected,
         onRichHeight = ::onRichHeight,
     )
-    private val document = buildRoleplayTranscriptDocument(AuthorFrontendSdk.source(appContext))
+    private val document = buildRoleplayTranscriptDocument(
+        authorSdkSource = AuthorFrontendSdk.source(appContext),
+        authorLibrariesHead = AuthorFrontendSdk.librariesHead(),
+    )
 
     @SuppressLint("SetJavaScriptEnabled")
     val webView: WebView = WebView(context).apply {
@@ -73,21 +92,12 @@ internal class RoleplayWebChatHost(
         overScrollMode = WebView.OVER_SCROLL_NEVER
         isHorizontalScrollBarEnabled = false
         settings.apply {
-            javaScriptEnabled = true
-            domStorageEnabled = true
-            allowFileAccess = false
-            allowContentAccess = false
-            javaScriptCanOpenWindowsAutomatically = false
-            setSupportMultipleWindows(false)
-            setSupportZoom(false)
-            builtInZoomControls = false
-            displayZoomControls = false
-            mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-            mediaPlaybackRequiresUserGesture = true
-            safeBrowsingEnabled = true
-            cacheMode = WebSettings.LOAD_DEFAULT
+            configureDesktopAlignedAuthorFrontend()
             textZoom = 100
             offscreenPreRaster = true
+        }
+        installDesktopAlignedWindowOpenHandler { uri ->
+            appContext.openDesktopAlignedExternalUri(uri)
         }
         val bridgeAvailable = bridge.install(this)
         if (!bridgeAvailable) {
@@ -99,7 +109,16 @@ internal class RoleplayWebChatHost(
                 request: WebResourceRequest,
             ): WebResourceResponse? {
                 val uri = request.url
-                if (uri.scheme in InlineResourceSchemes) return null
+                if (
+                    uri.scheme == "https" &&
+                    uri.host == RoleplayTranscriptOrigin.toUri().host &&
+                    uri.path?.startsWith(AuthorRuntimePath) == true
+                ) {
+                    val runtimePath = uri.path.orEmpty().removePrefix(AuthorRuntimePath)
+                    return AuthorFrontendSdk.runtimeResource(appContext, runtimePath)
+                        ?: authorRuntimeRouter.runtimeResource(runtimePath)
+                        ?: missingMediaResponse()
+                }
                 if (
                     uri.scheme == "https" &&
                     uri.host == RoleplayTranscriptOrigin.toUri().host &&
@@ -120,7 +139,7 @@ internal class RoleplayWebChatHost(
                 }
                 // Leave authored iframe networking to the browser so declared fonts, styles,
                 // images, scripts, and fetch requests are not replaced by a synthetic 403.
-                if (uri.scheme in FrontendNetworkResourceSchemes) return null
+                if (isDesktopAllowedAuthorFrontendResource(uri.scheme)) return null
                 return blockedResourceResponse()
             }
 
@@ -369,14 +388,11 @@ internal class RoleplayWebChatHost(
     }
 
     private fun openExternalUri(uri: Uri): Boolean {
-        if (uri.scheme !in ExternalSchemes) return true
-        return runCatching {
-            appContext.startActivity(
-                Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-            )
-        }.isSuccess
+        return appContext.openDesktopAlignedExternalUri(uri)
     }
 }
+
+private const val AuthorRuntimePath = "/eleckoi-runtime/"
 
 internal fun shouldKeepRoleplayNavigationInWebView(
     isForMainFrame: Boolean,

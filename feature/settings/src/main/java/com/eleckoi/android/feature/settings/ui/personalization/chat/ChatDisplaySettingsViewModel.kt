@@ -46,7 +46,6 @@ class ChatDisplaySettingsViewModel(
         if (draft.roleplayCardPanel != stored.roleplayCardPanel) {
             repository.setChatRoleplayCardPanel(draft.roleplayCardPanel)
         }
-        if (draft.roleplayScrim != stored.roleplayScrim) repository.setChatRoleplayScrim(draft.roleplayScrim)
         if (draft.cornerRadius != stored.cornerRadius) repository.setChatBubbleCornerRadius(draft.cornerRadius)
         if (draft.avatarSize != stored.avatarSize) repository.setChatAvatarSize(draft.avatarSize)
         if (draft.nameFontSize != stored.nameFontSize) repository.setChatNameFontSize(draft.nameFontSize)

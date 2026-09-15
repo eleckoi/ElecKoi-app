@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.eleckoi.android.app.ElecKoiApplication
@@ -13,7 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameNanos
 import com.eleckoi.android.feature.characters.ui.CharactersViewModel
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.ui.SettingLibraryViewModel
-import com.eleckoi.android.feature.characters.modes.story.presets.ui.StoryPresetViewModel
+import com.eleckoi.android.feature.characters.presets.ui.AgentPresetViewModel
 import com.eleckoi.android.feature.characters.modes.story.variables.ui.VariableConfigViewModel
 import com.eleckoi.android.feature.characters.modes.story.regex.ui.RegexRulesViewModel
 import com.eleckoi.android.feature.characters.modes.story.frontendbeauty.ui.FrontendBeautyViewModel
@@ -31,13 +32,14 @@ import com.eleckoi.android.feature.settings.ui.personalization.chat.ChatDisplayS
 import com.eleckoi.android.feature.settings.ui.runtime.LocalRuntimeSettingsViewModel
 import com.eleckoi.android.feature.settings.ui.websearch.WebSearchSettingsViewModel
 import com.eleckoi.android.feature.settings.ui.remotedsh.RemoteDshSettingsViewModel
-import com.eleckoi.android.feature.agenttools.AgentToolsViewModel
 import com.eleckoi.android.feature.chat.data.markdown.preloadNativeMarkdownRuntime
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.eleckoi.android.feature.preferences.UiPreferences
 import com.eleckoi.android.app.update.AppUpdateViewModel
 import com.eleckoi.android.app.update.installedVersionName
+import com.eleckoi.android.foundation.design.ElecKoiTheme
+import com.eleckoi.android.foundation.design.withDarkAppearance
 
 @Composable
 fun ElecKoiApp() {
@@ -50,7 +52,8 @@ fun ElecKoiApp() {
     val uiPreferences by repository.uiPreferencesFlow.collectAsStateWithLifecycle(
         initialValue = UiPreferences(),
     )
-    val initialAppearance = uiPreferences.appearanceTheme
+    val darkAppearance = uiPreferences.appearanceMode.resolvesDark(isSystemInDarkTheme())
+    val initialAppearance = uiPreferences.appearanceTheme.withDarkAppearance(darkAppearance)
     val chatViewModel: ChatViewModel = viewModel(
         factory = ChatViewModel.factory(
             chatService = repository,
@@ -69,8 +72,8 @@ fun ElecKoiApp() {
     val settingLibraryViewModel: SettingLibraryViewModel = viewModel(
         factory = SettingLibraryViewModel.factory(repository),
     )
-    val storyPresetViewModel: StoryPresetViewModel = viewModel(
-        factory = StoryPresetViewModel.factory(repository.storyPresetRepository),
+    val agentPresetViewModel: AgentPresetViewModel = viewModel(
+        factory = AgentPresetViewModel.factory(repository.agentPresetRepository),
     )
     val variableConfigViewModel: VariableConfigViewModel = viewModel(
         factory = VariableConfigViewModel.factory(repository),
@@ -127,10 +130,6 @@ fun ElecKoiApp() {
     val chatDisplaySettingsViewModel: ChatDisplaySettingsViewModel = viewModel(
         factory = ChatDisplaySettingsViewModel.factory(repository.uiPreferencesRepository),
     )
-    val agentToolsViewModel: AgentToolsViewModel = viewModel(
-        factory = AgentToolsViewModel.factory(container.agentToolsRepository),
-    )
-
     LaunchedEffect(chatViewModel) {
         chatViewModel.loadInitialDraft()
     }
@@ -144,23 +143,24 @@ fun ElecKoiApp() {
         }
     }
 
-    CompositionLocalProvider(
-        LocalOverscrollFactory provides null,
-        LocalChatRenderingPreferences provides ChatRenderingPreferences(
-            reasoningDisplayMode = uiPreferences.chatReasoningDisplayMode,
-            toolTimelineStyle = uiPreferences.chatToolTimelineStyle,
-            codeBlockStyle = uiPreferences.chatCodeBlockStyle,
-            codeBlockWrapEnabled = uiPreferences.chatCodeBlockWrapEnabled,
-            codeBlockShowAllEnabled = uiPreferences.chatCodeBlockShowAllEnabled,
-            timelineThinkingAnimation = uiPreferences.chatTimelineThinkingAnimation,
-        ),
-    ) {
-        ProvideAppFont {
-            MobileShell(
+    ElecKoiTheme(darkTheme = darkAppearance) {
+        CompositionLocalProvider(
+            LocalOverscrollFactory provides null,
+            LocalChatRenderingPreferences provides ChatRenderingPreferences(
+                reasoningDisplayMode = uiPreferences.chatReasoningDisplayMode,
+                toolTimelineStyle = uiPreferences.chatToolTimelineStyle,
+                codeBlockStyle = uiPreferences.chatCodeBlockStyle,
+                codeBlockWrapEnabled = uiPreferences.chatCodeBlockWrapEnabled,
+                codeBlockShowAllEnabled = uiPreferences.chatCodeBlockShowAllEnabled,
+                timelineThinkingAnimation = uiPreferences.chatTimelineThinkingAnimation,
+            ),
+        ) {
+            ProvideAppFont {
+                MobileShell(
                 shellViewModel = shellViewModel,
                 charactersViewModel = charactersViewModel,
                 settingLibraryViewModel = settingLibraryViewModel,
-                storyPresetViewModel = storyPresetViewModel,
+                agentPresetViewModel = agentPresetViewModel,
                 variableConfigViewModel = variableConfigViewModel,
                 regexRulesViewModel = regexRulesViewModel,
                 frontendBeautyViewModel = frontendBeautyViewModel,
@@ -174,16 +174,17 @@ fun ElecKoiApp() {
                 profileViewModel = profileViewModel,
                 themeViewModel = themeViewModel,
                 chatDisplaySettingsViewModel = chatDisplaySettingsViewModel,
-                agentToolsViewModel = agentToolsViewModel,
                 chatViewModel = chatViewModel,
                 dataBackupService = container.dataBackupService,
                 toolContextSnapshotProvider = container::agentToolContextSnapshot,
+                toolGroupsProvider = container::agentToolGroups,
                 agentBackgroundProtectionEnabled = agentBackgroundProtectionEnabled,
                 onAgentBackgroundProtectionEnabledChange =
                     container.agentBackgroundProtection::setEnabled,
                 onAgentBackgroundProtectionPermissionChanged =
                     container.agentBackgroundProtection::refreshPermission,
-            )
+                )
+            }
         }
     }
 }

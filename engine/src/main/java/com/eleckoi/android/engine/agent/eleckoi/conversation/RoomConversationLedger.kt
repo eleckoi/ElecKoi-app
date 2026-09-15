@@ -8,6 +8,7 @@ import androidx.paging.PagingState
 import com.eleckoi.android.foundation.storage.room.ElecKoiDatabase
 import com.eleckoi.android.foundation.storage.room.agent.dao.AgentLedgerDao
 import com.eleckoi.android.foundation.storage.room.agent.dao.AgentPagedTurnRef
+import com.eleckoi.android.foundation.storage.room.agent.dao.AgentPublicMessageRef
 import com.eleckoi.android.foundation.storage.room.agent.entity.AgentBranchEntity
 import com.eleckoi.android.foundation.storage.room.agent.entity.AgentBranchTurnEntity
 import com.eleckoi.android.foundation.storage.room.agent.entity.AgentContentPartEntity
@@ -35,6 +36,12 @@ import kotlinx.coroutines.flow.flowOn
  * Callers mutate it inside the same Room transaction that updates chat_sessions. Rust runtime
  * threads never participate in these transactions.
  */
+data class LedgerSuffixDeletion(
+    val messageIds: List<String>,
+    val retainedVariableStateJson: String,
+    val obsoleteRuntimeThreadIds: Set<String>,
+)
+
 class RoomConversationLedger(
     private val database: ElecKoiDatabase,
     private val dao: AgentLedgerDao = database.agentLedgerDao(),
@@ -62,12 +69,6 @@ class RoomConversationLedger(
             AgentBranchEntity(
                 id = branchId,
                 conversationId = conversationId,
-                parentBranchId = null,
-                forkedFromTurnId = null,
-                headSequence = -1,
-                name = "主分支",
-                reason = "conversation_created",
-                createdAt = createdAt,
             ),
         )
         replaceTimelineInTransaction(
@@ -141,7 +142,6 @@ class RoomConversationLedger(
                     ),
                 ),
             )
-            dao.updateBranchHead(conversation.activeBranchId, nextSequence)
         }
         finishMutation(conversationId, updatedAt, rebuildDisplayCache)
     }
@@ -206,10 +206,57 @@ class RoomConversationLedger(
         ).single()
         persistEntry(updatedEntry, clearResponseWhenMissing = true)
         dao.deleteBranchTurnsFrom(conversation.activeBranchId, ref.sequence + 1)
-        dao.updateBranchHead(conversation.activeBranchId, ref.sequence)
         dao.deleteUnreferencedTurns(conversationId)
         dao.deleteUnreferencedContentParts(conversationId)
         finishMutation(conversationId, updatedAt)
+    }
+
+    /** Removes a public message and its active causal suffix without reading any message body. */
+    fun deleteFromMessageInTransaction(
+        conversationId: String,
+        sourceMessageId: String,
+        updatedAt: String,
+    ): LedgerSuffixDeletion {
+        requireTransaction()
+        val conversation = requireNotNull(dao.conversation(conversationId)) { "对话不存在：$conversationId" }
+        val userTurn = dao.turnBySourceMessageId(conversationId, sourceMessageId)
+        val reply = if (userTurn == null) dao.responseBySourceMessageId(conversationId, sourceMessageId) else null
+        val turnId = userTurn?.id ?: reply?.turnId
+            ?: throw IllegalArgumentException("没有找到消息：$sourceMessageId")
+        val ref = dao.branchTurn(conversation.activeBranchId, turnId)
+            ?: throw IllegalArgumentException("消息不在当前聊天分支：$sourceMessageId")
+        val rows = dao.publicMessagesFrom(conversation.activeBranchId, ref.sequence)
+        val obsoleteRuntimeThreadIds = dao.runtimeThreadIds(conversationId).toSet()
+        val selected = rows.firstOrNull() ?: error("聊天分支缺少被删除消息")
+        val deletedIds = publicDeletedMessageIds(
+            rows = rows,
+            selectedSequence = ref.sequence,
+            selectedResponseIndex = reply?.responseIndex,
+        )
+        require(deletedIds.isNotEmpty()) { "没有可删除的消息：$sourceMessageId" }
+        if (reply != null) {
+            dao.deleteResponsesFromIndex(turnId, reply.responseIndex)
+            dao.deleteBranchTurnsFrom(conversation.activeBranchId, ref.sequence + 1)
+        } else {
+            dao.deleteBranchTurnsFrom(conversation.activeBranchId, ref.sequence)
+        }
+        dao.deleteUnreferencedTurns(conversationId)
+        dao.deleteUnreferencedContentParts(conversationId)
+        // A DSH thread represents the whole conversation, not just one reply. Once its suffix is
+        // changed, every retained pointer is stale and the next turn must rebuild from Room.
+        dao.clearRuntimeAssociations(conversationId)
+        finishMutation(conversationId, updatedAt)
+        return LedgerSuffixDeletion(
+            messageIds = deletedIds,
+            retainedVariableStateJson = if (reply != null && reply.responseIndex > 0) {
+                rows.firstOrNull {
+                    it.sequence == ref.sequence && it.responseIndex == reply.responseIndex - 1
+                }?.responseVariableStateJson.orEmpty().ifBlank { selected.turnVariableStateJson }
+            } else {
+                selected.turnVariableStateJson
+            },
+            obsoleteRuntimeThreadIds = obsoleteRuntimeThreadIds,
+        )
     }
 
     fun page(
@@ -350,12 +397,6 @@ class RoomConversationLedger(
                 )
             },
         )
-        val headSequence = if (selected.isEmpty()) {
-            (fromSequence - 1).coerceAtLeast(-1)
-        } else {
-            fromSequence + selected.lastIndex
-        }
-        dao.updateBranchHead(branchId, headSequence)
         dao.deleteUnreferencedTurns(conversationId)
         dao.deleteUnreferencedContentParts(conversationId)
         finishMutation(conversationId, updatedAt)
@@ -425,9 +466,13 @@ class RoomConversationLedger(
         ownerId: String,
         incoming: List<AgentContentPartEntity>,
     ) {
+        val current = dao.contentParts(ownerType, listOf(ownerId))
         val plan = contentPartWritePlan(
-            current = dao.contentParts(ownerType, listOf(ownerId)),
-            incoming = incoming.toStorageChunks(),
+            current = current,
+            incoming = preserveInternalCheckpoints(
+                current = current,
+                incoming = incoming.toStorageChunks(),
+            ),
         )
         if (plan.deletes.isNotEmpty()) dao.deleteContentPartRows(plan.deletes)
         if (plan.upserts.isNotEmpty()) dao.upsertContentParts(plan.upserts)
@@ -470,7 +515,6 @@ class RoomConversationLedger(
                     ledgerRevision = conversation.revision,
                     payloadJson = payload,
                     rendererVersion = DisplayCacheRendererVersion,
-                    updatedAt = updatedAt,
                 )
             },
         )
@@ -538,5 +582,49 @@ class RoomConversationLedger(
 
     private fun requireTransaction() {
         check(database.inTransaction()) { "Room 聊天主账本必须与会话元数据在同一事务中写入" }
+    }
+}
+
+/** Message projection rewrites must not erase product-owned rollback checkpoints. */
+internal fun preserveInternalCheckpoints(
+    current: List<AgentContentPartEntity>,
+    incoming: List<AgentContentPartEntity>,
+): List<AgentContentPartEntity> {
+    val incomingKeys = incoming.mapTo(hashSetOf(), ::checkpointStorageKey)
+    return incoming + current.filter { row ->
+        row.kind == SettingLibraryStateKind && checkpointStorageKey(row) !in incomingKeys
+    }
+}
+
+private data class CheckpointStorageKey(
+    val ownerType: String,
+    val ownerId: String,
+    val partIndex: Int,
+    val chunkIndex: Int,
+)
+
+private fun checkpointStorageKey(row: AgentContentPartEntity) = CheckpointStorageKey(
+    ownerType = row.ownerType,
+    ownerId = row.ownerId,
+    partIndex = row.partIndex,
+    chunkIndex = row.chunkIndex,
+)
+
+private const val SettingLibraryStateKind = "setting_library_state"
+
+internal fun publicDeletedMessageIds(
+    rows: List<AgentPublicMessageRef>,
+    selectedSequence: Int,
+    selectedResponseIndex: Int?,
+): List<String> = buildList {
+    rows.groupBy(AgentPublicMessageRef::sequence).forEach { (sequence, entries) ->
+        if (sequence != selectedSequence || selectedResponseIndex == null) {
+            entries.firstOrNull()?.turnMessageId?.let { add(it) }
+        }
+        entries.forEach { entry ->
+            val shouldDeleteResponse = sequence != selectedSequence || selectedResponseIndex == null ||
+                (entry.responseIndex ?: -1) >= selectedResponseIndex
+            if (shouldDeleteResponse) entry.responseMessageId?.let { add(it) }
+        }
     }
 }

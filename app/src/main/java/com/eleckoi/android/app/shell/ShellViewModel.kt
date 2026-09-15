@@ -1,12 +1,12 @@
 package com.eleckoi.android.app.shell
 
 import com.eleckoi.android.foundation.design.components.RootTab
-import com.eleckoi.android.foundation.design.components.BottomTab
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.eleckoi.android.app.service.ShellService
 import com.eleckoi.android.feature.chat.model.ChatListItem
+import com.eleckoi.android.feature.preferences.ListCharacterArtwork
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,9 +25,7 @@ internal data class ShellUiState(
     val pinnedChatIds: List<String> = emptyList(),
     val hiddenChatIds: List<String> = emptyList(),
     val searchHistory: List<String> = emptyList(),
-    val presetPagePinned: Boolean = false,
-    val pluginPagePinned: Boolean = false,
-    val commonPageOrder: List<BottomTab> = BottomTab.DefaultOrder,
+    val listCharacterArtwork: ListCharacterArtwork = ListCharacterArtwork.Default,
     val activeChatSessionIds: Map<String, String> = emptyMap(),
     val rootLoading: Boolean = true,
     val rootErrorMessage: String = "",
@@ -43,8 +41,7 @@ internal sealed interface ShellIntent {
     data class RememberSearch(val term: String) : ShellIntent
     data class ForgetSearch(val term: String) : ShellIntent
     data object ClearSearchHistory : ShellIntent
-    data class SetOptionalCommonPage(val tab: BottomTab?) : ShellIntent
-    data class SetCommonPageOrder(val visibleTabs: List<BottomTab>) : ShellIntent
+    data class SetListCharacterArtwork(val artwork: ListCharacterArtwork) : ShellIntent
 }
 
 internal class ShellViewModel(
@@ -70,8 +67,7 @@ internal class ShellViewModel(
                 forgetSearchTerm(_uiState.value.searchHistory, intent.term),
             )
             ShellIntent.ClearSearchHistory -> writeSearchHistory(emptyList())
-            is ShellIntent.SetOptionalCommonPage -> setOptionalCommonPage(intent.tab)
-            is ShellIntent.SetCommonPageOrder -> setCommonPageOrder(intent.visibleTabs)
+            is ShellIntent.SetListCharacterArtwork -> setListCharacterArtwork(intent.artwork)
         }
     }
 
@@ -96,9 +92,7 @@ internal class ShellViewModel(
                             pinnedChatIds = preferences.pinnedChatIds,
                             hiddenChatIds = preferences.hiddenChatIds,
                             searchHistory = preferences.searchHistory,
-                            presetPagePinned = preferences.presetPagePinned,
-                            pluginPagePinned = preferences.pluginPagePinned,
-                            commonPageOrder = BottomTab.orderedTabs(preferences.commonPageOrder),
+                            listCharacterArtwork = preferences.listCharacterArtwork,
                             activeChatSessionIds = chats
                                 .map(ChatListItem::characterId)
                                 .filter(String::isNotBlank)
@@ -169,69 +163,20 @@ internal class ShellViewModel(
         }
     }
 
-    private fun setOptionalCommonPage(tab: BottomTab?) {
-        if (tab != null && tab != BottomTab.Presets && tab != BottomTab.Plugins) return
-        val previous = _uiState.value
-        val previousOptional = BottomTab.optionalPage(
-            presetsPinned = previous.presetPagePinned,
-            pluginsPinned = previous.pluginPagePinned,
-            order = previous.commonPageOrder,
-        )
-        val nextOrder = if (previousOptional != null && tab != null && previousOptional != tab) {
-            previous.commonPageOrder.map { orderedTab ->
-                when (orderedTab) {
-                    previousOptional -> tab
-                    tab -> previousOptional
-                    else -> orderedTab
-                }
-            }
-        } else {
-            previous.commonPageOrder
-        }
-        _uiState.update {
-            it.copy(
-                presetPagePinned = tab == BottomTab.Presets,
-                pluginPagePinned = tab == BottomTab.Plugins,
-                commonPageOrder = nextOrder,
-                rootErrorMessage = "",
-            )
-        }
+    private fun setListCharacterArtwork(artwork: ListCharacterArtwork) {
+        val previous = _uiState.value.listCharacterArtwork
+        if (artwork == previous) return
+        _uiState.update { it.copy(listCharacterArtwork = artwork, rootErrorMessage = "") }
         viewModelScope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
-                    shellService.setOptionalCommonPage(
-                        tabKey = tab?.storageKey,
-                        order = nextOrder.map(BottomTab::storageKey),
-                    )
+                    shellService.setListCharacterArtwork(artwork)
                 }
             }.onFailure { error ->
                 _uiState.update {
                     it.copy(
-                        presetPagePinned = previous.presetPagePinned,
-                        pluginPagePinned = previous.pluginPagePinned,
-                        commonPageOrder = previous.commonPageOrder,
-                        rootErrorMessage = error.message ?: "保存常用页面失败",
-                    )
-                }
-            }
-        }
-    }
-
-    private fun setCommonPageOrder(visibleTabs: List<BottomTab>) {
-        val previous = _uiState.value.commonPageOrder
-        val next = BottomTab.mergeVisibleOrder(previous, visibleTabs)
-        if (next == previous) return
-        _uiState.update { it.copy(commonPageOrder = next, rootErrorMessage = "") }
-        viewModelScope.launch {
-            runCatching {
-                withContext(Dispatchers.IO) {
-                    shellService.setCommonPageOrder(next.map(BottomTab::storageKey))
-                }
-            }.onFailure { error ->
-                _uiState.update {
-                    it.copy(
-                        commonPageOrder = previous,
-                        rootErrorMessage = error.message ?: "保存常用页面顺序失败",
+                        listCharacterArtwork = previous,
+                        rootErrorMessage = error.message ?: "保存列表角色图失败",
                     )
                 }
             }

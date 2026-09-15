@@ -8,7 +8,6 @@ import com.eleckoi.android.engine.agent.api.AgentInputImage
 import com.eleckoi.android.engine.agent.api.AgentVirtualFileSearch
 import com.eleckoi.android.engine.agent.tools.AgentToolContextSnapshot
 import com.eleckoi.android.engine.agent.tools.AgentToolRequestPolicy
-import com.eleckoi.android.engine.agent.tools.AgentToolScopes
 import com.eleckoi.android.engine.agent.background.AgentRunManager
 import com.eleckoi.android.engine.agent.diagnostics.AgentRequestDiagnostics
 import com.eleckoi.android.engine.generation.config.AndroidKeystoreModelSecretCodec
@@ -27,12 +26,14 @@ import com.eleckoi.android.feature.characters.transfer.data.CharacterTransferRep
 import com.eleckoi.android.feature.characters.data.UserProfileRepository
 import com.eleckoi.android.feature.characters.model.CharactersPayload
 import com.eleckoi.android.feature.characters.model.UserProfile
+import com.eleckoi.android.feature.characters.model.AppDefaultChatBackground
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.data.SettingLibraryRepository
-import com.eleckoi.android.feature.characters.modes.story.presets.data.StoryPresetRepository
+import com.eleckoi.android.feature.characters.presets.data.AgentPresetRepository
 import com.eleckoi.android.feature.characters.modes.story.regex.data.RegexRuleRepository
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibrary
 import com.eleckoi.android.feature.chat.data.ChatSessionStore
 import com.eleckoi.android.feature.chat.data.ChatInputImageStore
+import com.eleckoi.android.feature.chat.data.ChatGenerationStatsStore
 import com.eleckoi.android.engine.agent.eleckoi.conversation.ConversationAttachmentCleanup
 import com.eleckoi.android.engine.agent.eleckoi.conversation.RoomConversationLedger
 import com.eleckoi.android.feature.chat.ui.blocks.markdown.MarkdownRebuildableCaches
@@ -41,6 +42,7 @@ import com.eleckoi.android.feature.chat.model.ChatDraft
 import com.eleckoi.android.feature.chat.model.ChatListItem
 import com.eleckoi.android.feature.settings.data.appearance.AppearanceRepository
 import com.eleckoi.android.feature.preferences.UiPreferencesRepository
+import com.eleckoi.android.feature.preferences.NewCharacterBackground
 import com.eleckoi.android.feature.appfont.data.AppFontRepository
 import com.eleckoi.android.app.service.backup.DataBackupService
 import com.eleckoi.android.app.service.cleanup.PersistentCleanupQueue
@@ -56,12 +58,6 @@ import java.io.File
  */
 internal class ElecKoiServiceGraph(
     context: Context,
-    isCreatorCapabilityEnabled: () -> Boolean,
-    toolModelConfigId: (scopeId: String, groupId: String) -> String,
-    initializeCharacterTools: (characterId: String) -> Unit,
-    deleteCharacterTools: (Collection<String>) -> Unit,
-    exportToolConfig: () -> String,
-    restoreToolConfig: (String) -> Unit,
 ) {
     private var agentRuns: AgentRunManager? = null
     private val captureProviderRequestsByDefault = (
@@ -75,15 +71,22 @@ internal class ElecKoiServiceGraph(
     private val store = JsonFileStore(context)
     private val database = ElecKoiDatabase.get(context)
     private val cleanupQueue = PersistentCleanupQueue(database)
-    private val characters = CharacterRepository(store, database)
+    internal val uiPreferences = UiPreferencesRepository(context)
+    private val characters = CharacterRepository(store, database) {
+        if (uiPreferences.preferencesFlow.value.newCharacterBackground == NewCharacterBackground.App) {
+            AppDefaultChatBackground
+        } else {
+            ""
+        }
+    }
     private val creatorWorkspaces = CreatorWorkspaceRepository(context.applicationContext, database)
     private val settingLibrary = SettingLibraryRepository(
         database = database,
         characters = characters,
     )
     private val regexRules = RegexRuleRepository(database, characters)
-    internal val storyPresets = StoryPresetRepository(
-        dao = database.storyPresetDao(),
+    internal val agentPresets = AgentPresetRepository(
+        dao = database.agentPresetDao(),
         store = store,
         onActivePresetChanged = regexRules::notifyActivePresetChanged,
     )
@@ -100,7 +103,6 @@ internal class ElecKoiServiceGraph(
         database = database,
         secretCodec = AndroidKeystoreModelSecretCodec(),
     )
-    internal val uiPreferences = UiPreferencesRepository(context)
     private val profile = UserProfileRepository(context, store, database)
     private val appFont = AppFontRepository(context)
     private val appearance = AppearanceRepository(store, uiPreferences)
@@ -108,11 +110,15 @@ internal class ElecKoiServiceGraph(
         rootDirectory = File(context.filesDir, "generated/chat-images"),
     )
     private val generationAttempts = GenerationAttemptRepository(database)
+    private val chatGenerationStats = ChatGenerationStatsStore(
+        File(context.filesDir, "chat/sessions"),
+    )
     private val chatInputImages = ChatInputImageStore(context.applicationContext)
     private val sessions = ChatSessionStore(
         database = database,
         characters = characters,
         generationAttempts = generationAttempts,
+        generationStats = chatGenerationStats,
         historySaveModeProvider = { uiPreferences.read().historySaveMode },
         replyImageGenerator = replyImageGenerator,
         inputImageStore = chatInputImages,
@@ -140,14 +146,12 @@ internal class ElecKoiServiceGraph(
         settingLibrary = settingLibrary,
         variableConfig = variableConfig,
         regexRules = regexRules,
-        storyPresets = storyPresets,
+        agentPresets = agentPresets,
         sessions = sessions,
         uiPreferences = uiPreferences,
         appFont = appFont,
         modelConfigs = settings,
         frontendProjects = frontendProjects,
-        exportToolConfig = exportToolConfig,
-        restoreToolConfig = restoreToolConfig,
         database = database,
         creatorWorkspaces = creatorWorkspaces,
     )
@@ -157,9 +161,6 @@ internal class ElecKoiServiceGraph(
         settingLibrary = settingLibrary,
         variableConfig = variableConfig,
         regexRules = regexRules,
-        frontendProjects = frontendProjects,
-        initializeImportedCharacterTools = initializeCharacterTools,
-        deleteImportedCharacterTools = deleteCharacterTools,
     )
     private val modelSelections = ChatModelSelectionResolver(
         settings = settings,
@@ -174,7 +175,6 @@ internal class ElecKoiServiceGraph(
     val regexRuleService = RegexRuleServiceImpl(regexRules)
     val frontendProjectService = FrontendProjectServiceImpl(frontendProjects)
     val characterService = CharacterServiceImpl(
-        deleteCharacterTools = deleteCharacterTools,
         beforeDeleteCharacters = { ids ->
             val active = agentRuns?.activeRun?.value?.descriptor
             if (active != null) {
@@ -183,7 +183,7 @@ internal class ElecKoiServiceGraph(
                     ?.characterId
                 val workspace = creatorWorkspaces.get(active.workspaceId)
                 check(activeCharacter !in ids &&
-                    !(workspace?.linkedCharacterMode != null && workspace.linkedCharacterId in ids)
+                    !(workspace?.characterOwned == true && workspace.linkedCharacterId in ids)
                 ) { "请先停止正在运行的任务，再删除它的角色" }
             }
         },
@@ -195,7 +195,6 @@ internal class ElecKoiServiceGraph(
         variableConfig = variableConfig,
         frontendProjects = frontendProjects,
         creatorWorkspaces = creatorWorkspaces,
-        initializeCharacterTools = initializeCharacterTools,
         cleanupRunner = cleanupQueue,
     )
     val characterTransferService = CharacterTransferServiceImpl(
@@ -218,14 +217,11 @@ internal class ElecKoiServiceGraph(
         variableRuntime = variableRuntime,
         regexRules = regexRules,
         mediaCacheDirectory = File(context.cacheDir, "creator-media-bindings"),
-        isCreatorCapabilityEnabled = isCreatorCapabilityEnabled,
         imageModelConfigId = {
-            toolModelConfigId(
-                AgentToolScopes.Shared,
-                AgentToolRequestPolicy.BuiltInCreator,
-            )
+            agentPresets.activePreset().toolConfiguration.toolModelConfigIds[
+                AgentToolRequestPolicy.BuiltInCreator
+            ].orEmpty()
         },
-        initializeCharacterTools = initializeCharacterTools,
     )
     val chatService: ChatServiceImpl = ChatServiceImpl(
         characters = characters,
@@ -244,15 +240,19 @@ internal class ElecKoiServiceGraph(
         generationAttempts = generationAttempts,
         inputImages = chatInputImages,
         displayCompatibility = MvuMessageDisplayAdapter,
-        toolModelConfigId = toolModelConfigId,
+        activeAgentPreset = agentPresets::activePreset,
         captureProviderRequests = captureProviderRequestsByDefault,
     )
+
+    fun setRuntimeSessionCleanup(cleanup: (Set<String>) -> Unit) {
+        chatService.setRuntimeSessionCleanup(cleanup)
+    }
 
     fun attachCharacterAgentRuntime(
         agentSessions: AgentSessionFactory,
         runtime: LocalRuntimeGateway,
         virtualFileSearch: AgentVirtualFileSearch,
-        toolContextSnapshot: (String) -> AgentToolContextSnapshot,
+        toolContextSnapshot: (Set<String>) -> AgentToolContextSnapshot,
         agentRuns: AgentRunManager,
         publishRemoteDshTurnImages: (String, List<AgentInputImage>) -> Unit,
     ) {
@@ -264,7 +264,7 @@ internal class ElecKoiServiceGraph(
             toolContextSnapshot,
             agentRuns,
             publishRemoteDshTurnImages,
-            storyPresets::activePreset,
+            agentPresets::activePreset,
         )
     }
 

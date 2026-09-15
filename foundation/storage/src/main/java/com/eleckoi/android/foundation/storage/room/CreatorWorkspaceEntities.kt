@@ -16,7 +16,6 @@ import androidx.room.Relation
     )],
     indices = [
         Index("linkedCharacterId"),
-        Index(value = ["linkedCharacterId", "linkedCharacterMode"], unique = true),
         Index("updatedAt"),
     ],
 )
@@ -25,7 +24,7 @@ data class CreatorWorkspaceEntity(
     val schemaVersion: Int,
     val name: String,
     val linkedCharacterId: String?,
-    val linkedCharacterMode: String?,
+    val characterOwned: Boolean,
     val primaryCharacterRootId: String?,
     val previewEntryFile: String?,
     val createdAt: String,

@@ -45,16 +45,16 @@ internal class GitHubReleaseClient(
     }
 
     companion object {
-        const val RepositoryUrl = "https://github.com/eleckoi/ElecKoi"
+        const val RepositoryUrl = "https://github.com/eleckoi/ElecKoi-app"
         const val ReleasesUrl = "$RepositoryUrl/releases"
-        const val LatestReleaseEndpoint = "https://api.github.com/repos/eleckoi/ElecKoi/releases/latest"
+        const val LatestReleaseEndpoint = "https://api.github.com/repos/eleckoi/ElecKoi-app/releases/latest"
 
         internal fun parseRelease(json: String): AppRelease {
             val root = ElecKoiJson.parseToJsonElement(json).jsonObject
             val tag = root["tag_name"]?.jsonPrimitive?.contentOrNull.orEmpty().trim()
             val page = root["html_url"]?.jsonPrimitive?.contentOrNull.orEmpty().trim()
             require(tag.isNotBlank()) { "GitHub Release 缺少 tag_name" }
-            require(page.startsWith("https://github.com/eleckoi/ElecKoi/releases/")) {
+            require(page.startsWith("https://github.com/eleckoi/ElecKoi-app/releases/")) {
                 "GitHub Release 地址无效"
             }
             return AppRelease(

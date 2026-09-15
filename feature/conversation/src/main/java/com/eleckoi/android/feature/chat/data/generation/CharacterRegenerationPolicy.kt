@@ -1,10 +1,8 @@
 package com.eleckoi.android.feature.chat.data
 
-import com.eleckoi.android.feature.characters.model.CharacterMode
 import com.eleckoi.android.feature.chat.model.ChatMessage
 import com.eleckoi.android.feature.chat.model.ChatSession
 import com.eleckoi.android.feature.chat.model.MessageRole
-import com.eleckoi.android.feature.chat.roleplay.protocol.roleplayOutputProtocolInstructions
 import com.eleckoi.android.foundation.storage.ElecKoiDataException
 
 internal data class RegenerationTimeline(
@@ -41,7 +39,6 @@ internal fun regenerationSessionVariableState(
     }
     return currentStateJson
 }
-
 /** 保留目标回复对应的用户提问；目标本身是用户消息时，也可直接从该消息重新请求。 */
 internal fun truncateForRegeneration(
     messages: List<ChatMessage>,
@@ -96,29 +93,5 @@ internal fun truncateForRegeneration(
             .firstNotNullOfOrNull { message ->
                 message.variableStateJson.takeIf(String::isNotBlank)
             },
-    )
-}
-
-/** The role layer contributes no hidden behavior: only the author's exact text is forwarded. */
-internal fun authorDeveloperInstructions(authorPrompt: String): String = authorPrompt
-
-internal data class CharacterAgentInstructions(
-    val baseInstructions: String,
-    val developerInstructions: String,
-)
-
-internal fun characterAgentInstructions(
-    mode: CharacterMode,
-    authorPrompt: String,
-    protocolInstructions: String = roleplayOutputProtocolInstructions(),
-): CharacterAgentInstructions = if (mode == CharacterMode.Story) {
-    CharacterAgentInstructions(
-        baseInstructions = protocolInstructions,
-        developerInstructions = "",
-    )
-} else {
-    CharacterAgentInstructions(
-        baseInstructions = protocolInstructions,
-        developerInstructions = authorDeveloperInstructions(authorPrompt),
     )
 }

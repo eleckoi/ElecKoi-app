@@ -1,10 +1,9 @@
 package com.eleckoi.android.foundation.design.components
 
 /**
- * DeepSeek Harness' built-in `ic_ds_*` glyphs, copied from the pinned embedded DSH source.
+ * Vector path data for the `ic_ds_*` glyph set.
  *
- * These paths are filled exports rather than stroked Lucide-style marks. Keep the native viewport
- * beside each group so Android renders exactly the same silhouette as the Harness web client.
+ * These filled paths keep their native viewports to preserve their geometry.
  */
 object DshIconPaths {
     const val Viewport16 = 16f
@@ -70,6 +69,11 @@ object DshIconPaths {
     /** `ic_ds_chevron_right_outline_14` */
     val ChevronRight = listOf(
         "M5.5 2.15137L5.92383 2.57617L8.65137 5.30273C8.90706 5.55843 9.13382 5.78438 9.29785 5.98828C9.46883 6.20088 9.61756 6.44405 9.66602 6.75C9.69222 6.91565 9.69222 7.08435 9.66602 7.25C9.61756 7.55595 9.46883 7.79912 9.29785 8.01172C9.13382 8.21561 8.90706 8.44157 8.65137 8.69727L5.92383 11.4238L5.5 11.8486L4.65137 11L5.07617 10.5762L7.80273 7.84863C8.07732 7.57405 8.24849 7.40124 8.3623 7.25977C8.46904 7.12709 8.47813 7.07728 8.48047 7.0625C8.48703 7.02105 8.48703 6.97895 8.48047 6.9375C8.47813 6.92272 8.46904 6.87291 8.3623 6.74023C8.24848 6.59876 8.07732 6.42595 7.80273 6.15137L5.07617 3.42383L4.65137 3L5.5 2.15137Z",
+    )
+
+    /** `ic_ds_triangle_right_fill_14` */
+    val TriangleRightFill = listOf(
+        "M4.25 2.82782L4.25 11.1722C4.25 11.6622 4.84243 11.9076 5.18891 11.5611L9.36109 7.38891C9.57588 7.17412 9.57588 6.82588 9.36109 6.61109L5.18891 2.43891C4.84243 2.09243 4.25 2.33782 4.25 2.82782Z",
     )
 
     val ProjectAdd = listOf(
@@ -271,11 +275,6 @@ object AppIconPaths {
         "M11 11.6a3.8 3.8 0 1 0 0-7.6 3.8 3.8 0 0 0 0 7.6Z",
         "M4 19.9c.75-3.8 3.05-5.8 7-5.8 1.1 0 2.1.16 3 .48",
         "M17.7 14.9v5.6M14.9 17.7h5.6",
-    )
-    val CharacterManager = listOf(
-        "M10.6 11.6a3.8 3.8 0 1 0 0-7.6 3.8 3.8 0 0 0 0 7.6Z",
-        "M3.8 19.8c.75-3.75 3-5.7 6.8-5.7 1.55 0 2.85.32 3.9.96",
-        "M17.4 13.2v1.3M17.4 19.7V21M14.15 15.1l1.12.65M19.53 18.25l1.12.65M14.15 18.9l1.12-.65M19.53 15.75l1.12-.65",
     )
     val ChevronDown = listOf("m5.5 9 6.5 6.5L18.5 9")
     val Check = listOf("m4.8 12.4 4.9 4.9L19.2 7.6")

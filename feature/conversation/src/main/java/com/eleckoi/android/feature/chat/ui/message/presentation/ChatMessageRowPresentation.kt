@@ -1,6 +1,5 @@
 package com.eleckoi.android.feature.chat.ui.message
 
-import androidx.annotation.RawRes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import com.eleckoi.android.feature.characters.model.CharacterCard
@@ -14,7 +13,6 @@ import com.eleckoi.android.feature.chat.ui.layout.asRoleplayReadingTheme
 import com.eleckoi.android.feature.preferences.ChatAvatarShape
 import com.eleckoi.android.feature.preferences.ChatLayoutMode
 import com.eleckoi.android.foundation.design.AppearanceTheme
-import com.eleckoi.android.foundation.design.R
 
 internal data class ChatMessageRowPresentation(
     val isUser: Boolean,
@@ -26,7 +24,6 @@ internal data class ChatMessageRowPresentation(
     val openingPagerVisible: Boolean,
     val name: String,
     val avatarPath: String,
-    @param:RawRes val defaultAvatarImage: Int?,
     val readingAppearance: AppearanceTheme,
     val displayMessage: ChatMessage,
 )
@@ -56,15 +53,6 @@ internal fun rememberChatMessageRowPresentation(
         ChatAvatarShape.Portrait -> avatars.portrait
         ChatAvatarShape.RoundedSquare -> avatars.square
         ChatAvatarShape.Circle -> avatars.circle
-    }
-    val defaultAvatarImage = if (isUser) {
-        when (avatarShape) {
-            ChatAvatarShape.Portrait -> null
-            ChatAvatarShape.RoundedSquare -> R.raw.default_user_avatar_square
-            ChatAvatarShape.Circle -> R.raw.default_user_avatar_circle
-        }
-    } else {
-        null
     }
     val readingAppearance = remember(appearance, roleplay) {
         if (roleplay) appearance.asRoleplayReadingTheme() else appearance
@@ -96,7 +84,6 @@ internal fun rememberChatMessageRowPresentation(
         openingPagerVisible = selectedOpeningIndex >= 0 && openingOptions.size > 1,
         name = if (isUser) character.userName else character.assistantName.ifBlank { "AI" },
         avatarPath = avatarPath,
-        defaultAvatarImage = defaultAvatarImage,
         readingAppearance = readingAppearance,
         displayMessage = displayMessage,
     )

@@ -3,11 +3,11 @@
   "sourceRepository": "https://github.com/deepseek-ai/deepseek-harness.git",
   "sourceCommit": "b150a551b8d465e31e418e1b2eaf5e79bbb7d28e",
   "harnessVersion": "0.1.1-rc.2",
-  "binaryRevision": "eleckoi.4",
-  "baseBundleRevision": "eleckoi.5",
-  "bundleRevision": "eleckoi.6",
+  "binaryRevision": "eleckoi.5",
+  "baseBundleRevision": "eleckoi.7",
+  "bundleRevision": "eleckoi.7",
   "sourcePatch": "deepseek/patches/0001-sdk-session-control.patch",
-  "sourcePatchSha256": "ac88289a384bc2f1fab26740c4486649ec8ea1fcd62e425f2786cba351638f14",
+  "sourcePatchSha256": "8862667bb59568609d4b13185b7d24ee7e225d5848b7e567f7dc8b67c442a71d",
   "buildNodeVersion": "24.18.0",
   "buildNodeSha256": "6b4484c2190274175df9aa8f28e2d758a819cb1c1fe6ab481e2f95b463ab8508",
   "packagedNodeVersion": "24.19.0",
@@ -18,6 +18,6 @@
   "ripgrepArchiveUrl": "https://registry.npmjs.org/@vscode/ripgrep-linux-arm64/-/ripgrep-linux-arm64-1.18.0.tgz",
   "ripgrepArchiveSha256": "2d65504a71ea421d1c457177ebefcbe0d2d3a1f60f9709b6337f1d933553064b",
   "ripgrepBinarySha256": "e152ea689d6e8420357e592f0d8253b96476c164118ca3e6e13074fa1705ddda",
-  "releaseRepository": "eleckoi/ElecKoi",
-  "releaseTag": "deepseek-harness-0.1.1-rc.2-eleckoi.6"
+  "releaseRepository": "eleckoi/ElecKoi-app",
+  "releaseTag": "deepseek-harness-0.1.1-rc.2-eleckoi.7"
 }

@@ -9,6 +9,7 @@ import com.eleckoi.android.engine.agent.api.AgentWorkItemType
 import com.eleckoi.android.engine.agent.api.agentWarningNotice
 import com.eleckoi.android.feature.chat.model.ChatMessage
 import com.eleckoi.android.feature.chat.model.ChatSession
+import com.eleckoi.android.feature.chat.model.ChatSessionGenerationStats
 import com.eleckoi.android.feature.chat.model.ImmutableAppendedList
 import com.eleckoi.android.feature.chat.model.hasRenderableContent
 import com.eleckoi.android.feature.chat.roleplay.actions.GenerateImageActionName
@@ -44,6 +45,9 @@ internal class CharacterAgentTurnProjector(
     private val stateLock = Any()
     private val baseSession = session
     private val metricsCollector = ChatTurnMetricsCollector()
+    private val generationStatsProjector = ChatSessionGenerationStatsProjector(
+        session.generationStats,
+    )
     private val assistantDeltas = CharacterAssistantDeltaAccumulator()
     private val phaseMarkerProjector = AssistantPhaseMarkerProjector()
     private var assistantDeltaFlushJob: Job? = null
@@ -68,6 +72,10 @@ internal class CharacterAgentTurnProjector(
 
     fun pendingMessage(): ChatMessage = synchronized(stateLock) { pending }
 
+    fun generationStats(): ChatSessionGenerationStats = synchronized(stateLock) {
+        generationStatsProjector.snapshot()
+    }
+
     fun flushPendingAssistantDelta() {
         synchronized(stateLock) { flushAssistantDeltasLocked() }
     }
@@ -86,8 +94,21 @@ internal class CharacterAgentTurnProjector(
         var approvalRequestId: Long? = null
         synchronized(stateLock) {
             if (event !is AgentSessionEvent.AssistantDelta) flushAssistantDeltasLocked()
+            event.agentRuntimeIdentity()?.let { identity ->
+                replacePending { message ->
+                    message.copy(
+                        runtimeThreadId = identity.threadId,
+                        runtimeTurnId = identity.turnId.ifBlank { message.runtimeTurnId },
+                    )
+                }
+            }
             val metricsChanged = metricsCollector.accept(event)
-            if (metricsChanged) {
+            val generationStatsChanged = generationStatsProjector.accept(
+                event = event,
+                turnMetrics = metricsCollector.snapshot(),
+                turnContextWindowUsage = metricsCollector.contextWindowUsage(),
+            )
+            if (metricsChanged || generationStatsChanged) {
                 replacePending { message ->
                     message.copy(
                         generationMetrics = metricsCollector.snapshot(),
@@ -96,11 +117,11 @@ internal class CharacterAgentTurnProjector(
                 }
             }
 
-            if (metricsChanged && event !is AgentSessionEvent.AssistantDelta) {
+            if ((metricsChanged || generationStatsChanged) && event !is AgentSessionEvent.AssistantDelta) {
                 publish(force = true)
             }
             when (event) {
-                is AgentSessionEvent.AssistantDelta -> acceptAssistantDelta(event)
+                is AgentSessionEvent.AssistantDelta -> if (event.visible) acceptAssistantDelta(event)
                 is AgentSessionEvent.ReasoningSummaryDelta -> {
                     applyTimelineEvent(event)
                     publish()
@@ -367,6 +388,7 @@ internal class CharacterAgentTurnProjector(
     private fun snapshot(): CharacterAgentTurnSnapshot = CharacterAgentTurnSnapshot(
         baseSession = baseSession,
         pendingMessage = pending,
+        generationStats = generationStatsProjector.snapshot(),
     )
 
     private fun projectTimeline(turnRunning: Boolean = true) {
@@ -412,8 +434,10 @@ internal class CharacterAgentTurnProjector(
 internal data class CharacterAgentTurnSnapshot(
     val baseSession: ChatSession,
     val pendingMessage: ChatMessage,
+    val generationStats: ChatSessionGenerationStats,
 ) {
     fun materialize(): ChatSession = baseSession.copy(
         messages = ImmutableAppendedList(baseSession.messages, pendingMessage),
+        generationStats = generationStats,
     )
 }

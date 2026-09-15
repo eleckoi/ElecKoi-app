@@ -13,7 +13,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-const val AuthorApiVersion: String = "0.2.0-preview.5"
+const val AuthorApiVersion: String = "0.1.0"
 const val AuthorApiStage: String = "preview"
 
 @Serializable
@@ -59,14 +59,10 @@ data class AuthorApiEnvironment(
             )
         }
 
-        /**
-         * A rich message is authored content, so it receives only a message-scoped read grant.
-         * Keeping this construction here prevents individual message components from widening it.
-         */
         fun forInlineMessage(
             appContext: Context,
             message: AuthorMessageSnapshot,
-            messageGateway: AuthorInlineMessageGateway? = null,
+            messageGateway: AuthorChatGateway? = null,
         ): AuthorApiEnvironment {
             val runtime = AuthorApiRuntimeState(
                 surface = "inline_message",
@@ -75,6 +71,7 @@ data class AuthorApiEnvironment(
             ).apply {
                 currentMessage = message
                 variableStateJson = message.variableStateJson
+                chatGateway = messageGateway
                 openingGateway = messageGateway
                 messageSendGateway = messageGateway
             }
@@ -84,7 +81,7 @@ data class AuthorApiEnvironment(
                 permissions = if (messageGateway == null) {
                     AuthorApiPermission.inlineMessageReadOnly
                 } else {
-                    AuthorApiPermission.inlineMessageInteractive
+                    AuthorApiPermission.previewLocalFull
                 },
             )
         }
@@ -105,7 +102,7 @@ class AuthorApiRuntimeState(
     @Volatile
     var chatSession: AuthorChatSessionSnapshot? = null
 
-    /** The only message visible to an inline rich-message frontend. */
+    /** Message whose authored frontend is currently being rendered. */
     @Volatile
     var currentMessage: AuthorMessageSnapshot? = null
 
@@ -132,6 +129,9 @@ data class AuthorChatSnapshot(
     val isGenerating: Boolean,
     val errorMessage: String,
     val modelConfigs: List<ModelConfig>,
+    val activeRunId: String = "",
+    val activeMessageId: String = "",
+    val activeOutput: String = "",
 )
 
 /** Stable SDK-owned projections; public API code never reaches into feature implementation models. */
@@ -139,7 +139,7 @@ data class AuthorChatDraftSnapshot(
     val session: AuthorChatSessionSnapshot,
     val selectedConfigId: String,
     val selectedModel: String,
-    val modelParameters: AuthorModelParameters,
+    val settingLibrary: AuthorSettingLibrarySnapshot? = null,
     val openings: AuthorOpeningStateSnapshot = AuthorOpeningStateSnapshot(),
 )
 
@@ -152,6 +152,9 @@ data class AuthorOpeningStateSnapshot(
 data class AuthorOpeningOptionSnapshot(
     val id: String,
     val title: String,
+    val content: String = "",
+    val displayContent: String = content,
+    val initialVariableStateJson: String = "{}",
 )
 
 data class AuthorChatSessionSnapshot(
@@ -159,7 +162,8 @@ data class AuthorChatSessionSnapshot(
     val title: String,
     val characterId: String,
     val characterName: String,
-    val characterMode: String,
+    val characterAvatar: String = "",
+    val characterPersona: JsonObject = buildJsonObject {},
     val messages: List<AuthorMessageSnapshot>,
     val createdAt: String,
     val updatedAt: String,
@@ -175,6 +179,7 @@ data class AuthorChatListItemSnapshot(
     val summary: String,
     val updatedAt: String,
     val messageCount: Int,
+    val createdAt: String = "",
 )
 
 data class AuthorMessageSnapshot(
@@ -187,22 +192,62 @@ data class AuthorMessageSnapshot(
     val createdAt: String,
     val pending: Boolean,
     val variableStateJson: String,
-    val toolCalls: List<AuthorToolCallSnapshot> = emptyList(),
+    val conversationId: String = "",
+    val displayContent: String = content,
+    val status: String = if (pending) "streaming" else "complete",
+    val turnId: String = "",
+    val speakerId: String = "",
+    val speakerName: String = "",
+    val speakerAvatar: String = "",
+    val sequence: Int? = null,
+    val responseIndex: Int? = null,
+    val process: List<AuthorAgentProcessSnapshot> = emptyList(),
+    val attachments: List<AuthorMediaResourceSnapshot> = emptyList(),
+    val openingOptions: List<AuthorOpeningSnapshot> = emptyList(),
+    val selectedOpeningId: String = "",
+    val runtimeThreadId: String = "",
+    val turnStartedAtMillis: Long = 0L,
+    val turnCompletedAtMillis: Long? = null,
+    val modelHistoryItems: List<String> = emptyList(),
 )
 
-data class AuthorToolCallSnapshot(
-    val callId: String,
-    val name: String,
+data class AuthorAgentProcessSnapshot(
+    val id: String,
+    val kind: String,
+    val status: String,
+    val toolName: String,
     val arguments: String,
-    val result: String,
-    val state: String,
-    val rollbackOnAbort: Boolean,
+    val summary: String,
+    val detail: String,
+    val startedAtMillis: Long,
+    val completedAtMillis: Long? = null,
+    val parentId: String? = null,
+    val delegatedModel: String? = null,
 )
 
-data class AuthorModelParameters(
-    val stream: Boolean = true,
-    val temperature: Double = 0.7,
-    val topP: Double = 1.0,
+data class AuthorMediaResourceSnapshot(
+    val id: String,
+    val type: String,
+    val url: String,
+    val mimeType: String,
+    val name: String,
+    val size: Long,
+    val width: Int? = null,
+    val height: Int? = null,
+    val duration: Double? = null,
+    val metadata: JsonObject = buildJsonObject {},
+    val sourcePath: String = "",
+)
+
+fun authorMediaResourceUrl(messageId: String, attachmentId: String): String =
+    "/eleckoi-runtime/author-media/${android.net.Uri.encode(messageId)}/${android.net.Uri.encode(attachmentId)}"
+
+data class AuthorOpeningSnapshot(
+    val id: String,
+    val title: String,
+    val content: String,
+    val displayContent: String? = null,
+    val initialVariableStateJson: String = "{}",
 )
 
 data class AuthorSettingLibrarySnapshot(
@@ -212,11 +257,23 @@ data class AuthorSettingLibrarySnapshot(
     val groupCount: Int,
     val versionCount: Int,
     val activeVersionId: String,
+    val document: JsonObject = buildJsonObject {},
 )
 
 data class AuthorCommandResult(
     val accepted: Boolean,
     val message: String = "",
+)
+
+data class AuthorSendImageAttachment(
+    val mediaType: String,
+    val data: String,
+    val name: String = "",
+)
+
+data class AuthorDeleteMessagesResult(
+    val deletedMessageCount: Int,
+    val remainingMessageCount: Int,
 )
 
 data class AuthorApiEvent(
@@ -230,7 +287,10 @@ interface AuthorOpeningGateway {
 }
 
 interface AuthorMessageSendGateway {
-    fun send(text: String): AuthorCommandResult
+    suspend fun send(
+        text: String,
+        attachments: List<AuthorSendImageAttachment> = emptyList(),
+    ): AuthorCommandResult
 }
 
 interface AuthorInlineMessageGateway : AuthorOpeningGateway, AuthorMessageSendGateway
@@ -243,10 +303,11 @@ interface AuthorChatGateway : AuthorInlineMessageGateway {
     fun stopGeneration(): AuthorCommandResult
     fun regenerate(messageId: String): AuthorCommandResult
     fun editAndRegenerate(messageId: String, text: String): AuthorCommandResult
-    fun createNewChat(characterId: String, characterMode: String?): AuthorCommandResult
+    suspend fun deleteMessagesFrom(messageId: String): AuthorDeleteMessagesResult
+    fun createNewChat(characterId: String): AuthorCommandResult
     fun openChat(sessionId: String): AuthorCommandResult
     fun deleteChat(sessionId: String): AuthorCommandResult
-    fun selectModel(configId: String, model: String, parameters: AuthorModelParameters): AuthorCommandResult
+    fun selectModel(configId: String, model: String): AuthorCommandResult
     suspend fun replaceVariableState(stateJson: String): AuthorCommandResult
     suspend fun resetVariableState(): AuthorCommandResult
 
@@ -298,6 +359,7 @@ internal object AuthorApiErrorCode {
     const val MethodNotFound = "METHOD_NOT_FOUND"
     const val PermissionDenied = "PERMISSION_DENIED"
     const val InvalidParams = "INVALID_PARAMS"
+    const val NotFound = "NOT_FOUND"
     const val ContextUnavailable = "CONTEXT_UNAVAILABLE"
     const val CommandRejected = "COMMAND_REJECTED"
     const val InternalError = "INTERNAL_ERROR"

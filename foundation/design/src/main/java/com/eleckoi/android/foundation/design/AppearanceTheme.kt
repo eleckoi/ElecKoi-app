@@ -27,28 +27,32 @@ data class MarkdownReadingColorOverrides(
 )
 
 data class AppearanceTheme(
-    val mobileBg: Color = Color(0xFFF7F8FB),
-    val mobilePinnedBg: Color = Color(0xFFF0F4FF),
+    val mobileBg: Color = Color(0xFFF0F3F6),
+    // The four root libraries share a cleaner neutral canvas than editor and settings pages.
+    // Keeping this role separate prevents a root-page polish from recolouring the whole app.
+    val mobileRootBg: Color = Color(0xFFF7F7F8),
+    val mobilePinnedBg: Color = Color(0x0F263148),
     val mobileSurface: Color = Color.White,
-    val mobileText: Color = Color(0xFF14171F),
-    val mobileMuted: Color = Color(0xFF6A7280),
-    val mobileSoft: Color = Color(0xFFB8BEC8),
-    val mobileLine: Color = Color(0x10111827),
-    val mobileSearchBg: Color = Color(0xFFF5F6FA),
-    // Sampled from the QQ reference. Root chrome owns explicit colours so the glass never collapses
-    // into the message surface when there is no wallpaper underneath it.
-    val mobileTopbarBg: Color = Color(0xFFF0F4FF),
-    val mobileTabbarBg: Color = Color(0xFFF3F3F8),
+    val mobileText: Color = Color(0xFF111111),
+    val mobileMuted: Color = Color(0xFF8B8B8B),
+    val mobileSoft: Color = Color(0xFFADADAD),
+    val mobileLine: Color = Color(0x0E000000),
+    val mobileSearchBg: Color = Color(0xFFEBEBEB),
+    // Root chrome owns explicit colours so the glass never collapses into the message surface when
+    // there is no wallpaper underneath it. The bottom bar stays neutral instead of carrying the old
+    // purple-grey tint into an otherwise white list surface.
+    val mobileTopbarBg: Color = Color(0xFFFCFCFC),
+    val mobileTabbarBg: Color = Color(0xFFFCFCFC),
     val mobileChatBg: Color = Color.White,
     val mobileChatHeaderBg: Color = Color.White,
-    val mobileChatMessageBg: Color = Color(0xFFEEF1F7),
-    val mobileChatMessageFg: Color = Color(0xFF181B22),
-    val mobileChatUserBg: Color = Color(0xFFF2F6FF),
-    val mobileChatUserFg: Color = Color(0xFF14171F),
+    val mobileChatMessageBg: Color = Color.White,
+    val mobileChatMessageFg: Color = Color(0xFF181818),
+    val mobileChatUserBg: Color = Color(0xFFCDEEFF),
+    val mobileChatUserFg: Color = Color(0xFF181818),
     val mobileChatTextureScrim: Color = Color.Transparent,
     val mobileComposerBg: Color = Color(0xFFF2F2F3),
     val mobileInputBg: Color = Color(0xFFFEFEFF),
-    val mobileBlue: Color = Color(0xFF119CFF),
+    val mobileBlue: Color = Color(0xFF13A8FF),
     val mobileAccentFg: Color = Color.White,
     val rootBackgroundImagePath: String = "",
     val rootBackgroundOpacity: Float = 1f,
@@ -74,4 +78,53 @@ data class AppearanceTheme(
     val textureScrimStartColor: Color = Color.Transparent,
     val textureScrimEndColor: Color = Color.Transparent,
     val markdownReadingColors: MarkdownReadingColorOverrides = MarkdownReadingColorOverrides(),
+)
+
+/** PC-aligned dark tokens. Background paths and tuning are presentation state and are retained. */
+fun AppearanceTheme.withDarkAppearance(dark: Boolean): AppearanceTheme {
+    if (isDark == dark) return this
+    val colors = if (dark) DarkAppearanceTheme else AppearanceTheme()
+    return colors.copy(
+        rootBackgroundImagePath = rootBackgroundImagePath,
+        rootBackgroundOpacity = rootBackgroundOpacity,
+        rootBackgroundBlur = rootBackgroundBlur,
+        rootBackgroundScrim = rootBackgroundScrim,
+        textureImagePath = textureImagePath,
+        textureOpacity = textureOpacity,
+        textureBlur = textureBlur,
+        textureScrim = textureScrim,
+        textureScrimAngle = textureScrimAngle,
+        textureScrimStart = textureScrimStart,
+        textureScrimMid = textureScrimMid,
+        textureScrimEnd = textureScrimEnd,
+        textureScrimStartColor = textureScrimStartColor,
+        textureScrimEndColor = textureScrimEndColor,
+        markdownReadingColors = markdownReadingColors,
+    )
+}
+
+private val DarkAppearanceTheme = AppearanceTheme(
+    mobileBg = Color(0xFF13131A),
+    mobileRootBg = Color(0xFF13131A),
+    mobilePinnedBg = Color(0x12FFFFFF),
+    mobileSurface = Color(0xFF1D1D25),
+    mobileText = Color(0xFFF2F2F5),
+    mobileMuted = Color(0xFFA4A4AD),
+    mobileSoft = Color(0xFF74747E),
+    mobileLine = Color(0x13FFFFFF),
+    mobileSearchBg = Color(0xFF262630),
+    mobileTopbarBg = Color.Black,
+    mobileTabbarBg = Color.Black,
+    mobileChatBg = Color(0xFF13131A),
+    mobileChatHeaderBg = Color(0xFF13131A),
+    mobileChatMessageBg = Color(0xFF1D1D25),
+    mobileChatMessageFg = Color(0xFFF2F2F5),
+    mobileChatUserBg = Color(0xFF203B4E),
+    mobileChatUserFg = Color(0xFFF2F2F5),
+    mobileChatTextureScrim = Color.Transparent,
+    mobileComposerBg = Color(0xFF1D1D25),
+    mobileInputBg = Color(0xFF1D1D25),
+    mobileBlue = Color(0xFF36AEF7),
+    mobileAccentFg = Color.White,
+    isDark = true,
 )

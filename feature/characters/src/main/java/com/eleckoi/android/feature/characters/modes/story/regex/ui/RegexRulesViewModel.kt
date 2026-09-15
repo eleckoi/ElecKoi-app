@@ -97,15 +97,10 @@ class RegexRulesViewModel(
                     val remaining = (failures.size - 2).coerceAtLeast(0)
                     "；${failures.size} 个文件无法识别：$names${if (remaining > 0) " 等" else ""}"
                 }.orEmpty()
-                val unsupportedSuffix = if (result.skippedDepthRuleCount > 0) {
-                    "；已跳过 ${result.skippedDepthRuleCount} 条不支持的深度正则"
-                } else {
-                    ""
-                }
                 _effects.emit(
                     RegexRulesEffect.RulesImported(
                         "已从 ${result.importedFileCount} 个文件导入 ${result.importedRuleCount} 条正则" +
-                            "$unsupportedSuffix$failureSuffix",
+                            failureSuffix,
                     ),
                 )
             }.onFailure { error ->
@@ -119,7 +114,9 @@ class RegexRulesViewModel(
     fun exportRules(characterId: String, ruleIds: Set<String>) {
         viewModelScope.launch {
             runCatching { withContext(Dispatchers.IO) { service.exportRegexRules(characterId, ruleIds) } }
-                .onSuccess { json -> _effects.emit(RegexRulesEffect.RulesExportReady(json, "regex-rules.json")) }
+                .onSuccess { json ->
+                    _effects.emit(RegexRulesEffect.RulesExportReady(json, "eleckoi-regex-rules.json"))
+                }
                 .onFailure { error -> _uiState.update { it.copy(errorMessage = error.message ?: "导出规则失败") } }
         }
     }

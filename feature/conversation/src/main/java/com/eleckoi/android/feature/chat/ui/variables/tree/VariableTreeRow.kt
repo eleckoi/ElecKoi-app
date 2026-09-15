@@ -31,6 +31,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.eleckoi.android.foundation.design.AppearanceTheme
+import com.eleckoi.android.foundation.design.components.dshTreeRowEntrance
 import com.eleckoi.android.foundation.design.components.noRippleClickable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -66,6 +67,7 @@ internal fun VariableTreeRow(
 
     Row(
         modifier = Modifier
+            .dshTreeRowEntrance(enabled = row.depth > 0)
             .fillMaxWidth()
             .heightIn(min = 48.dp)
             .drawBehind {

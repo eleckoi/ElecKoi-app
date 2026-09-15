@@ -6,6 +6,7 @@ import com.eleckoi.android.feature.characters.transfer.data.CharacterTransferRep
 import com.eleckoi.android.feature.characters.transfer.api.CharacterTransferService
 import com.eleckoi.android.feature.characters.transfer.model.CharacterImportPreview
 import com.eleckoi.android.feature.characters.transfer.model.CharacterImportSource
+import com.eleckoi.android.feature.characters.transfer.model.CharacterExportFormat
 import com.eleckoi.android.feature.characters.transfer.model.ExportedCharacterCard
 import java.io.File
 
@@ -30,11 +31,17 @@ internal class CharacterTransferServiceImpl(
         return characters
     }
 
-    override suspend fun exportCharacterCard(characterId: String): ExportedCharacterCard {
-        return transfers.exportCharacter(characterId)
+    override suspend fun exportCharacterCard(
+        characterId: String,
+        format: CharacterExportFormat,
+    ): ExportedCharacterCard {
+        return transfers.exportCharacter(characterId, format)
     }
 
-    override suspend fun exportCharacterCards(characterIds: List<String>): List<ExportedCharacterCard> {
-        return transfers.exportCharacters(characterIds)
+    override suspend fun exportCharacterCards(
+        characterIds: List<String>,
+        format: CharacterExportFormat,
+    ): List<ExportedCharacterCard> {
+        return transfers.exportCharacters(characterIds, format)
     }
 }

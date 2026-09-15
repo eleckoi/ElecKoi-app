@@ -88,10 +88,6 @@ internal object DshRequestContextProjector {
     ) {
         val firstDialogue = messages.indexOfFirst { it.isCleanDialogueMessage() }
             .takeIf { it >= 0 } ?: messages.size
-        injections.filter { it.anchor == AgentContextAnchor.AfterHistory }
-            .takeIf(List<*>::isNotEmpty)
-            ?.let { group -> messages.addAll(currentUserIndex + 1, group.map(::injectionMessage)) }
-
         val beforeTool = injections.filter { it.anchor == AgentContextAnchor.BeforeToolContext }
         if (beforeTool.isNotEmpty()) messages.addAll(0, beforeTool.map(::injectionMessage))
 
@@ -105,6 +101,26 @@ internal object DshRequestContextProjector {
                 (firstDialogue + beforeTool.size).coerceAtMost(messages.size),
                 leading.map(::injectionMessage),
             )
+        }
+
+        var projectedCurrentUserIndex = messages.indexOfLast { message ->
+            message.isCleanDialogueMessage() && message.messageRole() == "user"
+        }.takeIf { it >= 0 } ?: currentUserIndex
+        val beforeLatestUser = listOf(
+            AgentContextAnchor.AfterHistory,
+            AgentContextAnchor.BeforeLatestUserInput,
+        ).flatMap { anchor -> injections.filter { it.anchor == anchor } }
+        if (beforeLatestUser.isNotEmpty()) {
+            messages.addAll(projectedCurrentUserIndex, beforeLatestUser.map(::injectionMessage))
+            projectedCurrentUserIndex += beforeLatestUser.size
+        }
+
+        val afterLatestUser = listOf(
+            AgentContextAnchor.AfterLatestUserInput,
+            AgentContextAnchor.BeforeToolFlow,
+        ).flatMap { anchor -> injections.filter { it.anchor == anchor } }
+        if (afterLatestUser.isNotEmpty()) {
+            messages.addAll(projectedCurrentUserIndex + 1, afterLatestUser.map(::injectionMessage))
         }
 
         val afterToolFlow = injections.filter { it.anchor == AgentContextAnchor.AfterToolFlow }

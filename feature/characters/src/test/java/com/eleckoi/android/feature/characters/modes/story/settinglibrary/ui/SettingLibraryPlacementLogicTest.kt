@@ -19,11 +19,15 @@ class SettingLibraryPlacementLogicTest {
         val rows = placementGuideRows(positions)
 
         assertEquals(
-            listOf(FixedPlacementNode.History, FixedPlacementNode.ToolFlow),
+            listOf(
+                FixedPlacementNode.History,
+                FixedPlacementNode.LatestUserInput,
+                FixedPlacementNode.ToolFlow,
+            ),
             rows.filterIsInstance<PlacementGuideRow.FixedGroup>().map { it.node },
         )
-        assertEquals(2, rows.count { it is PlacementGuideRow.FixedGroup })
-        assertEquals(5, rows.count { it is PlacementGuideRow.Custom })
+        assertEquals(3, rows.count { it is PlacementGuideRow.FixedGroup })
+        assertEquals(7, rows.count { it is PlacementGuideRow.Custom })
         assertEquals(1, rows.count { it is PlacementGuideRow.Instructions })
         assertEquals(1, rows.count { it is PlacementGuideRow.AfterInstructions })
     }

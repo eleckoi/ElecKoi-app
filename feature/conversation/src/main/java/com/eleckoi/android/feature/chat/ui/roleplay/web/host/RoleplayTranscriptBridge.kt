@@ -1,7 +1,6 @@
 package com.eleckoi.android.feature.chat.ui.roleplay.web.host
 
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
 import android.webkit.WebView
 import androidx.core.net.toUri
@@ -12,20 +11,23 @@ import com.eleckoi.android.feature.chat.model.ChatMessage
 import com.eleckoi.android.feature.chat.ui.author.toAuthorSnapshot
 import com.eleckoi.android.feature.chat.ui.roleplay.web.model.RoleplayTranscriptOrigin
 import com.eleckoi.android.feature.chat.ui.roleplay.web.surface.RoleplayWebChatCallbacks
+import com.eleckoi.android.feature.chat.ui.web.openDesktopAlignedExternalUri
 import com.eleckoi.android.sdk.author.AuthorApiEnvironment
 import com.eleckoi.android.sdk.author.AuthorApiRouter
-import com.eleckoi.android.sdk.author.AuthorInlineMessageGateway
+import com.eleckoi.android.sdk.author.AuthorChatGateway
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import org.json.JSONTokener
 
 internal class RoleplayTranscriptBridge(
     private val appContext: Context,
     private val messageProvider: (String) -> ChatMessage?,
-    private val messageGatewayProvider: () -> AuthorInlineMessageGateway?,
+    private val messageGatewayProvider: () -> AuthorChatGateway?,
     private val callbacksProvider: () -> RoleplayWebChatCallbacks,
     private val onReady: (Long, String) -> Unit,
     private val onTransactionCommitted: (Long, String) -> Unit,
@@ -115,6 +117,22 @@ internal class RoleplayTranscriptBridge(
             }
         }
         installed = true
+        messageGatewayProvider()?.let { gateway ->
+            scope.launch {
+                gateway.authorEvents.collect { event ->
+                    val proxy = pageReplyProxy ?: return@collect
+                    val payload = runCatching { JSONTokener(event.payload.toString()).nextValue() }
+                        .getOrNull()
+                    proxy.postMessage(
+                        JSONObject()
+                            .put("type", "authorEvent")
+                            .put("event", event.name)
+                            .put("payload", payload)
+                            .toString(),
+                    )
+                }
+            }
+        }
         return true
     }
 
@@ -146,11 +164,6 @@ internal class RoleplayTranscriptBridge(
 
     private fun openExternal(value: String) {
         val uri = runCatching { Uri.parse(value) }.getOrNull() ?: return
-        if (uri.scheme !in ExternalSchemes) return
-        runCatching {
-            appContext.startActivity(
-                Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-            )
-        }
+        appContext.openDesktopAlignedExternalUri(uri)
     }
 }

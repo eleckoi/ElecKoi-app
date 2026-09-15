@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -19,7 +18,9 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -36,6 +37,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.eleckoi.android.foundation.design.AppearanceTheme
+import com.eleckoi.android.feature.preferences.AppearanceMode
 import com.eleckoi.android.foundation.design.components.AppIconPaths
 import com.eleckoi.android.foundation.design.components.ImageCropPage
 import kotlinx.coroutines.Dispatchers
@@ -45,6 +47,8 @@ import kotlinx.coroutines.withContext
 @Composable
 fun ThemePalettePage(
     appearance: AppearanceTheme,
+    appearanceMode: AppearanceMode,
+    onAppearanceModeChange: (AppearanceMode) -> Unit,
     onApplyPalette: (Bitmap) -> Unit,
     onSetRootBackground: (Bitmap, Float, Float, Float) -> Unit,
     onTuneRootBackground: (Float, Float, Float) -> Unit,
@@ -131,59 +135,84 @@ fun ThemePalettePage(
             .statusBarsPadding(),
     ) {
         ThemeEditorHeader(appearance, onBack, onReset)
-        ThemeEditorTabs(
-            activeTab = activeTab,
-            appearance = appearance,
-            modifier = Modifier.padding(horizontal = 16.dp),
-            onChange = { activeTab = it },
-        )
-        val previewAppearance = appearance.copy(
-            rootBackgroundOpacity = opacity,
-            rootBackgroundBlur = blur,
-            rootBackgroundScrim = scrim,
-        )
-        ProportionalHomePreview(
-            appearance = previewAppearance,
-            previewBitmap = previewBitmap,
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .padding(horizontal = 20.dp, vertical = 12.dp),
-        )
-        if (activeTab == ThemeEditorTab.Palette) {
-            FullWidthAction(
-                label = "从图片取色",
-                icon = AppIconPaths.Palette,
+                .verticalScroll(rememberScrollState())
+                .navigationBarsPadding()
+                .padding(bottom = 16.dp),
+        ) {
+            AppearanceModePicker(
+                selected = appearanceMode,
                 appearance = appearance,
                 modifier = Modifier
-                    .padding(horizontal = 16.dp)
-                    .fillMaxWidth(),
-                onClick = { launcher.launch("image/*") },
+                    .padding(start = 20.dp, top = 12.dp, end = 20.dp),
+                onSelect = onAppearanceModeChange,
             )
-        } else {
-            Row(
+            ThemeSectionLabel(
+                text = "编辑内容",
+                appearance = appearance,
+                modifier = Modifier.padding(start = 20.dp, top = 28.dp, bottom = 10.dp),
+            )
+            ThemeEditorTabs(
+                activeTab = activeTab,
+                appearance = appearance,
+                modifier = Modifier.padding(horizontal = 20.dp),
+                onChange = { activeTab = it },
+            )
+            ThemeSectionLabel(
+                text = "实时预览",
+                appearance = appearance,
+                modifier = Modifier.padding(start = 20.dp, top = 28.dp, bottom = 10.dp),
+            )
+            val previewAppearance = appearance.copy(
+                rootBackgroundOpacity = opacity,
+                rootBackgroundBlur = blur,
+                rootBackgroundScrim = scrim,
+            )
+            ProportionalHomePreview(
+                appearance = previewAppearance,
+                previewBitmap = previewBitmap,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
+                    .height(330.dp)
+                    .padding(horizontal = 20.dp),
+            )
+            if (activeTab == ThemeEditorTab.Palette) {
                 FullWidthAction(
-                    label = "选择图片",
-                    icon = AppIconPaths.Image,
+                    label = "从图片取色",
+                    icon = AppIconPaths.Palette,
                     appearance = appearance,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .padding(start = 20.dp, top = 14.dp, end = 20.dp)
+                        .fillMaxWidth(),
                     onClick = { launcher.launch("image/*") },
                 )
-                SecondaryAction(
-                    label = "调节",
-                    icon = AppIconPaths.Gear,
-                    appearance = appearance,
-                    modifier = Modifier.weight(1f),
-                    onClick = { tuningOpen = true },
-                )
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 20.dp, top = 14.dp, end = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    FullWidthAction(
+                        label = "选择图片",
+                        icon = AppIconPaths.Image,
+                        appearance = appearance,
+                        modifier = Modifier.weight(1f),
+                        onClick = { launcher.launch("image/*") },
+                    )
+                    SecondaryAction(
+                        label = "调节",
+                        icon = AppIconPaths.Gear,
+                        appearance = appearance,
+                        modifier = Modifier.weight(1f),
+                        onClick = { tuningOpen = true },
+                    )
+                }
             }
         }
-        Spacer(modifier = Modifier.navigationBarsPadding().height(14.dp))
     }
 
     if (tuningOpen) {

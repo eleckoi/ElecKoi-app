@@ -67,7 +67,6 @@ internal class CharacterPayloadJsonCodec(
         return CharacterCard(
             assistantName = assistantName,
             assistantAvatar = assistantAvatar,
-            assistantPrompt = value.stringOrEmpty("assistant_prompt"),
             profileAge = value.stringOrEmpty("profile_age").take(16),
             profileSex = value.stringOrEmpty("profile_sex").take(16),
             profileHeight = value.stringOrEmpty("profile_height").take(16),
@@ -97,7 +96,6 @@ internal class CharacterPayloadJsonCodec(
                     JSONObject()
                         .put("assistant_name", slot.persona.assistantName)
                         .put("assistant_avatar", slot.persona.assistantAvatar)
-                        .put("assistant_prompt", slot.persona.assistantPrompt)
                         .put("profile_age", slot.persona.profileAge)
                         .put("profile_sex", slot.persona.profileSex)
                         .put("profile_height", slot.persona.profileHeight)
@@ -132,7 +130,6 @@ internal class CharacterPayloadJsonCodec(
             order = value.optInt("order", 0),
             groupViewOrder = value.optInt("group_view_order", 0),
             folder = folderNameForCharacter(id),
-            characterMode = normalizeCharacterMode(value.stringOrEmpty("character_mode")),
             storyTools = value.optJSONObject("story_tools")?.let { tools ->
                 StoryToolSettings(
                     frontendBeautyEnabled = tools.optBoolean("frontend_beauty_enabled", false),
@@ -161,7 +158,6 @@ internal class CharacterPayloadJsonCodec(
             .put("order", slot.order)
             .put("group_view_order", slot.groupViewOrder)
             .put("folder", slot.folder)
-            .put("character_mode", normalizeCharacterMode(slot.characterMode))
             .put(
                 "story_tools",
                 JSONObject()

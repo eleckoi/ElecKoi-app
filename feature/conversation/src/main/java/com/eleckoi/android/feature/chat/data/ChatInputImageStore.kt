@@ -4,6 +4,8 @@ import android.content.Context
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.util.Base64
+import com.eleckoi.android.feature.chat.model.ChatEncodedImageInput
 import com.eleckoi.android.feature.chat.model.ChatUserImageAttachment
 import com.eleckoi.android.foundation.storage.ElecKoiDataException
 import com.eleckoi.android.foundation.storage.newId
@@ -43,6 +45,25 @@ class ChatInputImageStore(
         }
     }
 
+    fun prepareEncoded(images: List<ChatEncodedImageInput>): List<ChatUserImageAttachment> {
+        if (images.isEmpty()) return emptyList()
+        if (images.size > MaxChatInputImages) {
+            throw ElecKoiDataException("每条消息最多发送 $MaxChatInputImages 张图片")
+        }
+        rootDirectory.mkdirs()
+        val admitted = mutableListOf<ChatUserImageAttachment>()
+        try {
+            images.forEach { input -> admitted += copyEncoded(input) }
+            if (admitted.sumOf(ChatUserImageAttachment::bytes) > MaxChatInputMessageImageBytes) {
+                throw ElecKoiDataException("每条消息的图片总大小不能超过 20 MiB")
+            }
+            return admitted
+        } catch (error: Throwable) {
+            admitted.forEach(::delete)
+            throw error
+        }
+    }
+
     fun delete(image: ChatUserImageAttachment) {
         deletePath(image.localPath)
     }
@@ -71,7 +92,6 @@ class ChatInputImageStore(
     private fun copyOne(uri: Uri): ChatUserImageAttachment {
         val id = newId(20)
         val temporary = File(rootDirectory, "$id.image")
-        var target = temporary
         var bytes = 0L
         try {
             val input = resolver.openInputStream(uri)
@@ -91,43 +111,95 @@ class ChatInputImageStore(
                 }
             }
             if (bytes == 0L) throw ElecKoiDataException("所选图片为空")
-            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            BitmapFactory.decodeFile(temporary.absolutePath, bounds)
-            val mediaType = bounds.outMimeType?.lowercase()
-                ?.takeIf(AcceptedMediaTypes::contains)
-                ?: throw ElecKoiDataException("仅支持 PNG、JPEG、WebP 和 GIF 图片")
-            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
-                throw ElecKoiDataException("无法解析所选图片")
-            }
-            target = File(rootDirectory, "$id.${AcceptedMediaExtensions.getValue(mediaType)}")
-            runCatching {
-                Files.move(
-                    temporary.toPath(),
-                    target.toPath(),
-                    StandardCopyOption.ATOMIC_MOVE,
-                    StandardCopyOption.REPLACE_EXISTING,
-                )
-            }.getOrElse {
-                Files.move(
-                    temporary.toPath(),
-                    target.toPath(),
-                    StandardCopyOption.REPLACE_EXISTING,
-                )
-            }
-            return ChatUserImageAttachment(
+            return admitTemporary(
                 id = id,
-                localPath = target.absolutePath,
-                mediaType = mediaType,
-                displayName = displayName(uri).take(MaxDisplayNameChars),
+                temporary = temporary,
                 bytes = bytes,
-                imageWidth = bounds.outWidth,
-                imageHeight = bounds.outHeight,
+                displayName = displayName(uri),
             )
         } catch (error: Throwable) {
             temporary.delete()
-            target.delete()
             throw error
         }
+    }
+
+    private fun copyEncoded(input: ChatEncodedImageInput): ChatUserImageAttachment {
+        val expectedMediaType = input.mediaType.lowercase()
+        if (expectedMediaType !in AcceptedMediaTypes) {
+            throw ElecKoiDataException("仅支持 PNG、JPEG、WebP 和 GIF 图片")
+        }
+        if (input.data.isBlank()) throw ElecKoiDataException("图片附件内容不能为空")
+        if (input.data.length.toLong() > MaxEncodedImageChars) {
+            throw ElecKoiDataException("单张图片不能超过 20 MiB")
+        }
+        val decoded = try {
+            Base64.decode(input.data, Base64.DEFAULT)
+        } catch (_: IllegalArgumentException) {
+            throw ElecKoiDataException("图片附件不是有效的 Base64 数据")
+        }
+        if (decoded.isEmpty()) throw ElecKoiDataException("图片附件内容不能为空")
+        if (decoded.size.toLong() > MaxChatInputImageBytes) {
+            throw ElecKoiDataException("单张图片不能超过 20 MiB")
+        }
+        val id = newId(20)
+        val temporary = File(rootDirectory, "$id.image")
+        try {
+            FileOutputStream(temporary).use { it.write(decoded) }
+            return admitTemporary(
+                id = id,
+                temporary = temporary,
+                bytes = decoded.size.toLong(),
+                displayName = input.displayName,
+                expectedMediaType = expectedMediaType,
+            )
+        } catch (error: Throwable) {
+            temporary.delete()
+            throw error
+        }
+    }
+
+    private fun admitTemporary(
+        id: String,
+        temporary: File,
+        bytes: Long,
+        displayName: String,
+        expectedMediaType: String? = null,
+    ): ChatUserImageAttachment {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(temporary.absolutePath, bounds)
+        val mediaType = bounds.outMimeType?.lowercase()
+            ?.takeIf(AcceptedMediaTypes::contains)
+            ?: throw ElecKoiDataException("仅支持 PNG、JPEG、WebP 和 GIF 图片")
+        if (expectedMediaType != null && mediaType != expectedMediaType) {
+            throw ElecKoiDataException("图片附件声明的格式与实际内容不一致")
+        }
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+            throw ElecKoiDataException("无法解析所选图片")
+        }
+        val target = File(rootDirectory, "$id.${AcceptedMediaExtensions.getValue(mediaType)}")
+        runCatching {
+            Files.move(
+                temporary.toPath(),
+                target.toPath(),
+                StandardCopyOption.ATOMIC_MOVE,
+                StandardCopyOption.REPLACE_EXISTING,
+            )
+        }.getOrElse {
+            Files.move(
+                temporary.toPath(),
+                target.toPath(),
+                StandardCopyOption.REPLACE_EXISTING,
+            )
+        }
+        return ChatUserImageAttachment(
+            id = id,
+            localPath = target.absolutePath,
+            mediaType = mediaType,
+            displayName = displayName.take(MaxDisplayNameChars),
+            bytes = bytes,
+            imageWidth = bounds.outWidth,
+            imageHeight = bounds.outHeight,
+        )
     }
 
     private fun displayName(uri: Uri): String = runCatching {
@@ -140,6 +212,7 @@ class ChatInputImageStore(
     private companion object {
         const val CopyBufferBytes = 64 * 1024
         const val MaxDisplayNameChars = 160
+        const val MaxEncodedImageChars = (MaxChatInputImageBytes * 4L / 3L) + 16L
         val InputImageId = Regex("[a-f0-9]{20}")
         val AcceptedMediaTypes = setOf("image/png", "image/jpeg", "image/webp", "image/gif")
         val AcceptedMediaExtensions = mapOf(

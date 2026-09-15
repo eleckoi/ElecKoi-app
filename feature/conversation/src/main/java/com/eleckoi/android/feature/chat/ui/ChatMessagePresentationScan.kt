@@ -1,33 +1,20 @@
 package com.eleckoi.android.feature.chat.ui
 
-import com.eleckoi.android.feature.chat.model.ChatContextWindowUsage
-import com.eleckoi.android.feature.chat.model.ChatGenerationMetrics
 import com.eleckoi.android.feature.chat.model.ChatMessage
 import com.eleckoi.android.feature.chat.model.ImmutableAppendedList
-import com.eleckoi.android.feature.chat.model.MessageRole
 import com.eleckoi.android.feature.chat.model.hasRenderableContent
 
 /** One pass owns the screen-wide message aggregates that used to rescan on every live frame. */
 internal data class ChatMessagePresentationScan(
-    val generationMetrics: ChatGenerationMetrics,
-    val latestContextWindowUsage: ChatContextWindowUsage?,
     val renderableMessages: List<ChatMessage>,
 )
 
 internal fun scanChatMessages(messages: List<ChatMessage>): ChatMessagePresentationScan {
-    var metrics = ChatGenerationMetrics()
-    var latestContextWindowUsage: ChatContextWindowUsage? = null
     val renderable = ArrayList<ChatMessage>(messages.size)
     messages.forEach { message ->
-        if (message.role == MessageRole.Assistant) {
-            metrics += message.generationMetrics
-            message.contextWindowUsage?.let { latestContextWindowUsage = it }
-        }
         if (message.hasRenderableContent()) renderable += message
     }
     return ChatMessagePresentationScan(
-        generationMetrics = metrics,
-        latestContextWindowUsage = latestContextWindowUsage,
         renderableMessages = renderable,
     )
 }
@@ -54,12 +41,7 @@ internal class ChatMessagePresentationScanCache(
 
         val prefix = scanStable(appended.prefix)
         val tail = appended.tail
-        val assistantTail = tail.takeIf { it.role == MessageRole.Assistant }
         return ChatMessagePresentationScan(
-            generationMetrics = prefix.generationMetrics +
-                (assistantTail?.generationMetrics ?: ChatGenerationMetrics()),
-            latestContextWindowUsage = assistantTail?.contextWindowUsage
-                ?: prefix.latestContextWindowUsage,
             renderableMessages = if (tail.hasRenderableContent()) {
                 ImmutableAppendedList(prefix.renderableMessages, tail)
             } else {

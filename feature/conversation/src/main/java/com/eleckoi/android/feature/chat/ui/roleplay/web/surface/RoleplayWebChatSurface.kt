@@ -9,7 +9,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.eleckoi.android.feature.chat.ui.roleplay.web.host.RoleplayWebChatHost
 import com.eleckoi.android.feature.chat.ui.roleplay.web.model.RoleplayTranscriptModel
-import com.eleckoi.android.sdk.author.AuthorInlineMessageGateway
+import com.eleckoi.android.sdk.author.AuthorChatGateway
 
 @Composable
 internal fun RoleplayWebChatSurface(
@@ -17,7 +17,7 @@ internal fun RoleplayWebChatSurface(
     updatesPaused: Boolean,
     controller: RoleplayWebChatController,
     callbacks: RoleplayWebChatCallbacks,
-    messageGateway: AuthorInlineMessageGateway,
+    messageGateway: AuthorChatGateway,
     modifier: Modifier = Modifier,
 ) {
     key(model.sessionId) {
@@ -38,7 +38,7 @@ private fun RoleplayWebChatSessionSurface(
     updatesPaused: Boolean,
     controller: RoleplayWebChatController,
     callbacks: RoleplayWebChatCallbacks,
-    messageGateway: AuthorInlineMessageGateway,
+    messageGateway: AuthorChatGateway,
     modifier: Modifier,
 ) {
     val context = LocalContext.current

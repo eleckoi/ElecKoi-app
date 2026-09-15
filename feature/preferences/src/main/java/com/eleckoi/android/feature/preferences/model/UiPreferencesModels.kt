@@ -58,7 +58,6 @@ object RoleplayLayoutDefaults {
     const val LetterSpacing = 0f
     const val ParagraphSpacing = 10f
     const val CardPanel = false
-    const val Scrim = 0.55f
 }
 
 /** Limits and formulas shared by all three independently stored layout profiles. */
@@ -170,15 +169,15 @@ data class UiPreferences(
     val pinnedChatIds: List<String> = emptyList(),
     val hiddenChatIds: List<String> = emptyList(),
     val searchHistory: List<String> = emptyList(),
-    val presetPagePinned: Boolean = false,
-    val pluginPagePinned: Boolean = false,
-    val commonPageOrder: List<String> = emptyList(),
     val lastActiveChatSessionId: String = "",
     val activeChatSessionIds: Map<String, String> = emptyMap(),
     val pinnedCreatorWorkspaceIds: List<String> = emptyList(),
     val creatorWorkspaceExpansionOverrides: Map<String, Boolean> = emptyMap(),
     val lastCreatorWorkspaceId: String = "",
     val historySaveMode: String = "all",
+    val appearanceMode: AppearanceMode = AppearanceMode.Default,
+    val newCharacterBackground: NewCharacterBackground = NewCharacterBackground.Default,
+    val listCharacterArtwork: ListCharacterArtwork = ListCharacterArtwork.Default,
     val defaultChatConfigId: String = "",
     val defaultChatModel: String = "",
     val assistantBubbleEnabled: Boolean = RoleplayLayoutDefaults.AssistantBubbleEnabled,
@@ -193,7 +192,6 @@ data class UiPreferences(
     val chatCodeBlockShowAllEnabled: Boolean = ChatCodeBlockDefaults.ShowAllEnabled,
     val chatAvatarShape: ChatAvatarShape = RoleplayLayoutDefaults.AvatarShape,
     val chatRoleplayCardPanel: Boolean = RoleplayLayoutDefaults.CardPanel,
-    val chatRoleplayScrim: Float = RoleplayLayoutDefaults.Scrim,
     val chatBubbleCornerRadius: Float = RoleplayLayoutDefaults.BubbleCornerRadius,
     val chatAvatarSize: Float = RoleplayLayoutDefaults.AvatarSize,
     val chatNameFontSize: Float = RoleplayLayoutDefaults.NameFontSize,
@@ -230,12 +228,6 @@ data class UiPreferences(
         ).sessionIdFor(characterId)
     }
 
-    fun activeChatSessionId(characterId: String, characterMode: String): String {
-        return ActiveChatSessionSelection(
-            lastSessionId = lastActiveChatSessionId,
-            sessionIdsByContext = activeChatSessionIds,
-        ).sessionIdFor(characterId, characterMode)
-    }
 }
 
 internal fun List<String>.restoreChatEntry(sessionId: String): List<String> {

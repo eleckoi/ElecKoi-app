@@ -2,7 +2,6 @@ package com.eleckoi.android.app.shell
 
 import com.eleckoi.android.feature.characters.ui.components.AvatarSlotsPage
 import com.eleckoi.android.foundation.design.components.*
-import com.eleckoi.android.foundation.design.R as DesignR
 import com.eleckoi.android.feature.characters.model.AvatarSlot
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.NavKey
@@ -50,11 +49,6 @@ internal fun mobileSystemRouteEntry(
                     displayName = pageUser.userName,
                     cachePrefix = "user",
                     appearance = pageAppearance,
-                    defaultResources = mapOf(
-                        AvatarSlot.Circle to DesignR.raw.default_user_avatar_circle,
-                        AvatarSlot.Square to DesignR.raw.default_user_avatar_square,
-                    ),
-                    blankWhenMissing = setOf(AvatarSlot.Portrait),
                     onBack = goBackInsideApp,
                     onSave = { files ->
                         profileViewModel.onIntent(ProfileIntent.SaveAvatars(files))
@@ -65,6 +59,10 @@ internal fun mobileSystemRouteEntry(
                 val pageAppearance = currentThemeState.value.appearance
                 ThemePalettePage(
                     appearance = pageAppearance,
+                    appearanceMode = currentThemeState.value.appearanceMode,
+                    onAppearanceModeChange = { mode ->
+                        themeViewModel.onIntent(ThemeIntent.SaveAppearanceMode(mode))
+                    },
                     onApplyPalette = { bitmap ->
                         themeViewModel.onIntent(ThemeIntent.SaveThemePalette(bitmap))
                     },

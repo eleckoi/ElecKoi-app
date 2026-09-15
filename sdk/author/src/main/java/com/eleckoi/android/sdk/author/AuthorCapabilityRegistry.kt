@@ -3,12 +3,14 @@ package com.eleckoi.android.sdk.author
 import com.eleckoi.android.engine.creator.capability.CreatorCapability
 import com.eleckoi.android.engine.creator.capability.CreatorCapabilityRegistry
 import com.eleckoi.android.sdk.author.app.AppAuthorApi
+import com.eleckoi.android.sdk.author.audio.AudioAuthorApi
 import com.eleckoi.android.sdk.author.character.CharacterAuthorApi
 import com.eleckoi.android.sdk.author.chat.ChatAuthorApi
 import com.eleckoi.android.sdk.author.context.ContextAuthorApi
 import com.eleckoi.android.sdk.author.events.AuthorEventApi
 import com.eleckoi.android.sdk.author.input.InputAuthorApi
 import com.eleckoi.android.sdk.author.messages.MessageAuthorApi
+import com.eleckoi.android.sdk.author.media.MediaAuthorApi
 import com.eleckoi.android.sdk.author.openings.OpeningAuthorApi
 import com.eleckoi.android.sdk.author.setting_library.SettingLibraryAuthorApi
 import com.eleckoi.android.sdk.author.variables.VariableAuthorApi
@@ -32,6 +34,8 @@ internal object AuthorCapabilityRegistry {
                 VariableAuthorApi.routes,
                 OpeningAuthorApi.routes,
                 MessageAuthorApi.routes,
+                MediaAuthorApi.routes,
+                AudioAuthorApi.routes,
                 ChatAuthorApi.routes,
                 CharacterAuthorApi.routes,
                 SettingLibraryAuthorApi.routes,

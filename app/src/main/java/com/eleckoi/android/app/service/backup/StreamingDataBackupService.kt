@@ -12,7 +12,7 @@ import com.eleckoi.android.feature.appfont.data.AppFontRepository
 import com.eleckoi.android.feature.characters.data.CharacterRepository
 import com.eleckoi.android.feature.characters.data.UserProfileRepository
 import com.eleckoi.android.feature.characters.model.UserProfile
-import com.eleckoi.android.feature.characters.modes.story.presets.data.StoryPresetRepository
+import com.eleckoi.android.feature.characters.presets.data.AgentPresetRepository
 import com.eleckoi.android.feature.characters.modes.story.regex.data.RegexRuleRepository
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.data.SettingLibraryRepository
 import com.eleckoi.android.feature.chat.data.ChatSessionStore
@@ -42,14 +42,12 @@ internal class StreamingDataBackupService(
     private val settingLibrary: SettingLibraryRepository,
     private val variableConfig: VariableConfigRepository,
     private val regexRules: RegexRuleRepository,
-    private val storyPresets: StoryPresetRepository,
+    private val agentPresets: AgentPresetRepository,
     private val sessions: ChatSessionStore,
     private val uiPreferences: UiPreferencesRepository,
     private val appFont: AppFontRepository,
     private val modelConfigs: ModelConfigRepository,
     private val frontendProjects: FrontendProjectRepository,
-    private val exportToolConfig: () -> String,
-    private val restoreToolConfig: (String) -> Unit,
     private val creatorWorkspaces: CreatorWorkspaceRepository,
     private val creatorAssistantBackup: CreatorAssistantBackupStore,
     private val includedRoots: List<String>,
@@ -118,10 +116,9 @@ internal class StreamingDataBackupService(
                 section("preferences.json", uiPreferences.exportSnapshotJson())
                 section("app-font.json", appFont.exportSelectionJson())
                 section("model-configs.json", modelConfigs.exportBackupJson())
-                section("presets.json", rewriteJsonPaths(storyPresets.exportBackupJson(), root, true))
+                section("presets.json", rewriteJsonPaths(agentPresets.exportBackupJson(), root, true))
                 section("shared-regex.json", regexRules.exportSharedBackupJson())
                 section("author-frontends.json", frontendProjects.exportBackupJson())
-                section("tool-config.json", exportToolConfig())
                 characterItems.forEach { character ->
                     val id = safeSegment(character.id)
                     section("settings/$id.json", rewriteJsonPaths(
@@ -287,10 +284,9 @@ internal class StreamingDataBackupService(
                                 "preferences.json" -> uiPreferences.restoreSnapshotJson(payload)
                                 "app-font.json" -> appFont.restoreSelectionJson(payload)
                                 "model-configs.json" -> modelConfigs.restoreBackupJson(payload)
-                                "presets.json" -> storyPresets.restoreBackupJson(payload)
+                                "presets.json" -> agentPresets.restoreBackupJson(payload)
                                 "shared-regex.json" -> regexRules.restoreSharedBackupJson(payload)
                                 "author-frontends.json" -> frontendProjects.restoreBackupJson(payload)
-                                "tool-config.json" -> restoreToolConfig(payload)
                                 else -> {
                                     restoreCharacterSection(entry, payload, restoredCharacterIds())
                                     restoredCharacterSections += entry.name
@@ -461,7 +457,6 @@ internal class StreamingDataBackupService(
             "presets.json",
             "shared-regex.json",
             "author-frontends.json",
-            "tool-config.json",
         )
         val ExcludedSecrets = listOf(
             "model_credentials",

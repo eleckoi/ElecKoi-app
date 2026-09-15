@@ -58,13 +58,12 @@ internal fun CompactSettingsScaffold(
     title: String,
     appearance: AppearanceTheme,
     onBack: () -> Unit,
-    modifier: Modifier = Modifier,
     scrollable: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     BackHandler(onBack = onBack)
     Scaffold(
-        modifier = modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize(),
         containerColor = appearance.mobileBg,
         topBar = {
             SettingsLargeTitleBar(
@@ -259,6 +258,7 @@ internal fun SettingsDestinationRow(
     appearance: AppearanceTheme,
     onClick: () -> Unit,
     subtitle: String? = null,
+    value: String? = null,
     enabled: Boolean = true,
     iconTint: Color = appearance.mobileMuted,
 ) {
@@ -273,6 +273,7 @@ internal fun SettingsDestinationRow(
         },
         title = title,
         subtitle = subtitle,
+        value = value,
         appearance = appearance,
         onClick = onClick,
         enabled = enabled,
@@ -286,6 +287,7 @@ internal fun SettingsDestinationRow(
     appearance: AppearanceTheme,
     onClick: () -> Unit,
     subtitle: String? = null,
+    value: String? = null,
     enabled: Boolean = true,
     iconTint: Color = appearance.mobileMuted,
 ) {
@@ -300,6 +302,7 @@ internal fun SettingsDestinationRow(
         },
         title = title,
         subtitle = subtitle,
+        value = value,
         appearance = appearance,
         onClick = onClick,
         enabled = enabled,
@@ -311,6 +314,7 @@ private fun SettingsDestinationRowContent(
     icon: @Composable () -> Unit,
     title: String,
     subtitle: String?,
+    value: String?,
     appearance: AppearanceTheme,
     onClick: () -> Unit,
     enabled: Boolean,
@@ -344,6 +348,15 @@ private fun SettingsDestinationRowContent(
                     modifier = Modifier.padding(top = 2.dp),
                 )
             }
+        }
+        if (value != null) {
+            Text(
+                text = value,
+                color = appearance.mobileSoft,
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+                modifier = Modifier.padding(start = 8.dp),
+            )
         }
         Icon(
             imageVector = Icons.Rounded.ChevronRight,

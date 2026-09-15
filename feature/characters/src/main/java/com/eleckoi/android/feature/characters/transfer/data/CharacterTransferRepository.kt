@@ -1,25 +1,24 @@
 package com.eleckoi.android.feature.characters.transfer.data
 
 import android.content.Context
-import com.eleckoi.android.engine.immersive.project.FrontendProjectRepository
 import com.eleckoi.android.engine.story.variables.config.VariableConfigRepository
 import com.eleckoi.android.feature.characters.data.CharacterRepository
 import com.eleckoi.android.feature.characters.model.AvatarSlot
-import com.eleckoi.android.feature.characters.model.CharacterCard
-import com.eleckoi.android.feature.characters.model.AppDefaultChatBackground
-import com.eleckoi.android.feature.characters.model.CustomChatBackground
-import com.eleckoi.android.feature.characters.model.GlobalChatBackground
 import com.eleckoi.android.feature.characters.model.CharacterSlot
 import com.eleckoi.android.feature.characters.modes.story.model.StoryToolSettings
 import com.eleckoi.android.feature.characters.modes.story.regex.data.RegexRuleRepository
+import com.eleckoi.android.feature.characters.modes.story.regex.data.ScopedRegexRule
+import com.eleckoi.android.feature.characters.modes.story.regex.data.includeImportedRulesInActiveVersion
+import com.eleckoi.android.feature.characters.modes.story.regex.model.RegexRuleScope
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.data.SettingLibraryRepository
-import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.withRoleplayPlanEnabled
+import com.eleckoi.android.feature.characters.transfer.format.CharacterCardJsonCodec
 import com.eleckoi.android.feature.characters.transfer.format.CharacterCardFormatRegistry
 import com.eleckoi.android.feature.characters.transfer.format.json.JsonCharacterCardFormat
 import com.eleckoi.android.feature.characters.transfer.format.png.PngCharacterCardFormat
 import com.eleckoi.android.feature.characters.transfer.format.png.PngTextChunkCodec
 import com.eleckoi.android.feature.characters.transfer.format.sillytavern.SillyTavernCharacterCardFormat
 import com.eleckoi.android.feature.characters.transfer.model.CharacterImportSource
+import com.eleckoi.android.feature.characters.transfer.model.CharacterExportFormat
 import com.eleckoi.android.feature.characters.transfer.model.CharacterImportPreview
 import com.eleckoi.android.feature.characters.transfer.model.CharacterImportPreviewItem
 import com.eleckoi.android.feature.characters.transfer.model.DecodedCharacterCard
@@ -27,11 +26,8 @@ import com.eleckoi.android.feature.characters.transfer.model.ExportedCharacterCa
 import com.eleckoi.android.feature.characters.transfer.model.PortableAsset
 import com.eleckoi.android.feature.characters.transfer.model.PortableCharacter
 import com.eleckoi.android.feature.characters.transfer.model.PortableCharacterPackage
-import com.eleckoi.android.feature.characters.transfer.model.PortableFrontendProject
-import com.eleckoi.android.feature.characters.transfer.model.PortableProjectFile
 import java.io.File
 import java.util.UUID
-import kotlinx.coroutines.flow.first
 
 class CharacterTransferRepository(
     context: Context,
@@ -39,9 +35,6 @@ class CharacterTransferRepository(
     private val settingLibrary: SettingLibraryRepository,
     private val variableConfig: VariableConfigRepository,
     private val regexRules: RegexRuleRepository,
-    private val frontendProjects: FrontendProjectRepository,
-    private val initializeImportedCharacterTools: (characterId: String) -> Unit,
-    private val deleteImportedCharacterTools: (Collection<String>) -> Unit,
 ) {
     private val cacheRoot = File(context.cacheDir, "character_transfer")
     private val formats = CharacterCardFormatRegistry(
@@ -56,7 +49,7 @@ class CharacterTransferRepository(
         return try {
             val items = files.mapIndexed { index, file ->
                 val decoded = runCatching {
-                    require(file.isFile && file.length() <= MaxInputBytes) { "角色卡不能超过 64 MB" }
+                    require(file.isFile && file.length() <= MaxInputBytes) { "角色卡不能超过 96 MB" }
                     val bytes = file.readBytes()
                     val card = when (source) {
                         CharacterImportSource.ElecKoi -> formats.decode(bytes)
@@ -133,13 +126,9 @@ class CharacterTransferRepository(
                         variableConfig.restoreExportJson(created.id, decoded.packageData.variableConfigJson)
                     }
                     decoded.settingLibrary?.let { imported ->
-                        // Importing content never grants an executable capability. The author can
-                        // opt into the roleplay-plan tool after inspecting the imported card.
                         settingLibrary.save(
                             created.id,
-                            imported
-                                .copy(characterId = created.id)
-                                .withRoleplayPlanEnabled(false),
+                            imported.copy(characterId = created.id),
                         )
                     }
                     decoded.variableConfig?.let { imported ->
@@ -147,18 +136,20 @@ class CharacterTransferRepository(
                     }
                     if (decoded.regexRules.isNotEmpty()) {
                         val current = regexRules.load(created.id)
+                        val imported = decoded.regexRules.map { rule ->
+                            ScopedRegexRule(RegexRuleScope.Character, rule)
+                        }
                         regexRules.save(
                             created.id,
-                            current.copy(characterRules = current.characterRules + decoded.regexRules),
+                            current.copy(characterRules = current.characterRules + decoded.regexRules)
+                                .includeImportedRulesInActiveVersion(imported),
                         )
                     }
-                    restoreFrontends(created.id, decoded.packageData.frontends)
                     val importedCharacter = characters.characterById(created.id)
                         ?: error("导入角色失败")
                     // The imported content is already committed at this point. Give the new
                     // character the minimum capabilities needed to use its own setting library
                     // and plot variables; every unrelated tool keeps the default-off baseline.
-                    initializeImportedCharacterTools(created.id)
                     importedCharacter
                 }.getOrElse { error ->
                     if (createdId.isNotBlank()) cleanupImportedCharacter(createdId)
@@ -178,19 +169,26 @@ class CharacterTransferRepository(
         synchronized(lock) { prepared.remove(token) }?.items?.forEach { deleteImportSource(it.sourceFile) }
     }
 
-    suspend fun exportCharacter(characterId: String): ExportedCharacterCard {
+    suspend fun exportCharacter(
+        characterId: String,
+        format: CharacterExportFormat,
+    ): ExportedCharacterCard {
         val slot = characters.characterById(characterId) ?: error("角色不存在")
         val value = portablePackage(slot)
-        val imageSource = listOf(
-            slot.persona.assistantCover,
-            slot.coverImage,
-            slot.persona.assistantSquare,
-            slot.squareImage,
-            slot.persona.assistantAvatar,
-            slot.avatar,
-        ).firstNotNullOfOrNull { path -> File(path).takeIf { path.isNotBlank() && it.isFile } }
-        val image = CharacterCardMedia.cardPng(imageSource, slot.name)
-        val encoded = PngCharacterCardFormat.encode(image, value)
+        val encoded = when (format) {
+            CharacterExportFormat.Png -> {
+                val imageSource = listOf(
+                    slot.persona.assistantCover,
+                    slot.coverImage,
+                    slot.persona.assistantSquare,
+                    slot.squareImage,
+                    slot.persona.assistantAvatar,
+                    slot.avatar,
+                ).firstNotNullOfOrNull { path -> File(path).takeIf { path.isNotBlank() && it.isFile } }
+                PngCharacterCardFormat.encode(CharacterCardMedia.cardPng(imageSource, slot.name), value)
+            }
+            CharacterExportFormat.Json -> CharacterCardJsonCodec.encodeJson(value).toByteArray(Charsets.UTF_8)
+        }
         val directory = File(
             cacheRoot,
             "exports/${System.currentTimeMillis()}-${UUID.randomUUID()}",
@@ -198,24 +196,25 @@ class CharacterTransferRepository(
         val safeName = slot.name.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().ifBlank { "角色" }
         // Keep cache uniqueness in the directory. Share targets display the leaf file name, so
         // exposing the timestamp here makes a character card look like it has a product suffix.
-        val output = File(directory, "$safeName.png")
+        val output = File(directory, "$safeName.${format.extension}")
         output.writeBytes(encoded)
-        return ExportedCharacterCard(slot.id, slot.name, output)
+        return ExportedCharacterCard(slot.id, slot.name, format, output)
     }
 
-    suspend fun exportCharacters(characterIds: List<String>): List<ExportedCharacterCard> {
+    suspend fun exportCharacters(
+        characterIds: List<String>,
+        format: CharacterExportFormat,
+    ): List<ExportedCharacterCard> {
         val distinctIds = characterIds.distinct()
         require(distinctIds.isNotEmpty()) { "请先选择角色" }
-        return distinctIds.map { characterId -> exportCharacter(characterId) }
+        return distinctIds.map { characterId -> exportCharacter(characterId, format) }
     }
 
     private fun savePortableCharacter(created: CharacterSlot, value: PortableCharacter) {
         val current = characters.loadCharacters()
-        val persona = CharacterCard(
-            characterId = created.id,
+        val persona = created.persona.copy(
             characterName = value.name,
             assistantName = value.name,
-            assistantPrompt = value.assistantPrompt,
             profileAge = value.profileAge,
             profileSex = value.profileSex,
             profileHeight = value.profileHeight,
@@ -224,24 +223,10 @@ class CharacterTransferRepository(
             imagePrompt = value.imagePrompt,
             opening = value.opening,
             showOpening = value.showOpening,
-            chatBackground = when (value.chatBackgroundMode) {
-                "app_default" -> AppDefaultChatBackground
-                "custom" -> CustomChatBackground
-                "global" -> GlobalChatBackground
-                else -> ""
-            },
-            chatBackgroundOpacity = value.chatBackgroundOpacity,
-            chatBackgroundBlur = value.chatBackgroundBlur,
-            chatBackgroundScrim = value.chatBackgroundScrim,
-            userName = created.persona.userName,
-            userAvatar = created.persona.userAvatar,
-            userSquare = created.persona.userSquare,
-            userPortrait = created.persona.userPortrait,
         )
         val updated = created.copy(
             name = value.name,
             group = value.group,
-            characterMode = value.characterMode,
             storyTools = StoryToolSettings(frontendBeautyEnabled = value.frontendBeautyEnabled),
             persona = persona,
         )
@@ -293,9 +278,7 @@ class CharacterTransferRepository(
             character = PortableCharacter(
                 name = slot.name,
                 group = slot.group,
-                characterMode = slot.characterMode,
                 frontendBeautyEnabled = slot.storyTools.frontendBeautyEnabled,
-                assistantPrompt = persona.assistantPrompt,
                 profileAge = persona.profileAge,
                 profileSex = persona.profileSex,
                 profileHeight = persona.profileHeight,
@@ -304,62 +287,12 @@ class CharacterTransferRepository(
                 imagePrompt = persona.imagePrompt,
                 opening = persona.opening,
                 showOpening = persona.showOpening,
-                chatBackgroundMode = "card",
-                chatBackgroundOpacity = 0.72f,
-                chatBackgroundBlur = 0f,
-                chatBackgroundScrim = 0.22f,
             ),
             assets = assets,
             settingLibraryJson = settingLibrary.exportSnapshotJson(slot.id),
             variableConfigJson = variableConfig.exportJson(slot.id),
-            frontends = captureFrontends(slot.id),
+            regexRules = regexRules.load(slot.id).characterRules.sortedBy { it.order },
         )
-    }
-
-    private suspend fun captureFrontends(characterId: String): List<PortableFrontendProject> {
-        val workspace = frontendProjects.workspaceFlow(characterId).first()
-        var total = 0L
-        return workspace.projects.map { project ->
-            val root = frontendProjects.projectDirectory(project.id) ?: error("前端项目文件不存在")
-            val rootPath = root.canonicalFile.toPath()
-            val files = project.files.map { relative ->
-                val file = File(root, relative).canonicalFile
-                require(file.toPath().startsWith(rootPath) && file.isFile) { "前端项目文件路径无效" }
-                val bytes = file.readBytes()
-                total += bytes.size
-                require(total <= MaxAttachmentBytes) { "角色附件总大小不能超过 48 MB" }
-                PortableProjectFile(relative.replace('\\', '/'), bytes)
-            }
-            PortableFrontendProject(
-                name = project.name,
-                entryFile = project.entryFile,
-                selected = workspace.selectedProjectId == project.id,
-                files = files,
-            )
-        }
-    }
-
-    private suspend fun restoreFrontends(characterId: String, projects: List<PortableFrontendProject>) {
-        projects.forEachIndexed { index, project ->
-            val root = File(cacheRoot, "frontend/$characterId/$index").apply { mkdirs() }.canonicalFile
-            try {
-                project.files.forEach { item ->
-                    val output = File(root, item.path).canonicalFile
-                    require(output.toPath().startsWith(root.toPath())) { "角色卡包含不安全的文件路径" }
-                    output.parentFile?.mkdirs()
-                    output.writeBytes(item.bytes)
-                }
-                frontendProjects.publishProject(
-                    characterId = characterId,
-                    sourceDirectory = root,
-                    name = project.name,
-                    entryFile = project.entryFile,
-                    select = project.selected,
-                )
-            } finally {
-                root.deleteRecursively()
-            }
-        }
     }
 
     private fun asset(key: String, path: String): PortableAsset? {
@@ -384,8 +317,6 @@ class CharacterTransferRepository(
         settingLibrary.deleteForCharacters(ids)
         variableConfig.deleteForCharacters(ids)
         regexRules.deleteForCharacters(ids)
-        frontendProjects.deleteForCharacters(ids)
-        deleteImportedCharacterTools(ids)
         characters.deleteCharacters(ids)
     }
 
@@ -408,7 +339,7 @@ class CharacterTransferRepository(
     )
 
     private companion object {
-        const val MaxInputBytes = 64L * 1024 * 1024
+        const val MaxInputBytes = 96L * 1024 * 1024
         const val PngSignatureBytes = 8
         const val MaxImportCount = 50
         const val MaxAttachmentBytes = 48L * 1024 * 1024

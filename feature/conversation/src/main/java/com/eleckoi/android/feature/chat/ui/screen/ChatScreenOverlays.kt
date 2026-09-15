@@ -8,14 +8,12 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import com.eleckoi.android.engine.agent.diagnostics.AgentTurnRequestCapture
 import com.eleckoi.android.engine.generation.model.ModelConfig
-import com.eleckoi.android.feature.characters.model.CharacterMode
 import com.eleckoi.android.feature.chat.model.ChatDraft
 import com.eleckoi.android.feature.chat.model.ChatMessage
-import com.eleckoi.android.feature.modelconfig.model.ModelParameters
 import com.eleckoi.android.feature.chat.ui.diagnostics.AgentRequestCaptureDialog
 import com.eleckoi.android.feature.chat.ui.sheets.ChatHistorySheet
 import com.eleckoi.android.feature.chat.ui.sheets.EditMessageSheet
-import com.eleckoi.android.feature.chat.ui.sheets.ModelPickerSheet
+import com.eleckoi.android.feature.modelconfig.ui.modelpicker.ModelPickerSheet
 import com.eleckoi.android.feature.chat.ui.sheets.SelectMessageTextSheet
 import com.eleckoi.android.feature.chat.ui.layout.asRoleplayReadingTheme
 import com.eleckoi.android.feature.chat.ui.message.ChatAgentProcessSheet
@@ -76,7 +74,6 @@ internal fun ChatScreenOverlays(
             sessions = state.sessions,
             currentSessionId = draft?.session?.id.orEmpty(),
             currentCharacterId = draft?.session?.characterId ?: state.chatCharacterId,
-            currentCharacterMode = draft?.session?.characterMode ?: state.chatCharacterMode,
             characterName = draft?.session?.characterName ?: state.chatCharacterName,
             saveMode = state.historySaveMode,
             appearance = state.appearance,
@@ -101,7 +98,6 @@ internal fun ChatScreenOverlays(
             configs = state.modelConfigs + state.imageModelConfigs,
             selectedConfigId = draft?.selectedModelConfig?.id.orEmpty(),
             selectedModel = draft?.selectedModel.orEmpty(),
-            streamEnabled = draft?.modelParameters?.stream ?: true,
             characterImagePrompt = draft?.session?.characterPersona?.imagePrompt.orEmpty(),
             appearance = state.appearance,
             onDismiss = { onIntent(ChatIntent.SetModelPickerOpen(false)) },
@@ -110,17 +106,6 @@ internal fun ChatScreenOverlays(
                     ChatIntent.SelectModel(
                         configId,
                         model,
-                        draft?.modelParameters ?: ModelParameters(),
-                    ),
-                )
-            },
-            onStreamChange = { stream ->
-                val currentDraft = state.draft ?: return@ModelPickerSheet
-                onIntent(
-                    ChatIntent.SelectModel(
-                        currentDraft.selectedModelConfig.id,
-                        currentDraft.selectedModel,
-                        currentDraft.modelParameters.copy(stream = stream),
                     ),
                 )
             },
@@ -180,19 +165,6 @@ internal fun ChatScreenOverlays(
         )
     }
 
-    state.modeConflict?.let { conflict ->
-        val sessionMode = CharacterMode.fromStorage(conflict.sessionMode).label
-        val currentMode = CharacterMode.fromStorage(conflict.currentMode).label
-        ConfirmDialog(
-            title = "不能跨模式继续对话",
-            message = "这条聊天属于“${sessionMode}模式”，角色当前已经切换为“${currentMode}模式”。为避免聊天历史和工作区串线，不能在这里继续发送。",
-            appearance = state.appearance,
-            confirmText = "打开${currentMode}对话",
-            dismissText = "留在当前对话",
-            onDismiss = { onIntent(ChatIntent.DismissModeConflict) },
-            onConfirm = { onIntent(ChatIntent.OpenCurrentModeChat) },
-        )
-    }
 }
 
 @Composable

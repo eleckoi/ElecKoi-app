@@ -51,6 +51,7 @@ import com.eleckoi.android.feature.preferences.ChatLayoutMode
 import com.eleckoi.android.feature.appfont.ui.ProvideAppFont
 import com.eleckoi.android.feature.chat.ui.blocks.markdown.layout.MarkdownRenderPlanEngine
 import com.eleckoi.android.foundation.design.AppearanceTheme
+import com.eleckoi.android.sdk.author.AuthorChatGateway
 
 internal data class ChatConversationListLayout(
     val listState: LazyListState,
@@ -89,6 +90,7 @@ internal fun ChatConversationList(
     staticExpansionObserver: (Any, Boolean) -> Unit,
     layout: ChatConversationListLayout,
     actions: ChatConversationListActions,
+    authorGateway: AuthorChatGateway,
     modifier: Modifier = Modifier,
 ) {
     // Carries the user's font when they scoped it to chat text only. When the scope is the whole
@@ -208,6 +210,7 @@ internal fun ChatConversationList(
                         lineHeightMultiplier = state.chatLineHeightMultiplier,
                         letterSpacing = state.chatLetterSpacing,
                         paragraphSpacing = state.chatParagraphSpacing,
+                        authorGateway = authorGateway,
                         roleplayToolbarController = roleplayToolbarController,
                         visualGeneration = visualReplyState.generationFor(message.id),
                         awaitingAssistantVisualCompletion =

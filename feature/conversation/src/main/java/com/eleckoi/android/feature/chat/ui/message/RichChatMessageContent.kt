@@ -18,6 +18,7 @@ import com.eleckoi.android.feature.chat.model.MessageRole
 import com.eleckoi.android.feature.chat.ui.blocks.image.GeneratedImageGallery
 import com.eleckoi.android.feature.chat.ui.blocks.rich.RichMessageBlock
 import com.eleckoi.android.foundation.design.AppearanceTheme
+import com.eleckoi.android.sdk.author.AuthorChatGateway
 
 @Composable
 internal fun RichChatMessageContent(
@@ -28,6 +29,7 @@ internal fun RichChatMessageContent(
     fontSize: TextUnit,
     lineHeight: TextUnit,
     letterSpacing: TextUnit,
+    authorGateway: AuthorChatGateway,
     visualGeneration: Int,
     onContentReady: () -> Unit,
     onVisualComplete: () -> Unit,
@@ -85,6 +87,7 @@ internal fun RichChatMessageContent(
                 fontSize = fontSize,
                 lineHeight = lineHeight,
                 letterSpacing = letterSpacing,
+                authorGateway = authorGateway,
                 onContentReady = { richReady = true },
             )
         }

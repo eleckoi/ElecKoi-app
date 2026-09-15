@@ -1,6 +1,7 @@
 package com.eleckoi.android.feature.chat.ui.roleplay.web.document.runtime
 
-internal val RoleplayTranscriptTurns = """    const createBody = message => {
+internal val RoleplayTranscriptTurns = """    const missingAvatar = () => '<svg class="avatar-placeholder" viewBox="0 0 256 256" aria-hidden="true"><path d="M230.93,220a8,8,0,0,1-6.93,4H32a8,8,0,0,1-6.92-12c15.23-26.33,38.7-45.21,66.09-54.16a72,72,0,1,1,73.66,0c27.39,8.95,50.86,27.83,66.09,54.16A8,8,0,0,1,230.93,220Z"></path></svg>';
+    const createBody = message => {
       const body = document.createElement('div'); body.className = 'message-body';
       if (message.liveStatus && message.liveStatus.label) {
         const status = document.createElement('button');
@@ -34,7 +35,7 @@ internal val RoleplayTranscriptTurns = """    const createBody = message => {
       const lane = document.createElement('div'); lane.className = 'portrait-lane';
       const avatar = document.createElement('button'); avatar.className = 'avatar'; avatar.type = 'button'; avatar.dataset.action = 'avatar';
       if (message.avatarUrl) avatar.innerHTML = `<img src="${'$'}{escapeHtml(message.avatarUrl)}" alt="">`;
-      else if (message.showAvatarInitial) avatar.innerHTML = `<span class="avatar-initial">${'$'}{escapeHtml((message.name || '?').slice(0,1))}</span>`;
+      else avatar.innerHTML = missingAvatar();
       lane.append(avatar);
       if (pagerVisible) {
         const pager = document.createElement('div'); pager.className = 'pager';
@@ -112,15 +113,12 @@ internal val RoleplayTranscriptTurns = """    const createBody = message => {
       const name = existing.querySelector(':scope > .turn-main > .turn-header .name');
       if (name && name.textContent !== String(message.name || '')) name.textContent = message.name || '';
       if (
-        previousMessage.avatarUrl !== message.avatarUrl ||
-        previousMessage.showAvatarInitial !== message.showAvatarInitial ||
-        previousMessage.name !== message.name
+        previousMessage.avatarUrl !== message.avatarUrl
       ) {
         const avatar = existing.querySelector(':scope > .portrait-lane > .avatar');
         if (avatar) {
           if (message.avatarUrl) avatar.innerHTML = `<img src="${'$'}{escapeHtml(message.avatarUrl)}" alt="">`;
-          else if (message.showAvatarInitial) avatar.innerHTML = `<span class="avatar-initial">${'$'}{escapeHtml((message.name || '?').slice(0,1))}</span>`;
-          else avatar.replaceChildren();
+          else avatar.innerHTML = missingAvatar();
         }
       }
       if (

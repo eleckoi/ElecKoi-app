@@ -92,7 +92,7 @@ fun MobileRootBackdrop(
         modifier = modifier
             .fillMaxSize()
             .then(if (sky != null) Modifier.sky(sky) else Modifier)
-            .background(appearance.mobileSurface),
+            .background(mobileRootContentColor(appearance)),
     ) {
         if (model != null) {
             AsyncImage(
@@ -163,19 +163,24 @@ fun MobileRootGlassBar(
     appearance: AppearanceTheme,
     modifier: Modifier = Modifier,
     placement: MobileRootGlassPlacement = MobileRootGlassPlacement.Top,
+    chromeColor: Color? = null,
     content: @Composable BoxScope.() -> Unit,
 ) {
-    val chromeColor = when (placement) {
+    val resolvedChromeColor = chromeColor ?: when (placement) {
         MobileRootGlassPlacement.Top -> appearance.mobileTopbarBg
         MobileRootGlassPlacement.Bottom -> appearance.mobileTabbarBg
     }
+    if (appearance.isDark && resolvedChromeColor == Color.Black) {
+        Box(modifier = modifier.background(Color.Black), content = content)
+        return
+    }
     val stableAlpha = if (appearance.isDark) 0.88f else 0.92f
-    val stableFill = Modifier.background(chromeColor.copy(alpha = stableAlpha))
+    val stableFill = Modifier.background(resolvedChromeColor.copy(alpha = stableAlpha))
     Box(modifier = modifier) {
         Box(
             modifier = Modifier
                 .matchParentSize()
-                .mobileRootLiquidGlass(appearance, chromeColor),
+                .mobileRootLiquidGlass(appearance, resolvedChromeColor),
         )
         Box(
             modifier = Modifier
@@ -188,6 +193,30 @@ fun MobileRootGlassBar(
     }
 }
 
+/** Root-page chrome that paints behind the status bar with the page title. */
+@Composable
+fun MobileRootTopBar(
+    appearance: AppearanceTheme,
+    modifier: Modifier = Modifier,
+    includeStatusBarInset: Boolean = true,
+    content: @Composable () -> Unit,
+) {
+    MobileRootGlassBar(
+        appearance = appearance,
+        placement = MobileRootGlassPlacement.Top,
+        chromeColor = mobileRootTopBarContainerColor(appearance),
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (includeStatusBarInset) Modifier.statusBarsPadding() else Modifier),
+        ) {
+            content()
+        }
+    }
+}
+
 @Composable
 fun MobileRootSurface(
     appearance: AppearanceTheme,
@@ -195,15 +224,8 @@ fun MobileRootSurface(
     content: @Composable () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
-        MobileRootGlassBar(
-            appearance = appearance,
-            placement = MobileRootGlassPlacement.Top,
-            modifier = Modifier
-                .fillMaxWidth(),
-        ) {
-            Box(modifier = Modifier.statusBarsPadding()) {
-                header()
-            }
+        MobileRootTopBar(appearance = appearance) {
+            header()
         }
         Column(
             modifier = Modifier
@@ -214,3 +236,9 @@ fun MobileRootSurface(
         }
     }
 }
+
+fun mobileRootContentColor(appearance: AppearanceTheme): Color =
+    appearance.mobileRootBg
+
+fun mobileRootTopBarContainerColor(appearance: AppearanceTheme): Color =
+    appearance.mobileTopbarBg

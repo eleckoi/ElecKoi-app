@@ -2,11 +2,8 @@ package com.eleckoi.android.feature.characters.modes.story.settinglibrary.ui
 
 import com.eleckoi.android.feature.characters.modes.story.ui.shared.*
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -46,10 +43,10 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.data.se
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryAgentReadStrategy
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryGroup
-import com.eleckoi.android.foundation.design.components.AppIconPaths
 import com.eleckoi.android.foundation.design.components.DshFolderGlyph
+import com.eleckoi.android.foundation.design.components.DshTreeDisclosureGlyph
 import com.eleckoi.android.foundation.design.components.PinnedStatusScaffold
-import com.eleckoi.android.foundation.design.components.StrokeSvgIcon
+import com.eleckoi.android.foundation.design.components.dshTreeRowEntrance
 import com.eleckoi.android.foundation.design.components.noRippleClickable
 
 @Composable
@@ -165,6 +162,7 @@ private fun AgentCatalogTree(
                 val current = row.id.isNotEmpty() && row.id == currentEntryId
                 Row(
                     modifier = Modifier
+                        .dshTreeRowEntrance(enabled = row.depth > 0)
                         .fillMaxWidth()
                         .height(34.dp)
                         .padding(start = 16.dp, end = 14.dp)
@@ -199,17 +197,10 @@ private fun AgentCatalogTree(
                 ) {
                     if (row.folder) {
                         val folderExpanded = row.path in expandedFolderPaths
-                        val chevronRotation by animateFloatAsState(
-                            targetValue = if (folderExpanded) 90f else 0f,
-                            animationSpec = tween(durationMillis = 150),
-                            label = "setting_picker_chevron_rotation",
-                        )
-                        StrokeSvgIcon(
-                            paths = AppIconPaths.ChevronRight,
-                            color = editor.meta,
-                            modifier = Modifier.rotate(chevronRotation),
+                        DshTreeDisclosureGlyph(
+                            expanded = folderExpanded,
+                            tint = editor.meta,
                             iconSize = 14.dp,
-                            strokeWidth = 1.8f,
                         )
                     } else {
                         Box(modifier = Modifier.width(14.dp))

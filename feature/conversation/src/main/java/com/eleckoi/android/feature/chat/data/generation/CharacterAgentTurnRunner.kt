@@ -264,6 +264,7 @@ internal class CharacterAgentTurnRunner(
                 messages = session.messages + committedAssistant,
                 variableStateJson = committedVariableState,
                 updatedAt = nowIso(),
+                generationStats = projector.generationStats(),
             )
             checkpointWriter.stop()
             turnCommitter.commitActive(
@@ -315,7 +316,7 @@ internal class CharacterAgentTurnRunner(
                 error.message?.takeIf(String::isNotBlank) ?: "生成未完成"
             }
             val stopped = settleStoppedSession(
-                session = session,
+                session = session.copy(generationStats = projector.generationStats()),
                 pending = projector.pendingMessage(),
                 activeTurn = activeTurn,
                 failureReason = failureReason,

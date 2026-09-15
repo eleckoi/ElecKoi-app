@@ -6,7 +6,6 @@ import androidx.paging.PagingData
 import com.eleckoi.android.engine.generation.image.ReplyImageGenerator
 import com.eleckoi.android.feature.characters.data.CharacterRepository
 import com.eleckoi.android.feature.characters.model.CharacterCard
-import com.eleckoi.android.feature.characters.model.CharacterMode
 import com.eleckoi.android.feature.characters.model.CharacterSlot
 import com.eleckoi.android.feature.chat.data.session.ChatSessionImageCoordinator
 import com.eleckoi.android.feature.chat.data.session.ChatOpeningCoordinator
@@ -17,7 +16,6 @@ import com.eleckoi.android.feature.chat.model.ChatListItem
 import com.eleckoi.android.feature.chat.model.ChatImageAttachment
 import com.eleckoi.android.feature.chat.model.ChatImageStatus
 import com.eleckoi.android.feature.chat.model.ChatMessage
-import com.eleckoi.android.feature.modelconfig.model.ChatModelSelection
 import com.eleckoi.android.feature.chat.model.ChatSession
 import com.eleckoi.android.feature.chat.model.MessageRole
 import com.eleckoi.android.feature.chat.model.settleAbortedGeneration
@@ -41,15 +39,17 @@ class ChatSessionStore(
     private val database: ElecKoiDatabase,
     private val characters: CharacterRepository,
     private val generationAttempts: GenerationAttemptRepository,
+    private val generationStats: ChatGenerationStatsStore? = null,
     private val historySaveModeProvider: suspend () -> String = { "all" },
     private val replyImageGenerator: ReplyImageGenerator? = null,
     private val inputImageStore: ChatInputImageStore? = null,
     cleanupRunner: PersistentCleanupRunner = ImmediateCleanupRunner,
     onSessionsDeleted: suspend (List<String>) -> Unit = {},
 ) {
-    private val room = ChatSessionRoomStorage(database)
+    private val room = ChatSessionRoomStorage(database, generationStats)
     private val dao = room.dao
     private val ledger = room.ledger
+    private val settingSnapshots = ChatSettingLibrarySnapshotStore(database)
     private val images = ChatSessionImageCoordinator(database, room, generationAttempts)
     private val opening = ChatOpeningCoordinator(room)
     private val attachmentCleanup = ConversationAttachmentCleanup(
@@ -63,7 +63,10 @@ class ChatSessionStore(
         replyImageGenerator = replyImageGenerator,
         inputImageStore = inputImageStore,
         cleanupRunner = cleanupRunner,
-        onSessionsDeleted = onSessionsDeleted,
+        onSessionsDeleted = { ids ->
+            ids.forEach { id -> generationStats?.deleteConversation(id) }
+            onSessionsDeleted(ids)
+        },
     )
 
     fun chatList(): List<ChatListItem> = chatListFromRows(dao.chatListRows())
@@ -89,10 +92,7 @@ class ChatSessionStore(
     /** Complete selected branch used for the next role-chat dialogue projection. */
     fun activeMessages(sessionId: String): List<ChatMessage> = room.activeMessages(sessionId)
 
-    fun latest(
-        character: CharacterSlot,
-        characterMode: String = CharacterMode.Agent.storageValue,
-    ): ChatSession? = dao.latestSession(character.id, characterMode)
+    fun latest(character: CharacterSlot): ChatSession? = dao.latestSession(character.id)
         ?.let(room::sessionFromEntity)
         ?.let(::refreshCharacterPersona)
 
@@ -174,6 +174,7 @@ class ChatSessionStore(
 
     fun write(session: ChatSession) {
         database.runInTransaction { room.writeInTransaction(session) }
+        generationStats?.persist(session.id, session.generationStats)
     }
 
     /** Normal send path: append exactly one user turn without rewriting the loaded window. */
@@ -185,6 +186,7 @@ class ChatSessionStore(
                 updatedAt = session.updatedAt,
                 turn = message.toLedgerMessage(session),
             )
+            settingSnapshots.capture(session.id, message.id)
             room.upsertMetadataWithHistoryInTransaction(session, message.content)
         }
     }
@@ -192,13 +194,52 @@ class ChatSessionStore(
     /** Destructive regeneration path: retain the selected user turn and remove everything below. */
     fun truncateForRegeneration(session: ChatSession, retainedMessage: ChatMessage) {
         attachmentCleanup.discardMessages(session.id) {
+            val settingSnapshot = settingSnapshots.snapshotForMessage(session.id, retainedMessage.id)
             ledger.truncateAfterTurnInTransaction(
                 conversationId = session.id,
                 updatedAt = session.updatedAt,
                 retainedTurn = retainedMessage.toLedgerMessage(session),
             )
+            settingSnapshots.restore(session.id, settingSnapshot)
+            settingSnapshots.write(session.id, retainedMessage.id, settingSnapshot)
             room.upsertMetadataWithHistoryInTransaction(session, retainedMessage.content)
         }
+        generationStats?.deleteConversation(session.id)
+    }
+
+    /** Causal suffix deletion; reads only IDs and attachment metadata, never an entire transcript. */
+    fun deleteMessagesFrom(sessionId: String, messageId: String): ChatStoredSuffixDeletion {
+        val existing = load(sessionId, touch = false)
+        val updatedAt = nowIso()
+        var removed: com.eleckoi.android.engine.agent.eleckoi.conversation.LedgerSuffixDeletion? = null
+        var attemptPaths: Set<String> = emptySet()
+        attachmentCleanup.discardMessages(sessionId) {
+            val settingSnapshot = settingSnapshots.snapshotForMessage(sessionId, messageId)
+            val deletion = ledger.deleteFromMessageInTransaction(sessionId, messageId, updatedAt)
+            removed = deletion
+            settingSnapshots.restore(sessionId, settingSnapshot)
+            attemptPaths = generationAttempts.deleteForMessagesInTransaction(
+                sessionId,
+                deletion.messageIds,
+            )
+            database.roleplayRichHeightDao().deleteForMessages(sessionId, deletion.messageIds)
+            val latestSummary = ledger.page(sessionId, beforeSequence = null, limit = 1)
+                .messages.lastOrNull()?.content.orEmpty()
+            room.upsertMetadataWithHistoryInTransaction(
+                existing.copy(variableStateJson = deletion.retainedVariableStateJson, updatedAt = updatedAt),
+                latestSummary,
+                replaceBlankSummary = true,
+            )
+        }
+        replyImageGenerator?.deleteGeneratedFiles(attemptPaths)
+        generationStats?.deleteConversation(sessionId)
+        val deletion = requireNotNull(removed)
+        return ChatStoredSuffixDeletion(
+            session = load(sessionId, touch = false),
+            deletedMessageIds = deletion.messageIds,
+            remainingMessageCount = ledger.activeMessageCount(sessionId),
+            obsoleteRuntimeThreadIds = deletion.obsoleteRuntimeThreadIds,
+        )
     }
 
     /** Complete/failed/image-refreshed response path: update only the selected turn's one reply. */
@@ -217,6 +258,7 @@ class ChatSessionStore(
                 turnSourceMessageId = userMessageId,
                 response = response.toLedgerMessage(session),
             )
+            settingSnapshots.captureResponseAfter(session.id, response.id)
             if (terminalAttemptId != null && terminalAttemptState != null) {
                 generationAttempts.finishInTransaction(
                     attemptId = terminalAttemptId,
@@ -226,6 +268,7 @@ class ChatSessionStore(
             }
             room.upsertMetadataWithHistoryInTransaction(session, response.content)
         }
+        generationStats?.persist(session.id, session.generationStats)
     }
 
     internal fun finishGenerationAttempt(
@@ -271,6 +314,7 @@ class ChatSessionStore(
                 rebuildDisplayCache = false,
             )
         }
+        generationStats?.persist(session.id, session.generationStats)
     }
 
     /** Session settings/persona/workspace changes must never rewrite message history. */
@@ -311,10 +355,9 @@ class ChatSessionStore(
 
     fun replaceUnstartedOpening(
         characterId: String,
-        characterMode: String,
         content: String,
     ) {
-        opening.replaceUnstartedOpening(characterId, characterMode, content)
+        opening.replaceUnstartedOpening(characterId, content)
     }
 
     fun selectOpening(
@@ -377,27 +420,11 @@ class ChatSessionStore(
     suspend fun restoreBackupHistory(characterId: String, json: String): Int =
         history.import(characterId, json)
 
-    fun saveModelSelection(sessionId: String, selection: ChatModelSelection): ChatSession {
-        val session = load(sessionId, touch = false)
-        val capability = selection.capability.trim().ifBlank { "chat" }
-        val updated = session.copy(
-            modelSettings = session.modelSettings + (
-                capability to selection.copy(capability = capability)
-            ),
-            updatedAt = nowIso(),
-        )
-        updateMetadata(updated)
-        return updated
-    }
-
     suspend fun applyHistorySavePolicy(characterId: String) =
         history.applySavePolicy(characterId)
 
     fun personaSnapshot(character: CharacterSlot): CharacterCard =
         characterPersonaSnapshot(character)
-
-    fun personaSnapshot(character: CharacterSlot, characterMode: String): CharacterCard =
-        characterPersonaSnapshot(character, characterMode)
 
     private fun chatListFromRows(rows: List<ChatListRoomRow>): List<ChatListItem> {
         val characterById = characters.loadCharacters().items.associateBy { it.id }
@@ -413,12 +440,10 @@ class ChatSessionStore(
     private fun refreshCharacterPersona(session: ChatSession): ChatSession {
         val character = characters.characterById(session.characterId) ?: return session
         val snapshot = personaSnapshot(character)
-        val mode = CharacterMode.fromStorage(session.characterMode).storageValue
-        val persona = personaSnapshot(character, mode)
+        val persona = personaSnapshot(character)
         if (
             session.characterName == snapshot.assistantName &&
             session.characterAvatar == snapshot.assistantAvatar &&
-            session.characterMode == mode &&
             session.characterPersona == persona
         ) {
             return session
@@ -427,7 +452,6 @@ class ChatSessionStore(
             characterName = snapshot.assistantName,
             characterAvatar = snapshot.assistantAvatar,
             characterPersona = persona,
-            characterMode = mode,
         )
     }
 
@@ -454,18 +478,26 @@ internal fun ChatListRoomRow.toChatListItem(
     val displayName = snapshot?.assistantName.orEmpty().ifBlank {
         character?.name.orEmpty().ifBlank { entity.characterName }
     }
-    val displayAvatar = snapshot?.assistantAvatar.orEmpty().ifBlank {
-        character?.avatar.orEmpty().ifBlank { entity.characterAvatar }
+    val displayAvatar = character?.persona?.assistantAvatar.orEmpty().ifBlank {
+        character?.avatar.orEmpty()
+            .ifBlank { snapshot?.assistantAvatar.orEmpty() }
+            .ifBlank { entity.characterAvatar }
+    }
+    val displayCover = character?.persona?.assistantCover.orEmpty().ifBlank {
+        character?.coverImage.orEmpty()
+            .ifBlank { snapshot?.assistantCover.orEmpty() }
+            .ifBlank { displayAvatar }
     }
     return ChatListItem(
         id = entity.id,
         title = entity.title.ifBlank { displayName.ifBlank { "新对话" } },
         characterId = entity.characterId,
-        characterMode = entity.characterMode,
         characterName = displayName,
         characterAvatar = displayAvatar,
         summary = summary.take(42),
         updatedAt = entity.updatedAt,
         messageCount = messageCount,
+        characterCover = displayCover,
+        createdAt = entity.createdAt,
     )
 }

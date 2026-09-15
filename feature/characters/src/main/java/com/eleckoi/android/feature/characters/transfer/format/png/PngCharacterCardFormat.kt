@@ -4,8 +4,6 @@ import com.eleckoi.android.feature.characters.transfer.format.CharacterCardForma
 import com.eleckoi.android.feature.characters.transfer.format.CharacterCardJsonCodec
 import com.eleckoi.android.feature.characters.transfer.model.DecodedCharacterCard
 import com.eleckoi.android.feature.characters.transfer.model.PortableCharacterPackage
-import java.nio.charset.StandardCharsets
-import java.util.Base64
 
 internal object PngCharacterCardFormat : CharacterCardFormat {
     override fun decode(bytes: ByteArray): DecodedCharacterCard? {
@@ -16,25 +14,23 @@ internal object PngCharacterCardFormat : CharacterCardFormat {
                 packageData = CharacterCardJsonCodec.decodePortable(encoded),
                 sourceImage = bytes,
                 complete = true,
-            )
+            ).let { decoded ->
+                decoded.copy(
+                    summary = "ElecKoi 完整角色卡",
+                    regexRules = decoded.packageData.regexRules,
+                )
+            }
         }
-        text[CharacterCardJsonCodec.StandardKeyword]?.let { encoded ->
-            return CharacterCardJsonCodec.decodeStandard(encoded, bytes)
-        }
-        error("图片里没有角色卡数据")
+        error("图片里没有 ElecKoi 角色卡数据")
     }
 
     fun encode(image: ByteArray, value: PortableCharacterPackage): ByteArray {
-        val standard = Base64.getEncoder().encodeToString(
-            CharacterCardJsonCodec.encodeStandard(value.character)
-                .toByteArray(StandardCharsets.UTF_8),
-        )
         return PngTextChunkCodec.writeText(
             image,
-            mapOf(
-                CharacterCardJsonCodec.StandardKeyword to standard,
-                CharacterCardJsonCodec.PortableKeyword to CharacterCardJsonCodec.encodePortable(value),
-            ),
+            mapOf(CharacterCardJsonCodec.PortableKeyword to CharacterCardJsonCodec.encodePortable(value)),
+            removeKeys = ThirdPartyCharacterKeywords,
         )
     }
+
+    private val ThirdPartyCharacterKeywords = setOf("chara", "ccv3", "chara_card_v2")
 }

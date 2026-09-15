@@ -25,7 +25,6 @@ internal fun ModelConfig.addAndSelectModel(modelId: String): ModelConfig {
     return copy(
         model = selected,
         modelOptions = options,
-        supportsTools = if (selected != model.trim()) null else supportsTools,
     )
 }
 
@@ -37,7 +36,6 @@ internal fun ModelConfig.removeManualModel(modelId: String): ModelConfig {
     return copy(
         model = selected,
         modelOptions = remaining,
-        supportsTools = if (selected != model) null else supportsTools,
     )
 }
 

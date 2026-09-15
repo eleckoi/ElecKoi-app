@@ -3,6 +3,7 @@ package com.eleckoi.android.feature.chat.data
 import com.eleckoi.android.feature.chat.model.ChatContextWindowUsage
 import com.eleckoi.android.feature.chat.model.ChatGenerationMetrics
 import com.eleckoi.android.feature.chat.model.ChatMessage
+import com.eleckoi.android.feature.chat.model.ChatSessionGenerationStats
 import com.eleckoi.android.feature.chat.model.MessageRole
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
@@ -156,6 +157,29 @@ internal data class ChatContextWindowUsageJson(
             latestTokens = usage.latestTokens,
             totalTokens = usage.totalTokens,
             modelContextWindow = usage.modelContextWindow,
+        )
+    }
+}
+
+@Serializable
+internal data class ChatSessionGenerationStatsJson(
+    val version: Int = 1,
+    @SerialName("runtime_thread_id") val runtimeThreadId: String = "",
+    val metrics: ChatGenerationMetricsJson = ChatGenerationMetricsJson(),
+    @SerialName("context_window_usage")
+    val contextWindowUsage: ChatContextWindowUsageJson? = null,
+) {
+    fun toDomain() = ChatSessionGenerationStats(
+        runtimeThreadId = runtimeThreadId,
+        metrics = metrics.toDomain(),
+        contextWindowUsage = contextWindowUsage?.toDomain(),
+    )
+
+    companion object {
+        fun fromDomain(stats: ChatSessionGenerationStats) = ChatSessionGenerationStatsJson(
+            runtimeThreadId = stats.runtimeThreadId,
+            metrics = ChatGenerationMetricsJson.fromDomain(stats.metrics),
+            contextWindowUsage = stats.contextWindowUsage?.let(ChatContextWindowUsageJson::fromDomain),
         )
     }
 }

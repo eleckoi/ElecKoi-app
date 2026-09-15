@@ -17,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
@@ -95,6 +96,36 @@ internal fun ScrapbookFooter(
                 )
             }
         }
+    }
+}
+
+@Composable
+internal fun CharacterDraftFooter(
+    layoutScale: Float,
+    enabled: Boolean,
+    onCreate: () -> Unit,
+) {
+    val ink = Color(0xFF1C2026)
+    val typeScale = layoutScale / LocalDensity.current.fontScale
+    val shape = RoundedCornerShape((12f * layoutScale).dp)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = (8f * layoutScale).dp)
+            .height(maxOf(44.dp, (46f * layoutScale).dp))
+            .semantics { contentDescription = "创建角色" }
+            .clip(shape)
+            .background(ink.copy(alpha = if (enabled) 1f else 0.42f))
+            .noRippleClickable(enabled = enabled, onClick = onCreate),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = "创建角色",
+            color = Color.White,
+            fontSize = (14f * typeScale).sp,
+            lineHeight = (18f * typeScale).sp,
+            fontWeight = FontWeight.Medium,
+        )
     }
 }
 

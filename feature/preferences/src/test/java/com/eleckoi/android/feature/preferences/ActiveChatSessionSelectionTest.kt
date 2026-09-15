@@ -5,7 +5,7 @@ import org.junit.Test
 
 class ActiveChatSessionSelectionTest {
     @Test
-    fun `bulk deletion clears all mode pointers and is idempotent`() {
+    fun `bulk deletion clears all character pointers and is idempotent`() {
         val deleted = (0 until 5_000).map { "session-$it" }
         val selection = ActiveChatSessionSelection(
             lastSessionId = deleted.last(),
@@ -18,35 +18,31 @@ class ActiveChatSessionSelectionTest {
     }
 
     @Test
-    fun `each character mode remembers its own selected chat`() {
+    fun `each character remembers its latest selected chat`() {
         val selection = ActiveChatSessionSelection()
-            .remember("character-a", "agent", "session-a-agent")
-            .remember("character-a", "story", "session-a-story")
-            .remember("character-b", "agent", "session-b-agent")
+            .remember("character-a", "session-a-first")
+            .remember("character-a", "session-a-latest")
+            .remember("character-b", "session-b")
 
-        assertEquals("session-a-story", selection.sessionIdFor("character-a"))
-        assertEquals("session-a-agent", selection.sessionIdFor("character-a", "agent"))
-        assertEquals("session-a-story", selection.sessionIdFor("character-a", "story"))
-        assertEquals("session-b-agent", selection.sessionIdFor("character-b"))
-        assertEquals("session-b-agent", selection.lastSessionId)
+        assertEquals("session-a-latest", selection.sessionIdFor("character-a"))
+        assertEquals("session-b", selection.sessionIdFor("character-b"))
+        assertEquals("session-b", selection.lastSessionId)
     }
 
     @Test
     fun `forget removes a deleted session without disturbing other chat contexts`() {
         val selection = ActiveChatSessionSelection()
-            .remember("character-a", "story", "session-a")
-            .remember("character-b", "agent", "session-b")
+            .remember("character-a", "session-a")
+            .remember("character-b", "session-b")
             .forget("session-b")
 
         assertEquals("session-a", selection.sessionIdFor("character-a"))
-        assertEquals("session-a", selection.sessionIdFor("character-a", "story"))
         assertEquals("", selection.sessionIdFor("character-b"))
-        assertEquals("", selection.sessionIdFor("character-b", "agent"))
         assertEquals("", selection.lastSessionId)
     }
 
     @Test
-    fun `character level shortcut never substitutes a different mode selection`() {
+    fun `character lookup uses only the exact normalized key`() {
         val selection = ActiveChatSessionSelection(
             sessionIdsByContext = mapOf(
                 "character-a" to "session-story",
@@ -56,8 +52,7 @@ class ActiveChatSessionSelectionTest {
         )
 
         assertEquals("session-story", selection.sessionIdFor("character-a"))
-        assertEquals("session-agent", selection.sessionIdFor("character-a", "agent"))
-        assertEquals("session-story", selection.sessionIdFor("character-a", "story"))
-        assertEquals("", selection.sessionIdFor("character-a", "missing"))
+        assertEquals("session-agent", selection.sessionIdFor(" character-a:agent "))
+        assertEquals("", selection.sessionIdFor("character-a:missing"))
     }
 }

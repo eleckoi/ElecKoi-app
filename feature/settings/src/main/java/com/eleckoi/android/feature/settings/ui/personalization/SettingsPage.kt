@@ -15,7 +15,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Portrait
 import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material3.AlertDialog
@@ -40,6 +42,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.foundation.design.PhosphorRegular
+import com.eleckoi.android.feature.preferences.ListCharacterArtwork
 
 @Composable
 fun SettingsPage(
@@ -48,9 +51,11 @@ fun SettingsPage(
     onOpenUserProfile: () -> Unit,
     onOpenThemeStyle: () -> Unit,
     onOpenChatDisplay: () -> Unit,
-    onOpenCommonPages: () -> Unit,
     onOpenFont: () -> Unit,
+    listCharacterArtwork: ListCharacterArtwork,
+    onOpenListCharacterArtwork: () -> Unit,
     onOpenAbout: () -> Unit,
+    onOpenCommunity: () -> Unit,
     onOpenLocalRuntime: () -> Unit,
     onOpenCrashDiagnostics: () -> Unit,
     onOpenAppUpdate: () -> Unit,
@@ -137,17 +142,21 @@ fun SettingsPage(
             )
             SettingsDivider(appearance, startIndent = SettingsRowTextStart)
             SettingsDestinationRow(
-                iconPath = PhosphorRegular.Plus,
-                title = "常用页面",
-                appearance = appearance,
-                onClick = onOpenCommonPages,
-            )
-            SettingsDivider(appearance, startIndent = SettingsRowTextStart)
-            SettingsDestinationRow(
                 iconPath = PhosphorRegular.TextAa,
                 title = "字体",
                 appearance = appearance,
                 onClick = onOpenFont,
+            )
+            SettingsDivider(appearance, startIndent = SettingsRowTextStart)
+            SettingsDestinationRow(
+                icon = Icons.Outlined.Portrait,
+                title = "列表角色图",
+                value = when (listCharacterArtwork) {
+                    ListCharacterArtwork.Cover -> "封面立绘"
+                    ListCharacterArtwork.Avatar -> "头像"
+                },
+                appearance = appearance,
+                onClick = onOpenListCharacterArtwork,
             )
         }
         SettingsSection(label = "后台运行", appearance = appearance) {
@@ -280,7 +289,15 @@ fun SettingsPage(
                 onClick = onOpenAppUpdate,
             )
         }
-        SettingsSection(label = "关于", appearance = appearance) {
+        SettingsSection(label = "社区与关于", appearance = appearance) {
+            SettingsDestinationRow(
+                icon = Icons.Rounded.Groups,
+                title = "社区",
+                subtitle = "ElecKoi 测试群",
+                appearance = appearance,
+                onClick = onOpenCommunity,
+            )
+            SettingsDivider(appearance, startIndent = SettingsRowTextStart)
             SettingsDestinationRow(
                 icon = Icons.Rounded.Info,
                 title = "关于电子爱",

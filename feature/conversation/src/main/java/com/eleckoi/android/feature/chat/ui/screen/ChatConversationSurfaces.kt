@@ -22,7 +22,7 @@ import com.eleckoi.android.feature.chat.ui.roleplay.web.model.RoleplayTranscript
 import com.eleckoi.android.feature.chat.ui.roleplay.web.surface.RoleplayWebChatCallbacks
 import com.eleckoi.android.feature.chat.ui.roleplay.web.surface.RoleplayWebChatController
 import com.eleckoi.android.feature.chat.ui.roleplay.web.surface.RoleplayWebChatSurface
-import com.eleckoi.android.sdk.author.AuthorInlineMessageGateway
+import com.eleckoi.android.sdk.author.AuthorChatGateway
 
 /** Keeps the WebView-only interaction protocol out of the route-level screen coordinator. */
 @Composable
@@ -45,7 +45,7 @@ internal fun ChatRoleplayConversationSurface(
     onOpenUserAvatars: () -> Unit,
     onOpenCharacterSettings: (String) -> Unit,
     onRendererUnavailable: () -> Unit,
-    messageGateway: AuthorInlineMessageGateway,
+    messageGateway: AuthorChatGateway,
     modifier: Modifier = Modifier,
 ) {
     val clipboardManager = androidx.compose.runtime.remember(context) {
@@ -131,6 +131,7 @@ internal fun ChatNativeConversationSurface(
     onSelectText: (String) -> Unit,
     onOpenUserAvatars: () -> Unit,
     onOpenCharacterSettings: (String) -> Unit,
+    messageGateway: AuthorChatGateway,
 ) {
     ChatConversationList(
         state = state,
@@ -157,6 +158,7 @@ internal fun ChatNativeConversationSurface(
             onOpenUserAvatars = onOpenUserAvatars,
             onOpenCharacterSettings = onOpenCharacterSettings,
         ),
+        authorGateway = messageGateway,
         modifier = Modifier.graphicsLayer { alpha = presentationAlpha },
     )
 }

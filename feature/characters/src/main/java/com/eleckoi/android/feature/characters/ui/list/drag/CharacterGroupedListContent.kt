@@ -49,6 +49,7 @@ internal fun CharacterGroupedListContent(
     draggingCharacter: CharacterDragState?,
     draggingGroup: CharacterGroupDragState?,
     appearance: AppearanceTheme,
+    useCoverArtwork: Boolean,
     onToggleGroup: (String) -> Unit,
     onOpenCharacter: (String) -> Unit,
 ) {
@@ -93,6 +94,7 @@ internal fun CharacterGroupedListContent(
                     CharacterGroupedListCharacterRow(
                         character = character,
                         appearance = appearance,
+                        useCoverArtwork = useCoverArtwork,
                         reorderEnabled = reorderEnabled,
                         dragState = draggingCharacter?.takeIf {
                             it.characterId == character.id && it.sourceKey == "$AllCharacterDragPrefix${character.id}"
@@ -125,6 +127,7 @@ internal fun CharacterGroupedListContent(
                         CharacterGroupedListCharacterRow(
                             character = character,
                             appearance = appearance,
+                            useCoverArtwork = useCoverArtwork,
                             reorderEnabled = reorderEnabled,
                             dragState = draggingCharacter?.takeIf {
                                 it.characterId == character.id && it.sourceKey == "$GroupCharacterDragPrefix${character.id}"
@@ -141,6 +144,7 @@ internal fun CharacterGroupedListContent(
             CharacterListRow(
                 character = character,
                 appearance = appearance,
+                useCoverArtwork = useCoverArtwork,
                 modifier = Modifier
                     .fillMaxWidth()
                     .zIndex(3f)
@@ -177,6 +181,7 @@ internal fun CharacterGroupedListContent(
 private fun CharacterGroupedListCharacterRow(
     character: CharacterSlot,
     appearance: AppearanceTheme,
+    useCoverArtwork: Boolean,
     reorderEnabled: Boolean,
     dragState: CharacterDragState?,
     onOpenCharacter: (String) -> Unit,
@@ -185,9 +190,10 @@ private fun CharacterGroupedListCharacterRow(
         CharacterListRow(
             character = character,
             appearance = appearance,
+            useCoverArtwork = useCoverArtwork,
             modifier = Modifier.graphicsLayer { if (dragState != null) alpha = 0f },
         ) { onOpenCharacter(character.id) }
     } else {
-        CharacterListRow(character, appearance) { onOpenCharacter(character.id) }
+        CharacterListRow(character, appearance, useCoverArtwork) { onOpenCharacter(character.id) }
     }
 }

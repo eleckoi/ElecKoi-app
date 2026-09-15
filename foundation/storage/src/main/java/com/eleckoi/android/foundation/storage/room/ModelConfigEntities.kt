@@ -17,12 +17,6 @@ data class ModelConfigEntity(
     val modelOptionsJson: String,
     /** JSON object of header name to value. Empty string means no custom headers. */
     val customHeadersJson: String = "",
-    /**
-     * Result of the last connection test's tool-calling probe. Null means never tested. Agent mode
-     * is the point of this app, so a proxy that cannot do tool calls has to be knowable before the
-     * user hits a confusing failure mid-conversation.
-     */
-    val supportsTools: Boolean? = null,
     /** Only used by non-chat capabilities such as NovelAI image generation. */
     val enabled: Boolean = false,
     val imageSettingsJson: String = "{}",

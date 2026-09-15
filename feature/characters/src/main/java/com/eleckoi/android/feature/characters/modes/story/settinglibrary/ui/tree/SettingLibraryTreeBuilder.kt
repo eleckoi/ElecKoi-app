@@ -2,7 +2,6 @@ package com.eleckoi.android.feature.characters.modes.story.settinglibrary.ui
 
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryOpeningEntryId
-import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryRoleplayPlanEntryId
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryGroup
 
 internal fun settingTreeNodes(
@@ -81,7 +80,6 @@ private val SettingTreeNode.treeViewOrder: Int
         is SettingTreeNode.Folder -> group.treeViewOrder
         is SettingTreeNode.File -> when (entry.id) {
             SettingLibraryOpeningEntryId -> Int.MIN_VALUE
-            SettingLibraryRoleplayPlanEntryId -> Int.MIN_VALUE + 1
             else -> entry.treeViewOrder
         }
     }

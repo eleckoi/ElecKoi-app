@@ -12,7 +12,6 @@ import com.eleckoi.android.foundation.serialization.ElecKoiJson
 import com.eleckoi.android.sdk.author.AuthorMessageSnapshot
 import com.eleckoi.android.sdk.author.AuthorChatSessionSnapshot
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -28,75 +27,62 @@ internal object VariableAuthorApi {
                 ?.content
                 .orEmpty()
             val selection = resolveVariableState(
-                scopedMessage = runtime.currentMessage,
+                scopedMessage = runtime.currentMessage.takeIf { runtime.chatGateway == null },
                 requestedMessageId = requestedMessageId,
                 chatSession = chatSession,
                 runtimeStateJson = runtime.variableStateJson,
                 initialStateJson = runtime.variableConfig?.initialStateJson,
             )
-            val rawState = selection.rawState
-            val parsedState = rawState?.let { state ->
-                runCatching { kotlinx.serialization.json.Json.parseToJsonElement(state) }.getOrNull()
-            }
-            buildJsonObject {
-                put("available", selection.available)
-                put("root", "var_state")
-                put("messageId", selection.messageId)
-                put("source", selection.source)
-                put("validJson", parsedState != null)
-                put("state", parsedState ?: JsonNull)
-                if (rawState != null && parsedState == null) put("raw", rawState)
-                if (!selection.available) put("reason", "snapshot_missing")
-            }
+            selection.rawState.toStateObject()
         },
         AuthorApiRoute(AuthorApiCatalog.require("variables.getConfig")) { environment, _ ->
             val config = environment.runtime.variableConfig
-            buildJsonObject {
-                put("available", config != null)
-                put("characterId", config?.characterId.orEmpty())
-                put("schemaCode", config?.schemaCode.orEmpty())
-                put("initialStateJson", config?.initialStateJson.orEmpty())
-                put("objects", buildJsonArray {
-                    config?.objects.orEmpty().forEach { item ->
-                        add(buildJsonObject {
-                            put("id", item.id)
-                            put("name", item.name)
-                            put("parentId", item.parentId)
-                            put("enabled", item.enabled)
-                            put("description", item.description)
-                            put("updateRule", item.updateRule)
-                            put("order", item.order)
-                            put("treeViewOrder", item.treeViewOrder)
-                        })
-                    }
-                })
-                put("variables", buildJsonArray {
-                    config?.variables.orEmpty().forEach { item ->
-                        add(buildJsonObject {
-                            put("id", item.id)
-                            put("title", item.title)
-                            put("objectId", item.objectId)
-                            put("enabled", item.enabled)
-                            put("type", item.type)
-                            put("defaultValue", item.defaultValue)
-                            put("description", item.description)
-                            put("updateRule", item.updateRule)
-                            put("readMode", item.readMode.storageValue)
-                            put("order", item.order)
-                            put("treeViewOrder", item.treeViewOrder)
-                        })
-                    }
-                })
-            }
+            config?.let { currentConfig ->
+                buildJsonObject {
+                    put("characterId", currentConfig.characterId)
+                    put("schemaCode", currentConfig.schemaCode)
+                    put("initialStateJson", currentConfig.initialStateJson)
+                    put("objects", buildJsonArray {
+                        currentConfig.objects.forEach { item ->
+                            add(buildJsonObject {
+                                put("id", item.id)
+                                put("name", item.name)
+                                put("parentId", item.parentId)
+                                put("enabled", item.enabled)
+                                put("description", item.description)
+                                put("updateRule", item.updateRule)
+                                put("order", item.order)
+                                put("treeViewOrder", item.treeViewOrder)
+                            })
+                        }
+                    })
+                    put("variables", buildJsonArray {
+                        currentConfig.variables.forEach { item ->
+                            add(buildJsonObject {
+                                put("id", item.id)
+                                put("title", item.title)
+                                put("objectId", item.objectId)
+                                put("enabled", item.enabled)
+                                put("type", item.type)
+                                put("defaultValue", item.defaultValue)
+                                put("description", item.description)
+                                put("updateRule", item.updateRule)
+                                put("readMode", item.readMode.storageValue)
+                                put("order", item.order)
+                                put("treeViewOrder", item.treeViewOrder)
+                            })
+                        }
+                    })
+                }
+            } ?: kotlinx.serialization.json.JsonNull
         },
         AuthorApiRoute(AuthorApiCatalog.require("variables.setState")) { environment, params ->
             val state = params["state"] as? JsonObject ?: throw AuthorApiCallException(
                 AuthorApiErrorCode.InvalidParams,
                 "variables.setState 需要 JSON object 类型的 state",
             )
-            environment.requireChatGateway()
-                .replaceVariableState(state.toString())
-                .toAuthorJson()
+            environment.requireChatGateway().replaceVariableState(state.toString()).toAuthorJson()
+            state
         },
         AuthorApiRoute(AuthorApiCatalog.require("variables.merge")) { environment, params ->
             val state = params["state"] as? JsonObject ?: throw AuthorApiCallException(
@@ -115,9 +101,8 @@ internal object VariableAuthorApi {
             val current = runCatching { ElecKoiJson.parseToJsonElement(currentRaw) as? JsonObject }
                 .getOrNull() ?: buildJsonObject {}
             val merged = mergeJsonObjects(current, state)
-            environment.requireChatGateway()
-                .replaceVariableState(merged.toString())
-                .toAuthorJson()
+            environment.requireChatGateway().replaceVariableState(merged.toString()).toAuthorJson()
+            merged
         },
         AuthorApiRoute(AuthorApiCatalog.require("variables.applyPatch")) { environment, params ->
             val patch = params["patch"] as? JsonArray ?: throw AuthorApiCallException(
@@ -141,14 +126,25 @@ internal object VariableAuthorApi {
                     error.message ?: "variables.applyPatch 的操作清单无效",
                 )
             }
-            environment.requireChatGateway()
-                .replaceVariableState(nextState)
-                .toAuthorJson()
+            environment.requireChatGateway().replaceVariableState(nextState).toAuthorJson()
+            nextState.toStateObject()
         },
         AuthorApiRoute(AuthorApiCatalog.require("variables.reset")) { environment, _ ->
-            environment.requireChatGateway().resetVariableState().toAuthorJson()
+            val gateway = environment.requireChatGateway()
+            gateway.resetVariableState().toAuthorJson()
+            gateway.snapshot().draft?.session?.variableStateJson.toStateObject()
         },
     )
+}
+
+private fun String?.toStateObject(): JsonObject {
+    if (isNullOrBlank()) return buildJsonObject {}
+    return runCatching { ElecKoiJson.parseToJsonElement(this) as? JsonObject }
+        .getOrNull()
+        ?: throw AuthorApiCallException(
+            AuthorApiErrorCode.InvalidParams,
+            "变量状态不是有效的 JSON object",
+        )
 }
 
 internal data class VariableStateSelection(

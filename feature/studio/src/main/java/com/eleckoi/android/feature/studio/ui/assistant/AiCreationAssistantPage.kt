@@ -16,13 +16,13 @@ fun AiCreationAssistantPage(
     viewModel: AiCreationAssistantViewModel,
     chatGateway: AuthorChatGateway,
     onBack: () -> Unit,
-    onOpenPlugins: () -> Unit,
+    onOpenTools: () -> Unit,
 ) {
     AiCreationAssistantScreen(
         appearance = appearance,
         viewModel = viewModel,
         chatGateway = chatGateway,
         onBack = onBack,
-        onOpenPlugins = onOpenPlugins,
+        onOpenTools = onOpenTools,
     )
 }

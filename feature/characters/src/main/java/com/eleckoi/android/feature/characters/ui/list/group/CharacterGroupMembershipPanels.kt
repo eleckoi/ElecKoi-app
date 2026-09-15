@@ -157,28 +157,15 @@ internal fun CharacterInternalSortPanel(
 ) {
     val haptic = LocalHapticFeedback.current
     val listState = rememberLazyListState()
-    val groupCharacters = remember(characters.items, group) { sortedCharactersForGroup(characters.items, group) }
+    val groupCharacters = remember(characters.items, group) {
+        if (group == ALL_CHARACTERS) sortedAllCharacters(characters.items) else sortedCharactersForGroup(characters.items, group)
+    }
     val reorderableState = rememberReorderableLazyListState(listState) { from, to ->
         val fromId = (from.key as? String)?.removePrefix("sort-character-") ?: return@rememberReorderableLazyListState
         val toId = (to.key as? String)?.removePrefix("sort-character-") ?: return@rememberReorderableLazyListState
-        val display = sortedCharactersForGroup(characters.items, group).toMutableList()
-        val fromIndex = display.indexOfFirst { it.id == fromId }
-        val toIndex = display.indexOfFirst { it.id == toId }
-        if (fromIndex !in display.indices || toIndex !in display.indices || fromIndex == toIndex) return@rememberReorderableLazyListState
-        val moved = display.removeAt(fromIndex)
-        display.add(toIndex, moved)
-        val nextOrders = characterOrderMap(display)
-        onSaveCharacters(
-            characters.copy(
-                items = characters.items.map { character ->
-                    if (characterGroup(character) == group) {
-                        nextOrders[character.id]?.let { character.copy(groupViewOrder = it) } ?: character
-                    } else {
-                        character
-                    }
-                },
-            ),
-        )
+        val reordered = reorderCharacterDisplay(characters.items, group, fromId, toId)
+            ?: return@rememberReorderableLazyListState
+        onSaveCharacters(characters.copy(items = reordered))
         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
     }
     Box(

@@ -6,7 +6,6 @@ import android.webkit.MimeTypeMap
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
-import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
@@ -36,15 +35,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.webkit.WebViewAssetLoader
-import androidx.webkit.WebViewCompat
-import androidx.webkit.WebViewFeature
-import androidx.webkit.ServiceWorkerClientCompat
-import androidx.webkit.ServiceWorkerControllerCompat
 import com.eleckoi.android.sdk.author.AuthorApiEnvironment
 import com.eleckoi.android.sdk.author.AuthorApiPermission
 import com.eleckoi.android.sdk.author.AuthorApiRouter
 import com.eleckoi.android.sdk.author.AuthorApiRuntimeState
+import com.eleckoi.android.sdk.author.AuthorFrontendSdk
 import com.eleckoi.android.sdk.author.bridge.WebViewAuthorBridge
+import com.eleckoi.android.feature.chat.ui.web.configureDesktopAlignedAuthorFrontend
+import com.eleckoi.android.feature.chat.ui.web.installDesktopAlignedWindowOpenHandler
+import com.eleckoi.android.feature.chat.ui.web.isDesktopAllowedAuthorFrontendResource
+import com.eleckoi.android.feature.chat.ui.web.openDesktopAlignedExternalUri
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.engine.immersive.model.FrontendProject
 import com.eleckoi.android.engine.immersive.security.AuthorFrontendStoragePrincipal
@@ -71,31 +71,14 @@ fun ImmersiveChatScreen(
     val context = LocalContext.current
     var loadError by remember(project.id) { mutableStateOf("") }
     var reloadKey by remember(project.id) { mutableIntStateOf(0) }
-    val sdkSource = remember {
-        context.assets.open("frontend/preview/eleckoi.js").bufferedReader().use { it.readText() }
+    val authorRuntimeHead = remember(context.applicationContext) {
+        AuthorFrontendSdk.documentHead(context.applicationContext)
     }
     val isolatedHost = remember(storagePrincipal) {
         ImmersiveWebSecurity.isolatedHost(storagePrincipal)
     }
     val isolatedOrigin = remember(storagePrincipal) {
         ImmersiveWebSecurity.isolatedOrigin(storagePrincipal)
-    }
-    val assetLoader = remember(project.id, projectDirectory, isolatedHost) {
-        WebViewAssetLoader.Builder()
-            .setDomain(isolatedHost)
-            .addPathHandler(ProjectPath) { requestedPath ->
-                projectResponse(projectDirectory, requestedPath)
-            }
-            .addPathHandler(RuntimePath) { requestedPath ->
-                if (requestedPath == "eleckoi.js") {
-                    WebResourceResponse(
-                        "application/javascript",
-                        "UTF-8",
-                        ByteArrayInputStream(sdkSource.toByteArray()),
-                    )
-                } else null
-            }
-            .build()
     }
     val runtime = remember(project.id, project.characterId, characterName) {
         AuthorApiRuntimeState(
@@ -117,50 +100,45 @@ fun ImmersiveChatScreen(
     val bridge = remember(router, isolatedOrigin) {
         WebViewAuthorBridge(router = router, allowedOrigin = isolatedOrigin)
     }
+    val assetLoader = remember(project.id, projectDirectory, isolatedHost, router) {
+        WebViewAssetLoader.Builder()
+            .setDomain(isolatedHost)
+            .addPathHandler(ProjectPath) { requestedPath ->
+                projectResponse(projectDirectory, requestedPath, authorRuntimeHead)
+            }
+            .addPathHandler(RuntimePath) { requestedPath ->
+                AuthorFrontendSdk.runtimeResource(context.applicationContext, requestedPath)
+                    ?: router.runtimeResource(requestedPath)
+            }
+            .build()
+    }
     val configuration = LocalConfiguration.current
     val webView = remember(project.id, bridge, assetLoader) {
         WebView(context).apply {
-            AuthorFrontendServiceWorkerBlocker.install()
             setBackgroundColor(AndroidColor.TRANSPARENT)
-            settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true
-            settings.allowFileAccess = false
-            settings.allowContentAccess = false
-            settings.javaScriptCanOpenWindowsAutomatically = false
-            settings.setSupportMultipleWindows(false)
-            settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-            settings.mediaPlaybackRequiresUserGesture = true
+            settings.configureDesktopAlignedAuthorFrontend()
+            installDesktopAlignedWindowOpenHandler { uri ->
+                context.applicationContext.openDesktopAlignedExternalUri(uri)
+            }
             bridge.install(this)
-            val injectedAtDocumentStart = if (
-                WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)
-            ) {
-                runCatching {
-                    WebViewCompat.addDocumentStartJavaScript(
-                        this,
-                        sdkSource,
-                        setOf(isolatedOrigin),
-                    )
-                }.isSuccess
-            } else false
             webViewClient = object : WebViewClient() {
                 override fun shouldInterceptRequest(
                     view: WebView,
                     request: WebResourceRequest,
-                ): WebResourceResponse {
-                    if (!ImmersiveWebSecurity.isAllowedLocalResource(request.url, isolatedHost)) {
-                        return blockedResourceResponse()
+                ): WebResourceResponse? {
+                    if (ImmersiveWebSecurity.isAllowedLocalResource(request.url, isolatedHost)) {
+                        return assetLoader.shouldInterceptRequest(request.url)
+                            ?.withLocalSecurityHeaders()
+                            ?: missingLocalResourceResponse()
                     }
-                    return assetLoader.shouldInterceptRequest(request.url)
-                        ?.withLocalSecurityHeaders()
-                        ?: missingLocalResourceResponse()
+                    if (isDesktopAllowedAuthorFrontendResource(request.url.scheme)) return null
+                    return blockedResourceResponse()
                 }
 
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                    return !ImmersiveWebSecurity.isAllowedLocalResource(request.url, isolatedHost)
-                }
-
-                override fun onPageFinished(view: WebView, url: String) {
-                    if (!injectedAtDocumentStart) view.evaluateJavascript(sdkSource, null)
+                    if (!request.isForMainFrame) return false
+                    if (ImmersiveWebSecurity.isAllowedLocalResource(request.url, isolatedHost)) return false
+                    return context.applicationContext.openDesktopAlignedExternalUri(request.url)
                 }
 
                 override fun onReceivedError(
@@ -255,7 +233,11 @@ private fun RuntimeAction(
     }
 }
 
-private fun projectResponse(rootDirectory: File, requestedPath: String): WebResourceResponse? {
+private fun projectResponse(
+    rootDirectory: File,
+    requestedPath: String,
+    authorRuntimeHead: String,
+): WebResourceResponse? {
     val root = rootDirectory.canonicalFile
     val decoded = Uri.decode(requestedPath).trimStart('/')
     val file = File(root, decoded).canonicalFile
@@ -267,13 +249,38 @@ private fun projectResponse(rootDirectory: File, requestedPath: String): WebReso
         "svg" -> "image/svg+xml"
         else -> "application/octet-stream"
     }
+    if (extension == "html" || extension == "htm") {
+        val html = injectAuthorRuntime(file.readText(Charsets.UTF_8), authorRuntimeHead)
+        return WebResourceResponse(
+            "text/html",
+            "UTF-8",
+            ByteArrayInputStream(html.toByteArray(Charsets.UTF_8)),
+        )
+    }
     return WebResourceResponse(mime, "UTF-8", file.inputStream().buffered())
+}
+
+private fun injectAuthorRuntime(source: String, runtimeHead: String): String {
+    val head = HtmlHeadOpen.find(source)
+    if (head != null) {
+        val insertion = head.range.last + 1
+        return source.substring(0, insertion) + runtimeHead + source.substring(insertion)
+    }
+    val html = HtmlOpen.find(source)
+    if (html != null) {
+        val insertion = html.range.last + 1
+        return source.substring(0, insertion) + "<head>$runtimeHead</head>" + source.substring(insertion)
+    }
+    return if (HtmlBodyOpen.containsMatchIn(source)) {
+        "<!doctype html><html><head>$runtimeHead</head>$source</html>"
+    } else {
+        "<!doctype html><html><head>$runtimeHead</head><body>$source</body></html>"
+    }
 }
 
 private fun WebResourceResponse.withLocalSecurityHeaders(): WebResourceResponse = apply {
     val existing = responseHeaders.orEmpty()
     responseHeaders = existing + mapOf(
-        "Content-Security-Policy" to LocalOnlyContentSecurityPolicy,
         "Referrer-Policy" to "no-referrer",
         "X-Content-Type-Options" to "nosniff",
         "Permissions-Policy" to "camera=(), microphone=(), geolocation=()",
@@ -299,47 +306,11 @@ private fun localErrorResponse(statusCode: Int, reason: String, message: String)
     reason,
     mapOf(
         "Cache-Control" to "no-store",
-        "Content-Security-Policy" to LocalOnlyContentSecurityPolicy,
         "X-Content-Type-Options" to "nosniff",
     ),
     ByteArrayInputStream(message.toByteArray()),
 )
 
-private object AuthorFrontendServiceWorkerBlocker {
-    @Volatile
-    private var installed = false
-
-    @Synchronized
-    fun install() {
-        if (installed || !WebViewFeature.isFeatureSupported(WebViewFeature.SERVICE_WORKER_BASIC_USAGE)) return
-        val controller = ServiceWorkerControllerCompat.getInstance()
-        val settings = controller.serviceWorkerWebSettings
-        if (WebViewFeature.isFeatureSupported(WebViewFeature.SERVICE_WORKER_FILE_ACCESS)) {
-            settings.allowFileAccess = false
-        }
-        if (WebViewFeature.isFeatureSupported(WebViewFeature.SERVICE_WORKER_CONTENT_ACCESS)) {
-            settings.allowContentAccess = false
-        }
-        if (WebViewFeature.isFeatureSupported(WebViewFeature.SERVICE_WORKER_BLOCK_NETWORK_LOADS)) {
-            settings.blockNetworkLoads = true
-        }
-        if (WebViewFeature.isFeatureSupported(WebViewFeature.SERVICE_WORKER_SHOULD_INTERCEPT_REQUEST)) {
-            controller.setServiceWorkerClient(object : ServiceWorkerClientCompat() {
-                override fun shouldInterceptRequest(request: WebResourceRequest): WebResourceResponse =
-                    blockedResourceResponse()
-            })
-        }
-        installed = true
-    }
-}
-
-private const val LocalOnlyContentSecurityPolicy =
-    "default-src 'self' data: blob:; " +
-        "connect-src 'self'; " +
-        "img-src 'self' data: blob:; " +
-        "media-src 'self' data: blob:; " +
-        "font-src 'self' data:; " +
-        "style-src 'self' 'unsafe-inline'; " +
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
-        "worker-src 'none'; frame-src 'none'; object-src 'none'; " +
-        "base-uri 'self'; form-action 'self'"
+private val HtmlHeadOpen = Regex("(?i)<head(?:\\s[^>]*)?>")
+private val HtmlOpen = Regex("(?i)<html(?:\\s[^>]*)?>")
+private val HtmlBodyOpen = Regex("(?i)<body(?:\\s[^>]*)?>")

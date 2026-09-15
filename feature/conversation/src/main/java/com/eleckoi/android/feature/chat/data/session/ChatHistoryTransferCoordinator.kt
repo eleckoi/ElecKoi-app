@@ -1,7 +1,6 @@
 package com.eleckoi.android.feature.chat.data.session
 
 import com.eleckoi.android.feature.characters.data.CharacterRepository
-import com.eleckoi.android.feature.characters.model.CharacterMode
 import com.eleckoi.android.feature.chat.data.chatHistoryJsonString
 import com.eleckoi.android.feature.chat.data.chatSessionsFromHistoryJson
 import com.eleckoi.android.feature.chat.model.ChatSession
@@ -41,7 +40,6 @@ internal class ChatHistoryTransferCoordinator(
         sourceSessions.forEach { chat ->
             val id = uniqueSessionId(chat.id)
             val now = nowIso()
-            val mode = CharacterMode.fromStorage(chat.characterMode).storageValue
             val snapshot = characterPersonaSnapshot(character)
             val normalized = chat.copy(
                 id = id,
@@ -50,12 +48,12 @@ internal class ChatHistoryTransferCoordinator(
                 characterId = character.id,
                 characterName = snapshot.assistantName.ifBlank { character.name },
                 characterAvatar = snapshot.assistantAvatar.ifBlank { character.avatar },
-                characterPersona = characterPersonaSnapshot(character, mode),
-                characterMode = mode,
+                characterPersona = characterPersonaSnapshot(character),
                 createdAt = chat.createdAt.ifBlank { now },
                 updatedAt = chat.updatedAt.ifBlank { now },
             )
             room.databaseTransaction { room.writeInTransaction(normalized) }
+            room.persistGenerationStats(normalized)
             imported += 1
         }
         if (imported == 0) throw ElecKoiDataException("没有可导入的聊天记录")

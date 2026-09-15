@@ -1,19 +1,20 @@
 package com.eleckoi.android.feature.chat.ui
 
-import com.eleckoi.android.feature.characters.model.CharacterMode
 import com.eleckoi.android.feature.chat.data.stream.isAppendOnlyUpdate
 import com.eleckoi.android.feature.chat.model.ChatDraft
 import com.eleckoi.android.feature.chat.model.ChatMessage
+import com.eleckoi.android.feature.chat.model.ChatGenerationMetrics
 import com.eleckoi.android.feature.chat.model.MessageRole
-import com.eleckoi.android.feature.modelconfig.model.ModelParameters
 import com.eleckoi.android.feature.chat.ui.author.toAuthorSnapshot
-import com.eleckoi.android.feature.chat.ui.author.toFeatureModel
 import com.eleckoi.android.sdk.author.AuthorApiEvent
 import com.eleckoi.android.sdk.author.AuthorChatGateway
 import com.eleckoi.android.sdk.author.AuthorChatSnapshot
 import com.eleckoi.android.sdk.author.AuthorCommandResult
-import com.eleckoi.android.sdk.author.AuthorModelParameters
+import com.eleckoi.android.sdk.author.AuthorDeleteMessagesResult
+import com.eleckoi.android.sdk.author.AuthorMessageSnapshot
+import com.eleckoi.android.sdk.author.AuthorSendImageAttachment
 import com.eleckoi.android.sdk.author.messages.toAuthorMessageJson
+import com.eleckoi.android.sdk.author.messages.toAuthorProcessJson
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.BufferOverflow
@@ -23,8 +24,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -39,19 +39,50 @@ internal class ChatAuthorGatewayAdapter(
     private val state: () -> ChatUiState,
     private val updateState: ((ChatUiState) -> ChatUiState) -> Unit,
     private val actions: ChatAuthorActions,
-    publisher: ChatAuthorEventPublisher,
+    private val publisher: ChatAuthorEventPublisher,
 ) : AuthorChatGateway {
     override val authorEvents: SharedFlow<AuthorApiEvent> = publisher.events
 
     override fun snapshot(): AuthorChatSnapshot {
         val current = state()
+        val sourceDraft = current.draft
+        val draftSnapshot = sourceDraft?.toAuthorSnapshot()?.let { draft ->
+            val presentation = current.generationPresentation
+            val pendingId = presentation?.assistantMessageId
+                ?.takeIf { presentation.sessionId == draft.session.id }
+                ?.takeIf { id -> draft.session.messages.none { it.id == id } }
+            if (pendingId == null) {
+                draft
+            } else {
+                val selected = sourceDraft.selectedModelConfig
+                draft.copy(
+                    session = draft.session.copy(
+                        messages = draft.session.messages + AuthorMessageSnapshot(
+                            id = pendingId,
+                            conversationId = draft.session.id,
+                            role = "assistant",
+                            content = "",
+                            reasoningContent = "",
+                            provider = selected.provider,
+                            model = sourceDraft.selectedModel,
+                            createdAt = "",
+                            pending = current.isSending,
+                            variableStateJson = draft.session.variableStateJson,
+                        ),
+                    ),
+                )
+            }
+        }
         return AuthorChatSnapshot(
-            draft = current.draft?.toAuthorSnapshot(),
+            draft = draftSnapshot,
             sessions = current.sessions.map { it.toAuthorSnapshot() },
             input = current.input,
             isGenerating = current.isSending,
             errorMessage = current.errorMessage,
             modelConfigs = current.modelConfigs,
+            activeRunId = current.authorRunId(current.activeAuthorAssistant()),
+            activeMessageId = current.generationPresentation?.assistantMessageId.orEmpty(),
+            activeOutput = current.activeAuthorAssistant()?.content.orEmpty(),
         )
     }
 
@@ -61,14 +92,19 @@ internal class ChatAuthorGatewayAdapter(
         return accepted()
     }
 
-    override fun send(text: String): AuthorCommandResult {
+    override suspend fun send(
+        text: String,
+        attachments: List<AuthorSendImageAttachment>,
+    ): AuthorCommandResult {
         val content = text.trim()
         val current = state()
-        if (content.isBlank()) return rejected("发送内容不能为空")
+        if (content.isBlank() && attachments.isEmpty()) return rejected("发送内容和图片不能同时为空")
         if (current.isSending) return rejected("AI 正在生成")
         if (current.draft == null) return rejected("聊天还没有加载完成")
-        actions.send(content)
-        return accepted("消息已提交")
+        return actions.send(content, attachments).fold(
+            onSuccess = { accepted("消息已提交") },
+            onFailure = { error -> rejected(error.message ?: "图片处理失败") },
+        )
     }
 
     override fun stopGeneration(): AuthorCommandResult {
@@ -100,14 +136,25 @@ internal class ChatAuthorGatewayAdapter(
         return accepted("已修改消息并开始重新生成")
     }
 
-    override fun createNewChat(
-        characterId: String,
-        characterMode: String?,
-    ): AuthorCommandResult {
+    override suspend fun deleteMessagesFrom(messageId: String): AuthorDeleteMessagesResult {
+        val current = state()
+        if (current.isSending) throw IllegalStateException("AI 正在生成，暂时不能删除消息")
+        val draft = current.draft ?: throw IllegalStateException("当前没有聊天上下文")
+        val result = actions.deleteMessagesFrom(draft.session.id, messageId).getOrThrow()
+        updateState { latest ->
+            if (latest.draft?.session?.id == draft.session.id) latest.copy(draft = result.draft) else latest
+        }
+        com.eleckoi.android.feature.chat.ui.roleplay.web.host.RoleplayRichHeightCache
+            .discardMessages(draft.session.id, result.deletedMessageIds)
+        publisher.publishMessagesChanged(draft.session.id, "deleted", result.deletedMessageIds)
+        return AuthorDeleteMessagesResult(result.deletedMessageIds.size, result.remainingMessageCount)
+    }
+
+    override fun createNewChat(characterId: String): AuthorCommandResult {
         val id = characterId.ifBlank { state().draft?.session?.characterId.orEmpty() }
         if (id.isBlank()) return rejected("角色 ID 不能为空")
         if (state().isSending) return rejected("AI 正在生成，暂时不能创建对话")
-        actions.createChat(id, characterMode ?: CharacterMode.Agent.storageValue)
+        actions.createChat(id)
         return accepted("正在创建新对话")
     }
 
@@ -136,7 +183,6 @@ internal class ChatAuthorGatewayAdapter(
     override fun selectModel(
         configId: String,
         model: String,
-        parameters: AuthorModelParameters,
     ): AuthorCommandResult {
         val current = state()
         if (current.isSending) return rejected("AI 正在生成，暂时不能切换模型")
@@ -145,7 +191,7 @@ internal class ChatAuthorGatewayAdapter(
             ?: return rejected("没有找到模型配置：$configId")
         val selectedModel = model.ifBlank { config.model }
         if (selectedModel.isBlank()) return rejected("模型名称不能为空")
-        actions.selectModel(config.id, selectedModel, parameters.toFeatureModel())
+        actions.selectModel(config.id, selectedModel)
         return accepted("正在切换聊天模型")
     }
 
@@ -206,17 +252,18 @@ internal class ChatAuthorGatewayAdapter(
 }
 
 internal class ChatAuthorActions(
-    val send: (String) -> Unit,
+    val send: suspend (String, List<AuthorSendImageAttachment>) -> Result<Unit>,
     val stopGeneration: () -> Unit,
     val regenerate: (ChatMessage) -> Unit,
     val submitEditedMessage: () -> Unit,
-    val createChat: (String, String) -> Unit,
+    val createChat: (String) -> Unit,
     val openChat: (String) -> Unit,
     val deleteChat: (String) -> Unit,
-    val selectModel: (String, String, ModelParameters) -> Unit,
+    val selectModel: (String, String) -> Unit,
     val selectOpening: suspend (String, String) -> Result<ChatDraft>,
     val replaceVariableState: suspend (String, String) -> Result<ChatDraft>,
     val resetVariableState: suspend (String) -> Result<ChatDraft>,
+    val deleteMessagesFrom: suspend (String, String) -> Result<com.eleckoi.android.feature.chat.data.ChatDeleteMessagesResult>,
 )
 
 /**
@@ -231,6 +278,7 @@ internal class ChatAuthorEventPublisher(
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
     private val stopRequested = AtomicBoolean(false)
+    private val outputSequences = mutableMapOf<String, Int>()
     val events: SharedFlow<AuthorApiEvent> = mutableEvents.asSharedFlow()
 
     fun start() {
@@ -249,178 +297,178 @@ internal class ChatAuthorEventPublisher(
 
     fun markStopRequested() {
         stopRequested.set(true)
+        val current = states.value
+        val conversationId = current.draft?.session?.id.orEmpty()
+        if (conversationId.isNotBlank()) emitAgentState(conversationId, "stopping")
+    }
+
+    fun publishMessagesChanged(conversationId: String, reason: String, messageIds: List<String>) {
+        require(conversationId.isNotBlank())
+        require(reason in setOf("sent", "edited", "deleted", "regenerated"))
+        require(messageIds.isNotEmpty() && messageIds.none(String::isBlank))
+        emit("messages.changed", buildJsonObject {
+            put("conversationId", conversationId)
+            put("reason", reason)
+            put("messageIds", buildJsonArray { messageIds.forEach { add(JsonPrimitive(it)) } })
+        })
     }
 
     private fun publishChanges(previous: ChatUiState, current: ChatUiState) {
-        if (current.input != previous.input) {
-            emit("input.changed", buildJsonObject { put("text", current.input) })
-        }
-
-        val previousSession = previous.draft?.session
         val currentSession = current.draft?.session
-        if (
-            currentSession?.id != previousSession?.id ||
-            currentSession?.title != previousSession?.title
-        ) {
-            emit(
-                "chat.changed",
-                currentSession?.let { session ->
-                    buildJsonObject {
-                        put("id", session.id)
-                        put("title", session.title)
-                        put("characterId", session.characterId)
-                        put("characterName", session.characterName)
-                    }
-                } ?: JsonNull,
-            )
-            emit(
-                "context.changed",
-                currentSession?.let { session ->
-                    buildJsonObject {
-                        put("surface", "chat")
-                        put("sessionId", session.id)
-                        put("characterId", session.characterId)
-                        put("characterName", session.characterName)
-                    }
-                } ?: JsonNull,
-            )
-        }
-
-        val previousMessages = previousSession?.messages.orEmpty()
+        val conversationId = currentSession?.id.orEmpty()
+        if (conversationId.isBlank()) return
         val currentMessages = currentSession?.messages.orEmpty()
-        if (currentMessages != previousMessages) {
-            val latest = currentMessages.lastOrNull()
-            if (latest?.pending == true) {
-                val previousLatest = previousMessages.lastOrNull()
-                val delta = if (
-                    previousLatest?.id == latest.id &&
-                    isAppendOnlyUpdate(previousLatest.content, latest.content)
-                ) {
-                    latest.content.substring(previousLatest.content.length)
-                } else {
-                    latest.content
-                }
-                emit(
-                    "message.delta",
-                    messageEventPayload(currentSession?.id.orEmpty(), latest, delta),
-                )
-            } else {
-                emit(
-                    "messages.changed",
-                    buildJsonObject {
-                        put("sessionId", currentSession?.id.orEmpty())
-                        put("count", currentMessages.size)
-                        put(
-                            "current",
-                            latest?.let {
-                                messageEventPayload(currentSession?.id.orEmpty(), it)
-                            } ?: JsonNull,
-                        )
-                    },
-                )
-            }
-        }
+        val previousAssistant = previous.activeAuthorAssistant()
+        val currentAssistant = current.activeAuthorAssistant()
+        val runId = current.authorRunId(currentAssistant)
 
-        val previousVariableState = previousSession?.variableStateJson
-            ?.takeIf { it.isNotBlank() }
-            ?: previousMessages.lastOrNull()?.variableStateJson.orEmpty()
-        val currentVariableState = currentSession?.variableStateJson
-            ?.takeIf { it.isNotBlank() }
-            ?: currentMessages.lastOrNull()?.variableStateJson.orEmpty()
-        if (currentVariableState != previousVariableState) {
-            emit(
-                "variables.changed",
-                buildJsonObject {
-                    put("sessionId", currentSession?.id.orEmpty())
-                    put("stateJson", currentVariableState)
-                    put(
-                        "state",
-                        runCatching { Json.parseToJsonElement(currentVariableState) }.getOrNull() ?: JsonNull,
-                    )
-                },
-            )
-        }
-
-        val previousOpenings = previous.draft?.let { draft ->
-            Triple(draft.openingOptions, draft.selectedOpeningOptionId, draft.openingSelectionEnabled)
-        }
-        val currentOpenings = current.draft?.let { draft ->
-            Triple(draft.openingOptions, draft.selectedOpeningOptionId, draft.openingSelectionEnabled)
-        }
-        if (currentOpenings != previousOpenings) {
-            val draft = current.draft
-            emit(
-                "opening.changed",
-                buildJsonObject {
-                    put("sessionId", draft?.session?.id.orEmpty())
-                    put("selectedId", draft?.selectedOpeningOptionId.orEmpty())
-                    put("selectionEnabled", draft?.openingSelectionEnabled == true)
-                    put("items", buildJsonArray {
-                        draft?.openingOptions.orEmpty().forEach { option ->
-                            add(buildJsonObject {
-                                put("id", option.id)
-                                put("title", option.title)
-                                put("selected", option.id == draft?.selectedOpeningOptionId)
-                            })
-                        }
+        if (currentAssistant != null) {
+            val previousSameMessage = previousAssistant?.takeIf { it.id == currentAssistant.id }
+            val previousContent = previousSameMessage?.content.orEmpty()
+            if (currentAssistant.pending && isAppendOnlyUpdate(previousContent, currentAssistant.content)) {
+                val delta = currentAssistant.content.substring(previousContent.length)
+                if (delta.isNotEmpty()) {
+                    val sequence = outputSequences.merge(runId, 1, Int::plus) ?: 1
+                    if (sequence == 1) emitAgentState(conversationId, "streaming")
+                    emit("agent.output.delta", buildJsonObject {
+                        put("conversationId", conversationId)
+                        put("runId", runId)
+                        put("messageId", currentAssistant.id)
+                        put("sequence", sequence)
+                        put("delta", delta)
                     })
-                },
-            )
+                }
+            }
+            publishProcessChanges(conversationId, runId, previousSameMessage, currentAssistant)
+            if (currentAssistant.generationMetrics != previousSameMessage?.generationMetrics) {
+                emit("agent.generation.stats", buildJsonObject {
+                    put("conversationId", conversationId)
+                    put("runId", runId)
+                    put("stats", currentAssistant.generationMetrics.toAuthorStatsJson(currentAssistant))
+                })
+            }
         }
 
         if (current.isSending != previous.isSending) {
             when {
-                current.isSending -> emit(
-                    "generation.started",
-                    buildJsonObject { put("sessionId", currentSession?.id.orEmpty()) },
-                )
-                stopRequested.getAndSet(false) -> emit(
-                    "generation.stopped",
-                    buildJsonObject { put("sessionId", currentSession?.id.orEmpty()) },
-                )
-                current.errorMessage.isNotBlank() -> emit(
-                    "generation.failed",
-                    buildJsonObject {
-                        put("sessionId", currentSession?.id.orEmpty())
-                        put("message", current.errorMessage)
-                    },
-                )
-                else -> emit(
-                    "generation.completed",
-                    buildJsonObject { put("sessionId", currentSession?.id.orEmpty()) },
-                )
+                current.isSending -> emitAgentState(conversationId, "starting")
+                current.errorMessage.isNotBlank() -> {
+                    emit(
+                        "agent.run.failed",
+                        buildJsonObject {
+                            put("conversationId", conversationId)
+                            put("runId", runId)
+                            put("messageId", currentAssistant?.id.orEmpty())
+                            put("code", "GENERATION_FAILED")
+                            put("message", current.errorMessage)
+                        },
+                    )
+                    emitAgentState(conversationId, "error", current.errorMessage)
+                    outputSequences.remove(runId)
+                }
+                stopRequested.getAndSet(false) -> {
+                    emitAgentState(conversationId, "idle", "stopped")
+                    outputSequences.remove(runId)
+                }
+                currentAssistant != null -> {
+                    val sequence = currentMessages.indexOfFirst { it.id == currentAssistant.id }
+                        .takeIf { it >= 0 }
+                    emit("agent.run.finished", buildJsonObject {
+                        put("conversationId", conversationId)
+                        put("runId", runId)
+                        put(
+                            "message",
+                            currentAssistant.toAuthorSnapshot(conversationId, sequence).toAuthorMessageJson(),
+                        )
+                    })
+                    emitAgentState(conversationId, "idle")
+                    outputSequences.remove(runId)
+                }
+                else -> emitAgentState(conversationId, "idle")
             }
         }
-        if (
-            current.draft?.selectedModelConfig?.id != previous.draft?.selectedModelConfig?.id ||
-            current.draft?.selectedModel != previous.draft?.selectedModel ||
-            current.draft?.modelParameters != previous.draft?.modelParameters
-        ) {
-            emit(
-                "model.changed",
-                buildJsonObject {
-                    put("configId", current.draft?.selectedModelConfig?.id.orEmpty())
-                    put("provider", current.draft?.selectedModelConfig?.provider.orEmpty())
-                    put("model", current.draft?.selectedModel.orEmpty())
-                    put("stream", current.draft?.modelParameters?.stream ?: true)
-                    put("temperature", current.draft?.modelParameters?.temperature ?: 1.0)
-                    put("topP", current.draft?.modelParameters?.topP ?: 1.0)
-                },
-            )
+    }
+
+    private fun publishProcessChanges(
+        conversationId: String,
+        runId: String,
+        previous: ChatMessage?,
+        current: ChatMessage,
+    ) {
+        val previousItems = previous
+            ?.toAuthorSnapshot(conversationId)
+            ?.process
+            .orEmpty()
+            .associateBy { it.id }
+        current.toAuthorSnapshot(conversationId).process.forEach { item ->
+            if (previousItems[item.id] != item) {
+                emit("agent.process.updated", buildJsonObject {
+                    put("conversationId", conversationId)
+                    put("runId", runId)
+                    put("messageId", current.id)
+                    put("item", item.toAuthorProcessJson())
+                })
+            }
         }
+    }
+
+    private fun emitAgentState(conversationId: String, state: String, detail: String = "") {
+        emit("agent.state.changed", buildJsonObject {
+            put("conversationId", conversationId)
+            put("state", state)
+            if (detail.isNotBlank()) put("detail", detail)
+        })
     }
 
     private fun emit(name: String, payload: kotlinx.serialization.json.JsonElement) {
         mutableEvents.tryEmit(AuthorApiEvent(name, payload))
     }
 
-    private fun messageEventPayload(
-        sessionId: String,
-        message: ChatMessage,
-        delta: String? = null,
-    ) = buildJsonObject {
-        put("sessionId", sessionId)
-        message.toAuthorSnapshot().toAuthorMessageJson().forEach { (key, value) -> put(key, value) }
-        if (delta != null) put("delta", delta)
+}
+
+private fun ChatUiState.activeAuthorAssistant(): ChatMessage? {
+    val session = draft?.session ?: return null
+    val ownedId = generationPresentation
+        ?.takeIf { it.sessionId == session.id }
+        ?.assistantMessageId
+    return ownedId?.let { id -> session.messages.firstOrNull { it.id == id } }
+        ?: session.messages.lastOrNull { it.role == MessageRole.Assistant }
+}
+
+private fun ChatUiState.authorRunId(message: ChatMessage?): String {
+    val presentation = generationPresentation
+    if (presentation != null) {
+        return "${presentation.sessionId}:${presentation.generation}"
     }
+    return message?.runtimeTurnId?.takeIf(String::isNotBlank)
+        ?: message?.id.orEmpty()
+}
+
+private fun ChatGenerationMetrics.toAuthorStatsJson(message: ChatMessage) = buildJsonObject {
+    put("turns", turns)
+    put("steps", steps)
+    put("llmMs", llmDurationMillis)
+    put("toolMs", toolDurationMillis)
+    put("ttftMs", firstTokenDelayMillis)
+    put("ttftSteps", firstTokenSamples)
+    put("decodeMs", decodeDurationMillis)
+    put("decodeTokens", decodeOutputTokens)
+    put("tokenUsage", buildJsonObject {
+        put("uncachedInputTokens", inputTokens)
+        put("outputTokens", outputTokens)
+        put("cacheReadTokens", cacheReadTokens)
+        put("cacheWriteTokens", cacheWriteTokens)
+    })
+    put("contextPressure", buildJsonObject {
+        message.contextWindowUsage?.let { usage ->
+            put("pressureTokens", usage.latestTokens)
+            put("projectedTokens", usage.totalTokens)
+            usage.modelContextWindow?.let { put("contextWindow", it) }
+        }
+    })
+    put("contextBreakdown", buildJsonObject {
+        put("systemTokens", 0)
+        put("toolsTokens", 0)
+        put("messageTokens", 0)
+    })
 }

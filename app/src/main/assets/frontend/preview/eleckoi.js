@@ -1,7 +1,7 @@
 (function installElecKoiAuthorApi(global) {
   "use strict";
 
-  const API_VERSION = "0.2.0-preview.5";
+  const API_VERSION = "0.1.0";
   if (global.ElecKoi && global.ElecKoi.api && global.ElecKoi.api.version === API_VERSION) {
     return;
   }
@@ -104,6 +104,30 @@
     if (listeners.size === 0) eventListeners.delete(eventName);
   }
 
+  async function serializeAttachment(source) {
+    if (!source || source.type !== "image") {
+      throw makeError("INVALID_PARAMS", "当前聊天只支持把图片作为 Agent 附件发送");
+    }
+    if (source.data) {
+      return { type: "image", mediaType: source.mimeType, name: source.name, data: source.data };
+    }
+    if (!source.url) {
+      throw makeError("INVALID_PARAMS", "图片附件必须提供 data 或 url");
+    }
+    const response = await global.fetch(source.url);
+    if (!response.ok) {
+      throw makeError("MEDIA_LOAD_FAILED", `读取图片失败：${response.status}`);
+    }
+    const blob = await response.blob();
+    const mediaType = source.mimeType || blob.type;
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let binary = "";
+    for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+      binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + 0x8000, bytes.length)));
+    }
+    return { type: "image", mediaType, name: source.name, data: global.btoa(binary) };
+  }
+
   global.ElecKoi = Object.freeze({
     api: Object.freeze({ stage: "preview", version: API_VERSION }),
     call,
@@ -129,6 +153,7 @@
       list: () => call("messages.list"),
       get: (id) => call("messages.get", { id }),
       current: () => call("messages.current"),
+      deleteFrom: (id) => call("messages.deleteFrom", { id }),
       regenerate: (id) => call("messages.regenerate", { id }),
       editAndRegenerate: (id, text) => call("messages.editAndRegenerate", { id, text }),
     }),
@@ -136,8 +161,12 @@
       current: () => call("chat.current"),
       list: () => call("chat.list"),
       getGenerationState: () => call("chat.getGenerationState"),
+      getAgentTrajectory: (options = {}) => call("chat.getAgentTrajectory", options),
       getModels: () => call("chat.getModels"),
-      send: (text) => call("chat.send", { text }),
+      send: async (text, options = {}) => call("chat.send", {
+        text,
+        attachments: await Promise.all((options.attachments || []).map(serializeAttachment)),
+      }),
       stopGeneration: () => call("chat.stopGeneration"),
       create: (options = {}) => call("chat.create", options),
       open: (sessionId) => call("chat.open", { sessionId }),
@@ -145,7 +174,27 @@
       selectModel: (options) => call("chat.selectModel", options),
     }),
     character: Object.freeze({ current: () => call("character.current") }),
-    settingLibrary: Object.freeze({ getSummary: () => call("settingLibrary.getSummary") }),
+    settingLibrary: Object.freeze({
+      current: () => call("settingLibrary.current"),
+      getSummary: () => call("settingLibrary.getSummary"),
+    }),
+    media: Object.freeze({
+      getMessageAttachments: (messageId) => call("media.getMessageAttachments", { messageId }),
+      getMessageAttachment: (messageId, attachmentId) => call("media.getMessageAttachment", { messageId, attachmentId }),
+    }),
+    audio: Object.freeze({
+      play: (options) => call("audio.play", options),
+      pause: (channel = "bgm") => call("audio.pause", { channel }),
+      resume: (channel = "bgm") => call("audio.resume", { channel }),
+      stop: (channel = "bgm") => call("audio.stop", { channel }),
+      seek: (seconds, channel = "bgm") => call("audio.seek", { channel, seconds }),
+      getState: (channel = "bgm") => call("audio.getState", { channel }),
+      getPlaylist: (channel = "bgm") => call("audio.getPlaylist", { channel }),
+      setPlaylist: (channel, items, options = {}) => call("audio.setPlaylist", { channel, items, ...options }),
+      appendPlaylist: (channel, items) => call("audio.appendPlaylist", { channel, items }),
+      getSettings: () => call("audio.getSettings"),
+      setSettings: (settings) => call("audio.setSettings", { settings }),
+    }),
     input: Object.freeze({
       get: () => call("input.get"),
       set: (text) => call("input.set", { text }),

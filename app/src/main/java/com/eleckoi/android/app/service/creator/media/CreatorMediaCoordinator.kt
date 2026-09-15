@@ -37,7 +37,7 @@ internal class CreatorMediaCoordinator(
     private val characters: CharacterRepository,
     private val rootResolver: CreatorCharacterRootResolver,
     private val mediaCacheDirectory: File,
-    private val imageModelConfigId: () -> String,
+    private val imageModelConfigId: suspend () -> String,
 ) {
     private val mediaMutex = Mutex()
 

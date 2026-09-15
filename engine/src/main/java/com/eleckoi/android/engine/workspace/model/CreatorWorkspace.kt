@@ -21,16 +21,16 @@ data class CreatorWorkspace(
     /**
      * Compatibility mirror of [primaryCharacterRootId]. New creator code must resolve characters
      * through [characterRoots]; the legacy field remains because preview/publish callers still use
-     * it and because character-mode workspaces have a physical character owner.
+     * it and because character-owned workspaces have a physical character owner.
      */
     val linkedCharacterId: String? = null,
-    /** Persistent role mode association. Null means this is a standalone creator workspace. */
-    val linkedCharacterMode: String? = null,
+    /** True when this is the one runtime workspace physically owned by a character. */
+    val characterOwned: Boolean = false,
     /** Stable root selected when a capability omits an explicit root id. */
     val primaryCharacterRootId: String? = null,
     /**
      * Character resources mounted into this creator workspace. These are references to Room-owned
-     * data, never copies under /workspace. Character-mode workspaces deliberately keep this empty.
+     * data, never copies under /workspace. Character-owned workspaces deliberately keep this empty.
      */
     val characterRoots: List<CreatorWorkspaceCharacterRoot> = emptyList(),
     val previewEntryFile: String? = null,
@@ -64,10 +64,10 @@ fun creatorCharacterRootId(characterId: String): String = "character:${character
 
 /**
  * Normalizes the persisted multi-root contract and upgrades the old single linked character.
- * Character-mode workspaces are owned by one character directory and are not creator mounts.
+ * Character-owned workspaces live under one character directory and are not creator mounts.
  */
 fun CreatorWorkspace.withNormalizedCharacterRoots(): CreatorWorkspace {
-    if (linkedCharacterMode != null) {
+    if (characterOwned) {
         return copy(
             schemaVersion = maxOf(schemaVersion, 6),
             characterRoots = emptyList(),

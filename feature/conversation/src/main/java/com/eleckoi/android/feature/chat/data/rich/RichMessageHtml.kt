@@ -13,11 +13,11 @@ internal data class RichMessageCssTheme(
 internal fun buildRichMessageHtml(
     document: RichMessageDocument,
     theme: RichMessageCssTheme,
-    authorApiSource: String,
+    authorRuntimeHead: String,
 ): String {
     val head = richMessageHead(
         theme = theme,
-        authorApiSource = authorApiSource,
+        authorRuntimeHead = authorRuntimeHead,
     )
     val bootstrap = RichMessageBootstrap
     if (document.kind == RichMessageDocumentKind.Fragment) {
@@ -44,7 +44,7 @@ internal fun buildRichMessageHtml(
 
 private fun richMessageHead(
     theme: RichMessageCssTheme,
-    authorApiSource: String,
+    authorRuntimeHead: String,
 ): String = """
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
@@ -76,15 +76,12 @@ img, video, canvas, svg, iframe { max-width: 100%; }
 a { color: var(--eleckoi-accent); }
 button, input, textarea, select { font: inherit; }
 </style>
-<script id="eleckoi-author-api">${authorApiSource.safeInlineScript()}</script>
+$authorRuntimeHead
 """.trimIndent()
-
-private fun String.safeInlineScript(): String = replace(ClosingScriptTag) { "<\\/script" }
 
 private val HeadOpen = Regex("""(?i)<head(?:\s[^>]*)?>""")
 private val BodyClose = Regex("""(?i)</body\s*>""")
 private val HtmlOpen = Regex("""(?i)<html(?:\s[^>]*)?>""")
-private val ClosingScriptTag = Regex("""(?i)</script""")
 
 private fun String.insertBeforeFirst(pattern: Regex, addition: String): String {
     val match = pattern.find(this) ?: return this

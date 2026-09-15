@@ -1,6 +1,5 @@
 package com.eleckoi.android.feature.characters.model
 
-import com.eleckoi.android.feature.characters.model.CharacterMode
 import com.eleckoi.android.feature.characters.modes.story.model.StoryToolSettings
 
 const val CharacterCoverAspectRatio = 3f / 4f
@@ -65,7 +64,6 @@ data class CharacterCard(
     val assistantAvatar: String = "",
     val assistantSquare: String = "",
     val assistantCover: String = "",
-    val assistantPrompt: String = "",
     val profileAge: String = "",
     val profileSex: String = "",
     val profileHeight: String = "",
@@ -123,7 +121,6 @@ data class CharacterSlot(
     val order: Int = 0,
     val groupViewOrder: Int = 0,
     val folder: String,
-    val characterMode: String = CharacterMode.Story.storageValue,
     val storyTools: StoryToolSettings = StoryToolSettings(),
     val persona: CharacterCard,
 )

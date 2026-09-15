@@ -39,10 +39,11 @@ internal fun ColumnScope.ModelSettingsContent(
     state: ModelSettingsEditorState,
     provider: ModelProviderMeta,
     providerConfigs: List<ModelConfig>,
+    canDeleteConfig: Boolean,
     isImageProvider: Boolean,
     appearance: AppearanceTheme,
-    onSave: (ModelConfig) -> Unit,
     onCreateConfig: (String) -> Unit,
+    onDeleteConfig: () -> Unit,
     onFetchModels: (ModelConfig, (Result<ModelConfig>) -> Unit) -> Unit,
     onTestConnection: (ModelConfig, (Result<Unit>) -> Unit) -> Unit,
 ) {
@@ -65,15 +66,17 @@ internal fun ColumnScope.ModelSettingsContent(
             form = form,
             provider = provider,
             providerConfigs = providerConfigs,
+            canDeleteConfig = canDeleteConfig,
             isImageProvider = isImageProvider,
             appearance = appearance,
             scrollState = scrollState,
             imeBottomPx = imeBottomPx,
-            onCreateConfig = onCreateConfig,
+            onCreateConfig = { providerId ->
+                state.requestDraftReplacement { onCreateConfig(providerId) }
+            },
+            onDeleteConfig = onDeleteConfig,
             onSelectConfig = { selected ->
-                if (state.dirty) onSave(state.form)
-                state.selectConfig(selected)
-                onSave(selected)
+                state.requestDraftReplacement { state.selectConfig(selected) }
             },
             onUpdate = state::update,
         )
@@ -108,7 +111,6 @@ internal fun ColumnScope.ModelSettingsContent(
                 onFetchModels = {},
                 onTestConnection = {
                     if (state.startImageTestConnection()) {
-                        if (state.dirty) onSave(form)
                         onTestConnection(form, state::finishImageTestConnection)
                     }
                 },
@@ -121,20 +123,17 @@ internal fun ColumnScope.ModelSettingsContent(
                 appearance = appearance,
                 onFetchModels = {
                     if (state.startFetchModels()) {
-                        if (state.dirty) onSave(form)
                         onFetchModels(form, state::finishFetchModels)
                     }
                 },
                 onTestConnection = {
                     if (state.startTestConnection()) {
-                        if (state.dirty) onSave(form)
                         onFetchModels(form) { fetchResult ->
                             state.finishConnectionStage(fetchResult)
                             if (fetchResult.isSuccess) {
                                 val fetched = fetchResult.getOrThrow()
                                 onTestConnection(fetched) { toolResult ->
                                     state.finishToolStage(toolResult)
-                                    onSave(fetched.copy(supportsTools = toolResult.isSuccess))
                                 }
                             }
                         }
@@ -190,17 +189,28 @@ private fun ModelConfigurationSection(
     form: ModelConfig,
     provider: ModelProviderMeta,
     providerConfigs: List<ModelConfig>,
+    canDeleteConfig: Boolean,
     isImageProvider: Boolean,
     appearance: AppearanceTheme,
     scrollState: androidx.compose.foundation.ScrollState,
     imeBottomPx: Int,
     onCreateConfig: (String) -> Unit,
+    onDeleteConfig: () -> Unit,
     onSelectConfig: (ModelConfig) -> Unit,
     onUpdate: (ModelConfig) -> Unit,
 ) {
     ModelSectionHeader("配置", appearance) {
         if (!isImageProvider) {
             ModelSectionAction("新建", AppIconPaths.Plus, appearance) { onCreateConfig(provider.id) }
+        }
+        if (canDeleteConfig) {
+            ModelSectionAction(
+                "删除",
+                AppIconPaths.Trash,
+                appearance,
+                danger = true,
+                onClick = onDeleteConfig,
+            )
         }
     }
     ModelFieldGroup(appearance) {

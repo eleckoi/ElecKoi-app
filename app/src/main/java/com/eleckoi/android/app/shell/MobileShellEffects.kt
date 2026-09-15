@@ -10,7 +10,7 @@ import com.eleckoi.android.feature.characters.ui.CharactersViewModel
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.ui.SettingLibraryEffect
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.ui.SettingLibraryIntent
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.ui.SettingLibraryViewModel
-import com.eleckoi.android.feature.characters.modes.story.presets.ui.StoryPresetViewModel
+import com.eleckoi.android.feature.characters.presets.ui.AgentPresetViewModel
 import com.eleckoi.android.feature.characters.modes.story.variables.ui.VariableConfigEffect
 import com.eleckoi.android.feature.characters.modes.story.variables.ui.VariableConfigViewModel
 import com.eleckoi.android.feature.characters.modes.story.regex.ui.RegexRulesEffect
@@ -28,12 +28,12 @@ internal fun MobileShellEffects(
     charactersState: com.eleckoi.android.feature.characters.ui.CharactersUiState,
     profileState: com.eleckoi.android.feature.settings.ui.personalization.profile.ProfileUiState,
     settingLibraryState: com.eleckoi.android.feature.characters.modes.story.settinglibrary.ui.SettingLibraryUiState,
-    storyPresetState: com.eleckoi.android.feature.characters.modes.story.presets.ui.StoryPresetUiState,
+    agentPresetState: com.eleckoi.android.feature.characters.presets.ui.AgentPresetUiState,
     shellViewModel: ShellViewModel,
     charactersViewModel: CharactersViewModel,
     settingLibraryViewModel: SettingLibraryViewModel,
     variableConfigViewModel: VariableConfigViewModel,
-    storyPresetViewModel: StoryPresetViewModel,
+    agentPresetViewModel: AgentPresetViewModel,
     regexRulesViewModel: RegexRulesViewModel,
     profileViewModel: ProfileViewModel,
     chatViewModel: ChatViewModel,
@@ -52,8 +52,7 @@ internal fun MobileShellEffects(
         if (
             route == MobileRoute.Chat &&
             session != null &&
-            !chatState.isSending &&
-            session.characterMode == com.eleckoi.android.feature.characters.model.CharacterMode.Story.storageValue
+            !chatState.isSending
         ) {
             settingLibraryViewModel.onIntent(
                 SettingLibraryIntent.LoadConversationLibraries(session.characterId),
@@ -84,10 +83,15 @@ internal fun MobileShellEffects(
                     shellViewModel.onIntent(ShellIntent.ChangeTab(RootTab.Characters))
                     navigateTo(MobileRoute.CharacterSettings(effect.characterId))
                 }
+                is CharactersEffect.OpenCharacterDraft -> {
+                    shellViewModel.onIntent(ShellIntent.ChangeTab(RootTab.Characters))
+                    navigateTo(MobileRoute.CharacterDraft(effect.characterId))
+                }
                 is CharactersEffect.CharactersDeleted -> {
                     val current = latestRoute.value
                     val currentCharacterId = when (current) {
                         is MobileRoute.CharacterSettings -> current.characterId
+                        is MobileRoute.CharacterDraft -> current.characterId
                         is MobileRoute.CharacterAvatars -> current.characterId
                         is MobileRoute.SettingLibrary -> current.characterId
                         is MobileRoute.DynamicSettings -> current.characterId
@@ -99,6 +103,10 @@ internal fun MobileShellEffects(
                     if (currentCharacterId in effect.characterIds) {
                         navigateTo(MobileRoute.Root)
                     }
+                }
+                CharactersEffect.CharacterCreated -> {
+                    Toast.makeText(context, "角色创建成功", Toast.LENGTH_SHORT).show()
+                    chatViewModel.refreshCurrentDraft()
                 }
                 CharactersEffect.CharactersChanged -> chatViewModel.refreshCurrentDraft()
                 is CharactersEffect.CharactersImported -> {
@@ -164,10 +172,10 @@ internal fun MobileShellEffects(
         }
     }
 
-    LaunchedEffect(storyPresetState.importMessage) {
-        storyPresetState.importMessage.takeIf(String::isNotBlank)?.let { message ->
+    LaunchedEffect(agentPresetState.importMessage) {
+        agentPresetState.importMessage.takeIf(String::isNotBlank)?.let { message ->
             Toast.makeText(context, message, Toast.LENGTH_LONG).show()
-            storyPresetViewModel.importMessageShown()
+            agentPresetViewModel.importMessageShown()
         }
     }
 

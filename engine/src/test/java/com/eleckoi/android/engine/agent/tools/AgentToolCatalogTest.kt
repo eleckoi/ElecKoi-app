@@ -24,30 +24,6 @@ import org.junit.Test
 
 class AgentToolCatalogTest {
     @Test
-    fun `character scope round trips its character id`() {
-        assertEquals("card-1", AgentToolScopes.characterId(AgentToolScopes.character("card-1")))
-        assertEquals(null, AgentToolScopes.characterId(AgentToolScopes.Shared))
-    }
-
-    @Test
-    fun `only creator meta tools are enabled by default`() {
-        val disabled = AgentToolRequestPolicy.defaultDisabledGroupIds()
-        val enabled = AgentToolRequestPolicy.builtInGroups()
-            .map(AgentToolGroupSnapshot::id)
-            .filterNot(disabled::contains)
-            .toSet()
-
-        assertEquals(setOf(AgentToolRequestPolicy.BuiltInCreator), enabled)
-        assertFalse(AgentToolRequestPolicy.BuiltInCreator in disabled)
-        assertTrue(AgentToolRequestPolicy.BuiltInSettingLibrary in disabled)
-        assertTrue(AgentToolRequestPolicy.BuiltInVariables in disabled)
-        assertTrue(AgentToolRequestPolicy.BuiltInRoleplayWorkflow in disabled)
-        assertTrue(AgentToolRequestPolicy.BuiltInWeb in disabled)
-        assertTrue(AgentToolRequestPolicy.BuiltInRemoteDsh in disabled)
-        assertTrue(AgentToolRequestPolicy.BuiltInOther in disabled)
-    }
-
-    @Test
     fun `roleplay plan is isolated in its own built in group`() {
         val group = AgentToolRequestPolicy.builtInGroups()
             .single { it.id == AgentToolRequestPolicy.BuiltInRoleplayWorkflow }
@@ -79,11 +55,10 @@ class AgentToolCatalogTest {
 
         assertEquals("联网搜索", group.name)
         assertTrue(AgentWebSearchTool in group.members.map { it.name })
-        assertTrue(AgentToolRequestPolicy.BuiltInWeb in AgentToolRequestPolicy.defaultDisabledGroupIds())
     }
 
     @Test
-    fun `native web search bridge follows the same per-scope switch`() {
+    fun `native web search bridge follows the preset tool switch`() {
         val request = json(
             """
             {
@@ -106,13 +81,12 @@ class AgentToolCatalogTest {
     }
 
     @Test
-    fun `remote dsh is a real per-scope tool group and stays off by default`() {
+    fun `remote dsh is exposed as a selectable preset tool group`() {
         val group = AgentToolRequestPolicy.builtInGroups()
             .single { it.id == AgentToolRequestPolicy.BuiltInRemoteDsh }
 
         assertEquals("远端 DSH", group.name)
         assertEquals(listOf(AgentRemoteDshTaskTool), group.members.map { it.name })
-        assertTrue(AgentToolRequestPolicy.BuiltInRemoteDsh in AgentToolRequestPolicy.defaultDisabledGroupIds())
     }
 
     @Test

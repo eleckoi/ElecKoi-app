@@ -25,8 +25,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.eleckoi.android.foundation.design.AppearanceTheme
-import com.eleckoi.android.foundation.design.components.DshIconPaths
-import com.eleckoi.android.foundation.design.components.FilledSvgIcon
+import com.eleckoi.android.foundation.design.components.DshTreeDisclosureGlyph
 import com.eleckoi.android.foundation.design.components.QuietBackButton
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -77,11 +76,10 @@ internal fun VariableViewerChevron(
     color: Color,
     iconSize: Dp,
 ) {
-    FilledSvgIcon(
-        paths = if (expanded) DshIconPaths.ChevronDown else DshIconPaths.ChevronRight,
-        color = color,
+    DshTreeDisclosureGlyph(
+        expanded = expanded,
+        tint = color,
         iconSize = iconSize,
-        viewportSize = DshIconPaths.Viewport14,
     )
 }
 

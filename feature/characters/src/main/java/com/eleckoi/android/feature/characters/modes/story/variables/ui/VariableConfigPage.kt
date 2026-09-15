@@ -2,7 +2,6 @@ package com.eleckoi.android.feature.characters.modes.story.variables.ui
 
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -223,20 +222,11 @@ fun VariableConfigPage(
                         }
                         else -> items(displayedTreeNodes, key = { it.id }) { node ->
                             val dragging = treeInternalReorder.isDragging(node)
-                            val placementModifier = if (dragging) {
-                                Modifier
-                            } else {
-                                Modifier.animateItem(
-                                    fadeInSpec = tween(durationMillis = 80),
-                                    placementSpec = tween(durationMillis = 110),
-                                    fadeOutSpec = tween(durationMillis = 45),
-                                )
-                            }
                             VariableTreeNodeRow(
                                 node = node,
                                 selected = selectedTreeNodeId == node.id,
                                 dragging = dragging,
-                                modifier = placementModifier
+                                modifier = Modifier
                                     .zIndex(if (dragging) 2f else 0f)
                                     .offset { IntOffset(0, treeInternalReorder.dragOffsetY(node).roundToInt()) },
                                 reorderModifier = treeInternalReorder.dragModifier(node),

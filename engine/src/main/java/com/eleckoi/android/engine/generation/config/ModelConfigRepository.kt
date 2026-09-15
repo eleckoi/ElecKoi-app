@@ -84,7 +84,6 @@ class ModelConfigRepository internal constructor(
                     .put("model", config.model)
                     .put("model_options", JSONArray(config.modelOptions.toModelOptionsJson()))
                     .put("custom_headers", JSONObject(config.customHeaders.filterKeys(::isSafeBackupHeader)))
-                    .put("supports_tools", config.supportsTools ?: JSONObject.NULL)
                     .put("enabled", config.enabled)
                     .put("image_settings", JSONObject(config.imageSettings.toJson()))
                     .put("api_format", config.apiFormat.storageValue)
@@ -123,7 +122,6 @@ class ModelConfigRepository internal constructor(
                         .filter(::isSafeBackupHeader)
                         .associateWith { headers.optString(it) }
                 }.orEmpty(),
-                supportsTools = if (item.isNull("supports_tools")) null else item.optBoolean("supports_tools"),
                 enabled = item.optBoolean("enabled"),
                 imageSettings = imageSettingsFromJson(
                     item.optJSONObject("image_settings")?.toString().orEmpty(),
@@ -182,8 +180,14 @@ class ModelConfigRepository internal constructor(
 
     fun fetchModelOptions(config: ModelConfig): ModelConfig {
         val models = mergeFetchedModelOptions(config, provider.fetchModels(config))
-        val saved = saveModelConfig(config.copy(modelOptions = models, model = config.model.ifBlank { models.firstOrNull()?.id.orEmpty() }))
-        return saved
+        // Fetching is an editor operation, not a persistence boundary. The returned copy stays in
+        // the caller's draft until the user explicitly chooses Save.
+        return normalizeConfig(
+            config.copy(
+                modelOptions = models,
+                model = config.model.ifBlank { models.firstOrNull()?.id.orEmpty() },
+            ),
+        )
     }
 
     suspend fun testConnection(config: ModelConfig) {

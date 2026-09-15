@@ -29,7 +29,7 @@ import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.foundation.design.components.MobileRootSurface
 import com.eleckoi.android.foundation.design.components.GroupRow
 import com.eleckoi.android.foundation.design.components.MobileEmptyState
-import com.eleckoi.android.foundation.design.components.MobileProfileHeader
+import com.eleckoi.android.foundation.design.components.MobileRootActionHeader
 import com.eleckoi.android.foundation.design.components.ModelProviderIcon
 import com.eleckoi.android.foundation.design.components.AppIconPaths
 import com.eleckoi.android.foundation.design.components.StrokeSvgIcon
@@ -51,18 +51,15 @@ private fun rememberModelsRootEditorState(): ModelsRootEditorState {
 
 @Composable
 fun ModelsRootPage(
-    userName: String,
-    userAvatarPath: String,
     models: ModelConfigCollection?,
     appearance: AppearanceTheme,
     onSearch: () -> Unit,
     onAdd: () -> Unit,
-    onOpenProfile: () -> Unit,
+    onOpenSidebar: () -> Unit,
     onOpenModel: (String, String) -> Unit,
 ) {
     val configs = models?.configs.orEmpty()
     val activeConfigId = models?.activeConfigId.orEmpty()
-    val configuredCount = configs.size
     val editorState = rememberModelsRootEditorState()
     val generalSection = modelLibrarySections.first { it.id == ModelLibrarySectionId.General }
     val imageSection = modelLibrarySections.first { it.id == ModelLibrarySectionId.Image }
@@ -76,15 +73,12 @@ fun ModelsRootPage(
     MobileRootSurface(
         appearance = appearance,
         header = {
-            MobileProfileHeader(
-                userName = userName,
-                userAvatarPath = userAvatarPath,
+            MobileRootActionHeader(
                 title = "模型",
-                subtitle = "$configuredCount 个配置",
                 appearance = appearance,
+                onOpenSidebar = onOpenSidebar,
                 onSearch = onSearch,
                 onAdd = onAdd,
-                onOpenProfile = onOpenProfile,
             )
         },
     ) {

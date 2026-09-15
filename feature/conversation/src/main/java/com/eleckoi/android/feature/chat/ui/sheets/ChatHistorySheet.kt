@@ -67,7 +67,6 @@ fun ChatHistorySheet(
     sessions: List<ChatListItem>,
     currentSessionId: String,
     currentCharacterId: String,
-    currentCharacterMode: String,
     characterName: String,
     saveMode: String,
     appearance: AppearanceTheme,
@@ -83,10 +82,7 @@ fun ChatHistorySheet(
     with(sheetState) {
     val key = keyword.trim().lowercase()
     val related = sessions
-        .filter {
-            it.characterId == currentCharacterId &&
-                it.characterMode == currentCharacterMode
-        }
+        .filter { it.characterId == currentCharacterId }
         .filter { key.isBlank() || listOf(it.title, it.characterName, it.summary, it.updatedAt).joinToString(" ").lowercase().contains(key) }
         .sortedWith(compareByDescending<ChatListItem> { it.id == currentSessionId }.thenByDescending { it.updatedAt })
         .let { if (saveMode == "recent10") it.take(10) else it }

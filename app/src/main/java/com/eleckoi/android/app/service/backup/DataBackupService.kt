@@ -6,7 +6,7 @@ import com.eleckoi.android.feature.appfont.data.AppFontRepository
 import com.eleckoi.android.feature.characters.data.CharacterRepository
 import com.eleckoi.android.feature.characters.data.UserProfileRepository
 import com.eleckoi.android.feature.characters.model.UserProfile
-import com.eleckoi.android.feature.characters.modes.story.presets.data.StoryPresetRepository
+import com.eleckoi.android.feature.characters.presets.data.AgentPresetRepository
 import com.eleckoi.android.feature.characters.modes.story.regex.data.RegexRuleRepository
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.data.SettingLibraryRepository
 import com.eleckoi.android.feature.preferences.UiPreferencesRepository
@@ -50,14 +50,12 @@ class DataBackupService(
     private val settingLibrary: SettingLibraryRepository,
     private val variableConfig: VariableConfigRepository,
     private val regexRules: RegexRuleRepository,
-    private val storyPresets: StoryPresetRepository,
+    private val agentPresets: AgentPresetRepository,
     private val sessions: ChatSessionStore,
     private val uiPreferences: UiPreferencesRepository,
     private val appFont: AppFontRepository,
     private val modelConfigs: ModelConfigRepository,
     private val frontendProjects: FrontendProjectRepository,
-    private val exportToolConfig: () -> String,
-    private val restoreToolConfig: (String) -> Unit,
     database: ElecKoiDatabase,
     private val creatorWorkspaces: CreatorWorkspaceRepository,
 ) {
@@ -69,14 +67,12 @@ class DataBackupService(
         settingLibrary = settingLibrary,
         variableConfig = variableConfig,
         regexRules = regexRules,
-        storyPresets = storyPresets,
+        agentPresets = agentPresets,
         sessions = sessions,
         uiPreferences = uiPreferences,
         appFont = appFont,
         modelConfigs = modelConfigs,
         frontendProjects = frontendProjects,
-        exportToolConfig = exportToolConfig,
-        restoreToolConfig = restoreToolConfig,
         creatorWorkspaces = creatorWorkspaces,
         creatorAssistantBackup = creatorAssistantBackup,
         includedRoots = IncludedRoots,
@@ -177,12 +173,11 @@ class DataBackupService(
                         ?: error("聊天记录找不到对应角色")
                 }
             val restoredSessions = sessions.restoreBackupHistories(histories)
-            storyPresets.restoreBackupJson(sections.getValue("presets.json"))
+            agentPresets.restoreBackupJson(sections.getValue("presets.json"))
             sections["shared-regex.json"]?.let(regexRules::restoreSharedBackupJson)
             uiPreferences.restoreSnapshotJson(sections.getValue("preferences.json"))
             appFont.restoreSelectionJson(sections.getValue("app-font.json"))
             modelConfigs.restoreBackupJson(sections.getValue("model-configs.json"))
-            sections["tool-config.json"]?.let(restoreToolConfig)
             val restoredCreatorConversations = creatorAssistantBackup.restoreJson(
                 sections.getValue("creator-assistant.json"),
                 restoredCreatorWorkspaces,
@@ -360,7 +355,7 @@ class DataBackupService(
             "data/characters",
             "data/user",
             "data/settings",
-            "data/story-presets",
+            "data/agent-presets",
             "author_frontends/projects",
             "creator_workspaces/workspaces",
             "creator_workspaces/characters",

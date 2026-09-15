@@ -43,7 +43,7 @@ internal fun ChatComposerMenu(
     onOpenHistory: () -> Unit,
     onOpenPresets: () -> Unit,
     onPermissionModeChange: (AgentPermissionMode) -> Unit,
-    onOpenPlugins: () -> Unit,
+    onOpenTools: () -> Unit,
     onOpenRequestViewer: () -> Unit,
     onOpenVariableViewer: () -> Unit,
     onOpenDynamicSettings: (() -> Unit)?,
@@ -99,7 +99,7 @@ internal fun ChatComposerMenu(
                     paths = AppIconPaths.Plug,
                     appearance = appearance,
                     onDismiss = onDismiss,
-                    onClick = onOpenPlugins,
+                    onClick = onOpenTools,
                 )
                 RoleplayMenuAction(
                     label = "请求",

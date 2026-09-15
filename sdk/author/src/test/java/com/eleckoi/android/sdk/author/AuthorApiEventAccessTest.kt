@@ -9,7 +9,7 @@ class AuthorApiEventAccessTest {
     fun `events read alone does not expose data events`() {
         assertFalse(
             AuthorApiEventAccess.canReceive(
-                "variables.changed",
+                "messages.changed",
                 setOf(AuthorApiPermission.EventsRead),
             ),
         )
@@ -19,10 +19,10 @@ class AuthorApiEventAccessTest {
     fun `event requires both subscription and matching data permission`() {
         val permissions = setOf(
             AuthorApiPermission.EventsRead,
-            AuthorApiPermission.VariablesRead,
+            AuthorApiPermission.ChatRead,
         )
 
-        assertTrue(AuthorApiEventAccess.canReceive("variables.changed", permissions))
+        assertTrue(AuthorApiEventAccess.canReceive("agent.output.delta", permissions))
         assertFalse(AuthorApiEventAccess.canReceive("messages.changed", permissions))
     }
 
@@ -30,24 +30,24 @@ class AuthorApiEventAccessTest {
     fun `matching data permission without events read is denied`() {
         assertFalse(
             AuthorApiEventAccess.canReceive(
-                "message.delta",
-                setOf(AuthorApiPermission.MessagesRead),
+                "agent.output.delta",
+                setOf(AuthorApiPermission.ChatRead),
             ),
         )
     }
 
     @Test
-    fun `opening event requires opening read permission`() {
+    fun `messages changed requires message read permission`() {
         assertTrue(
             AuthorApiEventAccess.canReceive(
-                "opening.changed",
-                setOf(AuthorApiPermission.EventsRead, AuthorApiPermission.OpeningsRead),
+                "messages.changed",
+                setOf(AuthorApiPermission.EventsRead, AuthorApiPermission.MessagesRead),
             ),
         )
         assertFalse(
             AuthorApiEventAccess.canReceive(
-                "opening.changed",
-                setOf(AuthorApiPermission.EventsRead, AuthorApiPermission.MessagesRead),
+                "messages.changed",
+                setOf(AuthorApiPermission.EventsRead, AuthorApiPermission.ChatRead),
             ),
         )
     }

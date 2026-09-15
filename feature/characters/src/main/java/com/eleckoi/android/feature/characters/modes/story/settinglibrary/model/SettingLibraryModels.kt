@@ -5,6 +5,8 @@ enum class SettingLibraryPosition(val storageValue: String, val label: String) {
     AfterInstructions("after_instructions", "系统指令之后"),
     BeforeHistory("before_history", "聊天记录之前"),
     AfterHistory("after_history", "聊天记录之后"),
+    BeforeLatestUserInput("before_latest_user_input", "用户最新输入之前"),
+    AfterLatestUserInput("after_latest_user_input", "用户最新输入之后"),
     BeforeToolFlow("before_tool_flow", "工具调用流程之前"),
     AfterToolFlow("after_tool_flow", "工具调用流程之后");
 }
@@ -43,7 +45,6 @@ enum class SettingLibraryKeywordCondition(val storageValue: String, val label: S
 enum class SettingLibraryEntryKind(val storageValue: String) {
     Normal("normal"),
     Opening("opening"),
-    RoleplayPlan("roleplay_plan"),
     HistoryCompaction("history_compaction"),
     HiddenToolTimeline("hidden_tool_timeline");
 }
@@ -52,15 +53,6 @@ const val SettingLibraryOpeningEntryId: String = "fixed-opening-assistant"
 const val SettingLibraryOpeningEntryTitle: String = "AI角色开场白"
 const val DefaultOpeningMessageId: String = "opening-default"
 const val DefaultOpeningMessageTitle: String = "默认开场"
-const val SettingLibraryRoleplayPlanEntryId: String = "fixed-roleplay-plan"
-const val SettingLibraryRoleplayPlanEntryTitle: String = "角色扮演任务计划"
-const val DefaultRoleplayPlanReadTask: String =
-    "必须先并行调用工具调研阅读设定，这里不扮演回复，禁止未阅读设定直接回复"
-const val DefaultRoleplayPlanFinalTask: String =
-    "等前置任务都完成，直接输出 <FINAL> 正文，不要再次调用 update_roleplay_plan；" +
-        "应用检测到正文后会自动完成最终项的标记。"
-const val DefaultRoleplayPlanContent: String =
-    "$DefaultRoleplayPlanReadTask\n$DefaultRoleplayPlanFinalTask"
 const val HiddenToolTimelineEntryTitle: String = "隐藏工具时间线"
 const val HiddenToolTimelineEntryId: String = "built-in-hidden-tool-timeline"
 const val DefaultHiddenToolTimelineContent: String = """<roleplay_output_protocol>
@@ -145,13 +137,8 @@ fun SettingLibraryEntry.isOpeningEntry(): Boolean {
     return kind == SettingLibraryEntryKind.Opening || id == SettingLibraryOpeningEntryId
 }
 
-fun SettingLibraryEntry.isRoleplayPlanEntry(): Boolean {
-    return kind == SettingLibraryEntryKind.RoleplayPlan || id == SettingLibraryRoleplayPlanEntryId
-}
-
 fun SettingLibraryEntry.isFixedEntry(): Boolean {
     return isOpeningEntry() ||
-        isRoleplayPlanEntry() ||
         isHistoryCompactionEntry()
 }
 
@@ -253,39 +240,6 @@ private fun normalizeOpeningMessages(
     }
 }
 
-fun settingLibraryRoleplayPlanEntry(existing: SettingLibraryEntry? = null): SettingLibraryEntry {
-    val source = existing ?: SettingLibraryEntry(
-        content = DefaultRoleplayPlanContent,
-        enabled = false,
-    )
-    return source.copy(
-        id = SettingLibraryRoleplayPlanEntryId,
-        title = SettingLibraryRoleplayPlanEntryTitle,
-        iconId = "list",
-        kind = SettingLibraryEntryKind.RoleplayPlan,
-        groupId = "",
-        content = normalizeRoleplayPlanItems(source.content.lineSequence().toList()).joinToString("\n"),
-        agentReadStrategy = SettingLibraryAgentReadStrategy.Normal,
-        agentReadCondition = "",
-        dynamicMode = SettingLibraryDynamicMode.SingleCondition,
-        keywords = emptyList(),
-        conditionKeywords = emptyList(),
-        keywordCondition = SettingLibraryKeywordCondition.None,
-        keywordUseRegex = false,
-        keywordIgnoreCase = true,
-        keywordWholeWord = false,
-        keywordRecursionDepth = 0,
-        triggerMode = null,
-        position = null,
-        promptPositionId = "",
-        insertRole = SettingLibraryInsertRole.System,
-        order = 1,
-        viewOrder = 0,
-        groupViewOrder = 0,
-        treeViewOrder = 0,
-    )
-}
-
 fun settingLibraryHiddenToolTimelineEntry(existing: SettingLibraryEntry? = null): SettingLibraryEntry {
     val source = existing ?: SettingLibraryEntry(
         id = HiddenToolTimelineEntryId,
@@ -308,26 +262,13 @@ fun settingLibraryHiddenToolTimelineEntry(existing: SettingLibraryEntry? = null)
 fun normalizeSettingLibraryFixedEntry(entry: SettingLibraryEntry): SettingLibraryEntry {
     return when {
         entry.isOpeningEntry() -> settingLibraryOpeningEntry(entry)
-        entry.isRoleplayPlanEntry() -> settingLibraryRoleplayPlanEntry(entry)
         entry.isHistoryCompactionEntry() -> settingLibraryHistoryCompactionEntry(entry)
         else -> entry
     }
 }
 
 fun defaultSettingLibraryFixedEntries(): List<SettingLibraryEntry> {
-    return listOf(settingLibraryOpeningEntry(), settingLibraryRoleplayPlanEntry())
-}
-
-fun SettingLibraryEntry.roleplayPlanItems(): List<String> {
-    if (!isRoleplayPlanEntry() || !enabled) return emptyList()
-    return normalizeRoleplayPlanItems(content.lineSequence().toList())
-}
-
-fun normalizeRoleplayPlanItems(items: List<String>): List<String> {
-    val normalized = items
-        .map(String::trim)
-        .filter(String::isNotBlank)
-    return normalized.ifEmpty { listOf(DefaultRoleplayPlanFinalTask) }
+    return listOf(settingLibraryOpeningEntry())
 }
 
 data class SettingLibraryGroup(
@@ -363,13 +304,6 @@ data class SettingLibrary(
     val listAllExpanded: Boolean = true,
     val expandedGroupIds: List<String> = emptyList(),
 )
-
-fun SettingLibrary.withRoleplayPlanEnabled(enabled: Boolean): SettingLibrary {
-    val updatedEntries = entries.map { entry ->
-        if (entry.isRoleplayPlanEntry()) entry.copy(enabled = enabled) else entry
-    }
-    return if (updatedEntries == entries) this else copy(entries = updatedEntries)
-}
 
 data class SettingLibraryConversation(
     val sessionId: String,

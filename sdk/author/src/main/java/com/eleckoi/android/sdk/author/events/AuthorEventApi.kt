@@ -11,14 +11,16 @@ import kotlinx.serialization.json.put
 internal object AuthorEventApi {
     val routes = listOf(
         AuthorApiRoute(AuthorApiCatalog.require("events.list")) { environment, _ ->
-            buildJsonObject {
-                put("events", buildJsonArray {
-                    AuthorApiEventAccess.knownEventNames
-                        .filter { name -> AuthorApiEventAccess.canReceive(name, environment.permissions) }
-                        .sorted()
-                        .forEach { name -> add(JsonPrimitive(name)) }
-                })
-            }
+            listAvailableEvents(environment.permissions)
         },
     )
+
+    internal fun listAvailableEvents(permissions: Set<com.eleckoi.android.sdk.author.AuthorApiPermission>) =
+        buildJsonObject {
+            put("items", buildJsonArray {
+                AuthorApiEventAccess.knownEventNames
+                    .filter { name -> AuthorApiEventAccess.canReceive(name, permissions) }
+                    .forEach { name -> add(JsonPrimitive(name)) }
+            })
+        }
 }

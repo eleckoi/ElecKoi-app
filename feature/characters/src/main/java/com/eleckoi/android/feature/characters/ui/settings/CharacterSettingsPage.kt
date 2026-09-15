@@ -18,37 +18,34 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.feature.characters.model.AvatarSlot
+import com.eleckoi.android.feature.characters.model.AvatarSet
 import com.eleckoi.android.feature.characters.model.CharacterCard
 import com.eleckoi.android.feature.characters.model.CharacterSlot
-import com.eleckoi.android.feature.characters.model.CharacterMode
-import com.eleckoi.android.feature.characters.modes.agent.ui.AgentToolsPanel
 import com.eleckoi.android.feature.characters.modes.story.ui.StoryToolsPanel
 import com.eleckoi.android.foundation.design.components.ConfirmDialog
+import com.eleckoi.android.foundation.design.components.UnsavedChangesDialog
 import com.eleckoi.android.feature.characters.ui.components.AvatarSlotsPage
 import com.eleckoi.android.foundation.design.components.PinnedStatusScaffold
-import kotlinx.coroutines.delay
 import java.io.File
 
-private class CharacterSettingsEditorState(character: CharacterSlot) {
+internal class CharacterSettingsEditorState(character: CharacterSlot) {
     var name by mutableStateOf(initialName(character))
-    var prompt by mutableStateOf(character.persona.assistantPrompt)
     var opening by mutableStateOf(character.persona.opening)
-    var chatMode by mutableStateOf(CharacterMode.fromStorage(character.characterMode))
     var dirty by mutableStateOf(false)
     var confirmDelete by mutableStateOf(false)
+    var pendingAvatarFiles by mutableStateOf<Map<AvatarSlot, File>>(emptyMap())
+    var unsavedDialogOpen by mutableStateOf(false)
+    private var pendingAction: (() -> Unit)? = null
 
     fun syncFrom(character: CharacterSlot) {
         if (dirty) return
         name = initialName(character)
-        prompt = character.persona.assistantPrompt
         opening = character.persona.opening
-        chatMode = CharacterMode.fromStorage(character.characterMode)
     }
 
     fun draft(source: CharacterCard): CharacterCard {
         return source.copy(
             assistantName = name,
-            assistantPrompt = prompt,
             opening = opening,
             showOpening = opening.isNotBlank(),
         )
@@ -59,22 +56,65 @@ private class CharacterSettingsEditorState(character: CharacterSlot) {
         dirty = true
     }
 
-    fun updatePrompt(value: String) {
-        prompt = value
-        dirty = true
-    }
-
     fun updateOpening(value: String) {
         opening = value
         dirty = true
     }
 
-    fun updateChatMode(mode: CharacterMode) {
-        chatMode = mode
-    }
-
     fun markSaved() {
         dirty = false
+    }
+
+    fun requestAction(alwaysUnsaved: Boolean, action: () -> Unit) {
+        if (!alwaysUnsaved && !dirty) {
+            action()
+            return
+        }
+        pendingAction = action
+        unsavedDialogOpen = true
+    }
+
+    fun cancelPendingAction() {
+        pendingAction = null
+        unsavedDialogOpen = false
+    }
+
+    fun continuePendingAction() {
+        val action = pendingAction
+        pendingAction = null
+        unsavedDialogOpen = false
+        dirty = false
+        action?.invoke()
+    }
+
+    fun discardAndContinue() {
+        discardPendingAvatars()
+        continuePendingAction()
+    }
+
+    fun stageAvatars(files: Map<AvatarSlot, File>) {
+        files.forEach { (slot, file) ->
+            pendingAvatarFiles[slot]?.takeIf { it != file }?.delete()
+        }
+        pendingAvatarFiles = pendingAvatarFiles + files
+        dirty = true
+    }
+
+    fun clearStagedAvatar(slot: AvatarSlot) {
+        pendingAvatarFiles[slot]?.delete()
+        pendingAvatarFiles = pendingAvatarFiles - slot
+        dirty = true
+    }
+
+    fun displayedAvatars(source: AvatarSet): AvatarSet = AvatarSet(
+        circle = pendingAvatarFiles[AvatarSlot.Circle]?.absolutePath ?: source.circle,
+        square = pendingAvatarFiles[AvatarSlot.Square]?.absolutePath ?: source.square,
+        portrait = pendingAvatarFiles[AvatarSlot.Portrait]?.absolutePath ?: source.portrait,
+    )
+
+    fun discardPendingAvatars() {
+        pendingAvatarFiles.values.forEach(File::delete)
+        pendingAvatarFiles = emptyMap()
     }
 
     private fun initialName(character: CharacterSlot): String {
@@ -87,7 +127,7 @@ private class CharacterSettingsEditorState(character: CharacterSlot) {
 @Composable
 private fun rememberCharacterSettingsEditorState(character: CharacterSlot): CharacterSettingsEditorState {
     val state = remember(character.id) { CharacterSettingsEditorState(character) }
-    LaunchedEffect(character.persona, character.characterMode) {
+    LaunchedEffect(character.persona) {
         state.syncFrom(character)
     }
     return state
@@ -98,20 +138,22 @@ fun CharacterSettingsPage(
     character: CharacterSlot?,
     appearance: AppearanceTheme,
     saving: Boolean,
+    isDraft: Boolean = false,
     onBack: () -> Unit,
-    onSavePersona: (CharacterCard) -> Unit,
+    onSavePersona: (CharacterCard, (Result<CharacterSlot>) -> Unit) -> Unit,
+    onCreateCharacter: (CharacterCard, Map<AvatarSlot, File>, (Result<CharacterSlot>) -> Unit) -> Unit = { _, _, callback ->
+        callback(Result.failure(IllegalStateException("当前页面不能创建角色")))
+    },
+    onCharacterCreated: (String) -> Unit = {},
     onSaveAvatars: (Map<AvatarSlot, File>) -> Unit,
     onClearAvatar: (AvatarSlot) -> Unit,
-    onSendMessage: (persona: CharacterCard, characterMode: String) -> Unit,
-    onModeChange: (String) -> Unit,
+    onSendMessage: (persona: CharacterCard) -> Unit,
     onOpenAiCreationAssistant: () -> Unit,
-    onOpenPresetConfig: () -> Unit,
     onOpenSettingLibrary: () -> Unit,
     onOpenDynamicSettings: () -> Unit,
     onOpenVariableConfig: () -> Unit,
     onOpenRegexRules: () -> Unit,
     onOpenFrontendBeauty: () -> Unit,
-    onOpenAgentTools: () -> Unit,
     onExport: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -124,34 +166,17 @@ fun CharacterSettingsPage(
     }
 
     val editorState = rememberCharacterSettingsEditorState(character)
-    var activeSection by remember(character.id) {
-        mutableStateOf(
-            CharacterSettingsSection.fromCharacterMode(
-                CharacterMode.fromStorage(character.characterMode),
-            ),
-        )
-    }
+    var activeSection by remember(character.id) { mutableStateOf(CharacterSettingsSection.Story) }
     with(editorState) {
-    val avatarPath = character.persona.assistantAvatar.ifBlank { character.avatar }
-    val coverPath = character.persona.assistantCover.ifBlank { character.coverImage }
+    val visibleAvatars = if (isDraft) displayedAvatars(character.persona.assistantAvatars) else character.persona.assistantAvatars
+    val avatarPath = visibleAvatars.circle.ifBlank { character.avatar }
+    val coverPath = visibleAvatars.portrait.ifBlank { character.coverImage }
     val fallbackName = character.name.takeUnless { it == "未命名角色" }.orEmpty()
-
-    LaunchedEffect(
-        name,
-        prompt,
-        opening,
-        dirty,
-    ) {
-        if (!dirty) return@LaunchedEffect
-        delay(1000)
-        onSavePersona(draft(character.persona))
-        markSaved()
-    }
 
     if (avatarPageOpen) {
         AvatarSlotsPage(
-            avatars = character.persona.assistantAvatars,
-            displayName = character.name,
+            avatars = visibleAvatars,
+            displayName = name.ifBlank { character.name },
             cachePrefix = "character",
             appearance = appearance,
             initialSlot = avatarPageSlot,
@@ -159,15 +184,37 @@ fun CharacterSettingsPage(
                 avatarPageOpen = false
                 avatarPageSlot = null
             },
-            onSave = onSaveAvatars,
-            onClear = onClearAvatar,
+            onSave = { files ->
+                if (isDraft) stageAvatars(files) else onSaveAvatars(files)
+            },
+            onClear = { slot ->
+                if (isDraft) clearStagedAvatar(slot) else onClearAvatar(slot)
+            },
         )
         return
     }
 
     fun requestBack() {
-        if (dirty) onSavePersona(draft(character.persona))
-        onBack()
+        requestAction(alwaysUnsaved = isDraft, action = onBack)
+    }
+
+    fun saveAndContinue(action: () -> Unit) {
+        onSavePersona(draft(character.persona)) { result ->
+            result.onSuccess {
+                markSaved()
+                action()
+            }
+        }
+    }
+
+    fun createAndContinue(action: (CharacterSlot) -> Unit) {
+        onCreateCharacter(draft(character.persona), pendingAvatarFiles) { result ->
+            result.onSuccess { created ->
+                pendingAvatarFiles = emptyMap()
+                markSaved()
+                action(created)
+            }
+        }
     }
 
     BackHandler(onBack = ::requestBack)
@@ -185,8 +232,8 @@ fun CharacterSettingsPage(
             coverPath = coverPath,
             appearance = appearance,
             onBack = ::requestBack,
-            onExport = onExport,
-            onDelete = { confirmDelete = true },
+            onExport = if (isDraft) null else onExport,
+            onDelete = if (isDraft) null else ({ confirmDelete = true }),
             onAvatarClick = {
                 avatarPageSlot = null
                 avatarPageOpen = true
@@ -201,13 +248,7 @@ fun CharacterSettingsPage(
                 activeSection = activeSection,
                 appearance = appearance,
                 layoutScale = layoutScale,
-                onChange = { section ->
-                    activeSection = section
-                    section.characterMode?.let { mode ->
-                        updateChatMode(mode)
-                        onModeChange(mode.storageValue)
-                    }
-                },
+                onChange = { section -> activeSection = section },
             )
 
             when (activeSection) {
@@ -236,65 +277,46 @@ fun CharacterSettingsPage(
                             appearance = appearance,
                             layoutScale = layoutScale,
                             onOpenAiCreationAssistant = {
-                                if (dirty) onSavePersona(draft(character.persona))
-                                onOpenAiCreationAssistant()
-                            },
-                            onOpenPresetConfig = {
-                                if (dirty) onSavePersona(draft(character.persona))
-                                onOpenPresetConfig()
+                                requestAction(isDraft, onOpenAiCreationAssistant)
                             },
                             onOpenSettingLibrary = {
-                                if (dirty) onSavePersona(draft(character.persona))
-                                onOpenSettingLibrary()
+                                requestAction(isDraft, onOpenSettingLibrary)
                             },
                             onOpenDynamicSettings = {
-                                if (dirty) onSavePersona(draft(character.persona))
-                                onOpenDynamicSettings()
+                                requestAction(isDraft, onOpenDynamicSettings)
                             },
                             onOpenVariableConfig = {
-                                if (dirty) onSavePersona(draft(character.persona))
-                                onOpenVariableConfig()
+                                requestAction(isDraft, onOpenVariableConfig)
                             },
                             onOpenRegexRules = {
-                                if (dirty) onSavePersona(draft(character.persona))
-                                onOpenRegexRules()
+                                requestAction(isDraft, onOpenRegexRules)
                             },
                             onOpenFrontendBeauty = {
-                                if (dirty) onSavePersona(draft(character.persona))
-                                onOpenFrontendBeauty()
-                            },
-                            onOpenAgentTools = {
-                                if (dirty) onSavePersona(draft(character.persona))
-                                onOpenAgentTools()
-                            },
-                        )
-                    }
-                }
-                CharacterSettingsSection.Agent -> {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                            .padding(horizontal = (6f * layoutScale).dp),
-                    ) {
-                        AgentToolsPanel(
-                            appearance = appearance,
-                            layoutScale = layoutScale,
-                            onOpenAgentTools = {
-                                if (dirty) onSavePersona(draft(character.persona))
-                                onOpenAgentTools()
+                                requestAction(isDraft, onOpenFrontendBeauty)
                             },
                         )
                     }
                 }
             }
-            ScrapbookFooter(
-                layoutScale = layoutScale,
-                enabled = !saving,
-                onSend = {
-                    onSendMessage(draft(character.persona), chatMode.storageValue)
-                },
-            )
+            if (isDraft) {
+                CharacterDraftFooter(
+                    layoutScale = layoutScale,
+                    enabled = !saving,
+                    onCreate = {
+                        createAndContinue { created ->
+                            onCharacterCreated(created.id)
+                        }
+                    },
+                )
+            } else {
+                ScrapbookFooter(
+                    layoutScale = layoutScale,
+                    enabled = !saving,
+                    onSend = {
+                        onSendMessage(draft(character.persona))
+                    },
+                )
+            }
         }
     }
 
@@ -308,6 +330,32 @@ fun CharacterSettingsPage(
                 confirmDelete = false
                 onDelete()
             },
+        )
+    }
+    if (unsavedDialogOpen) {
+        UnsavedChangesDialog(
+            title = if (isDraft) "创建角色？" else "保存修改？",
+            message = if (isDraft) {
+                "离开前是否创建当前角色？"
+            } else {
+                "离开前是否保存当前角色的修改？"
+            },
+            appearance = appearance,
+            saving = saving,
+            saveText = if (isDraft) "创建角色" else "保存",
+            discardText = if (isDraft) "不创建" else "不保存",
+            onSave = {
+                if (isDraft) {
+                    createAndContinue { created ->
+                        onCharacterCreated(created.id)
+                        continuePendingAction()
+                    }
+                } else {
+                    saveAndContinue(::continuePendingAction)
+                }
+            },
+            onDiscard = ::discardAndContinue,
+            onCancel = ::cancelPendingAction,
         )
     }
     }

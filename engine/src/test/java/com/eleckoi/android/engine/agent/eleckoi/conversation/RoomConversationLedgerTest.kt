@@ -1,6 +1,7 @@
 package com.eleckoi.android.engine.agent.eleckoi.conversation
 
 import com.eleckoi.android.foundation.storage.room.agent.entity.AgentContentPartEntity
+import com.eleckoi.android.foundation.storage.room.agent.dao.AgentPublicMessageRef
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -11,6 +12,55 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RoomConversationLedgerTest {
+    @Test
+    fun `message projection rewrite preserves setting library rollback checkpoint`() {
+        val checkpoint = AgentContentPartEntity(
+            conversationId = "chat-1",
+            ownerType = "response",
+            ownerId = "response-1",
+            partIndex = 1_000_000,
+            kind = "setting_library_state",
+            text = "",
+            payloadJson = "[]",
+        )
+        val text = AgentContentPartEntity(
+            conversationId = "chat-1",
+            ownerType = "response",
+            ownerId = "response-1",
+            partIndex = 0,
+            kind = "assistant_text",
+            text = "更新后的回复",
+            payloadJson = "",
+        )
+
+        assertEquals(
+            listOf(text, checkpoint),
+            preserveInternalCheckpoints(current = listOf(checkpoint), incoming = listOf(text)),
+        )
+    }
+
+    @Test
+    fun `suffix deletion returns public ids in chat order without message bodies`() {
+        val rows = (0 until 500).flatMap { sequence ->
+            listOf(
+                AgentPublicMessageRef(
+                    sequence, "turn-$sequence", "user-$sequence", "{}",
+                    "response-a-$sequence", 0, "assistant-a-$sequence", "{}",
+                ),
+                AgentPublicMessageRef(
+                    sequence, "turn-$sequence", "user-$sequence", "{}",
+                    "response-b-$sequence", 1, "assistant-b-$sequence", "{}",
+                ),
+            )
+        }.drop(400 * 2)
+
+        val deleted = publicDeletedMessageIds(rows, selectedSequence = 400, selectedResponseIndex = 1)
+
+        assertEquals("assistant-b-400", deleted.first())
+        assertEquals(listOf("user-401", "assistant-a-401", "assistant-b-401"), deleted.drop(1).take(3))
+        assertEquals("assistant-b-499", deleted.last())
+    }
+
     @Test
     fun `stable ledger ids encode identity components without hashing message content`() {
         assertEquals("turn.Y2hhdA.bWFpbg", stableLedgerId("turn", "chat", "main"))

@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import com.eleckoi.android.feature.characters.model.AppDefaultChatBackground
 import com.eleckoi.android.feature.characters.model.CustomChatBackground
 import com.eleckoi.android.feature.characters.model.GlobalChatBackground
+import com.eleckoi.android.feature.preferences.NewCharacterBackground
 import com.eleckoi.android.feature.chat.ui.layout.ChatBackdrop
 import com.eleckoi.android.feature.chat.ui.layout.ChatBackdropSpec
 import com.eleckoi.android.feature.chat.ui.layout.ChatBackground
@@ -65,12 +66,14 @@ import kotlinx.coroutines.delay
 fun ChatScreen(
     viewModel: ChatViewModel,
     onBack: () -> Unit = {},
-    onOpenPlugins: () -> Unit = {},
+    onOpenTools: () -> Unit = {},
     onOpenPresets: () -> Unit = {},
     dynamicSettingsSessionIds: Set<String> = emptySet(),
     onOpenDynamicSettings: (characterId: String, sessionId: String) -> Unit = { _, _ -> },
     onOpenUserAvatars: () -> Unit = {},
     onOpenCharacterSettings: (String) -> Unit = {},
+    newCharacterBackground: NewCharacterBackground = NewCharacterBackground.Default,
+    onNewCharacterBackgroundChange: (NewCharacterBackground) -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -160,7 +163,6 @@ fun ChatScreen(
         state.modelPickerOpen ||
         state.errorMessage.isNotBlank() ||
         showRequestCaptures ||
-        state.modeConflict != null ||
         roleplayProcessMessageId != null ||
         roleplayOpeningJumpOpen ||
         topMenuOpen
@@ -174,6 +176,8 @@ fun ChatScreen(
         CharacterChatBackgroundDestination(
             state = state,
             draft = draft,
+            newCharacterBackground = newCharacterBackground,
+            onNewCharacterBackgroundChange = onNewCharacterBackgroundChange,
             onIntent = viewModel::onIntent,
             onBack = {
                 characterBackgroundSettingsOpen = false
@@ -238,9 +242,6 @@ fun ChatScreen(
             ?.exists() == true
     }
     val backdropSpec = ChatBackdropSpec(
-        // With no image, roleplay uses its own real near-black canvas. Applying the user's
-        // image-scrim slider over a light app canvas made 95% look almost right but coupled two
-        // unrelated settings and produced grey/white flashes while images changed.
         appearance = topBarAppearance,
         characterBackgroundPath = characterBackgroundPath,
         defaultCharacterBackgroundPath = defaultCharacterBackgroundPath,
@@ -248,11 +249,6 @@ fun ChatScreen(
         characterBackgroundBlur = characterPersona?.chatBackgroundBlur ?: 0f,
         characterBackgroundScrim = characterPersona?.chatBackgroundScrim ?: 0.22f,
         characterBackgroundResolved = characterPersona != null,
-        roleplayScrim = if (roleplay && hasEffectiveBackgroundImage) {
-            state.chatRoleplayScrim
-        } else {
-            0f
-        },
     )
     // Where the wallpaper landed, so a glass panel anywhere on screen — including one inside a
     // Popup, which has its own window — can redraw the matching slice of it behind itself.
@@ -306,7 +302,7 @@ fun ChatScreen(
                 )
             },
             onStop = timeline.stop,
-            onOpenPlugins = onOpenPlugins,
+            onOpenTools = onOpenTools,
             onOpenPresets = onOpenPresets,
             onOpenRequestViewer = { showRequestCaptures = true },
             onOpenVariableViewer = { variableViewerOpen = true },
@@ -447,6 +443,7 @@ fun ChatScreen(
                             onSelectText = { selectedUserMessageText = it },
                             onOpenUserAvatars = onOpenUserAvatars,
                             onOpenCharacterSettings = onOpenCharacterSettings,
+                            messageGateway = viewModel,
                         )
                     },
                 )

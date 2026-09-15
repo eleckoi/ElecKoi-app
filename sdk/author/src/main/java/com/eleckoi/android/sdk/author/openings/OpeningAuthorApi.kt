@@ -11,6 +11,7 @@ import com.eleckoi.android.sdk.author.requireOpeningGateway
 import com.eleckoi.android.sdk.author.toAuthorJson
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -32,6 +33,7 @@ internal object OpeningAuthorApi {
                 )
             }
             environment.requireOpeningGateway().selectOpening(id).toAuthorJson()
+            buildJsonObject { put("selectedId", id) }
         },
     )
 }
@@ -41,26 +43,27 @@ private fun AuthorApiEnvironment.currentOpeningState(): AuthorOpeningStateSnapsh
 
 internal fun AuthorOpeningStateSnapshot?.toListJson() = buildJsonObject {
     val state = this@toListJson
-    put("available", state != null && state.items.isNotEmpty())
-    put("selectedId", state?.selectedId.orEmpty())
-    put("selectionEnabled", state?.selectionEnabled == true)
     put("items", buildJsonArray {
         state?.items.orEmpty().forEach { option ->
-            add(option.toJson(selectedId = state?.selectedId.orEmpty()))
+            add(option.toJson())
         }
     })
 }
 
-internal fun AuthorOpeningStateSnapshot?.toCurrentJson() = buildJsonObject {
+internal fun AuthorOpeningStateSnapshot?.toCurrentJson(): kotlinx.serialization.json.JsonElement {
     val state = this@toCurrentJson
     val selected = state?.items?.firstOrNull { it.id == state.selectedId }
-    put("available", selected != null)
-    put("selectionEnabled", state?.selectionEnabled == true)
-    put("opening", selected?.toJson(selectedId = state.selectedId) ?: JsonNull)
+    return selected?.toJson() ?: JsonNull
 }
 
-private fun AuthorOpeningOptionSnapshot.toJson(selectedId: String) = buildJsonObject {
+private fun AuthorOpeningOptionSnapshot.toJson() = buildJsonObject {
     put("id", id)
     put("title", title)
-    put("selected", id == selectedId)
+    put("content", content)
+    put("displayContent", displayContent)
+    put(
+        "initialVariableState",
+        runCatching { Json.parseToJsonElement(initialVariableStateJson) }.getOrNull()
+            ?: buildJsonObject {},
+    )
 }

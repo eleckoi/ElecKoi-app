@@ -3,7 +3,7 @@ package com.eleckoi.android.feature.studio.ui.assistant.screen.overlay
 import androidx.compose.runtime.Composable
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.feature.chat.ui.sheets.EditMessageSheet
-import com.eleckoi.android.feature.chat.ui.sheets.ModelPickerSheet
+import com.eleckoi.android.feature.modelconfig.ui.modelpicker.ModelPickerSheet
 import com.eleckoi.android.feature.studio.ui.assistant.AiCreationAssistantIntent
 import com.eleckoi.android.feature.studio.ui.assistant.AiCreationAssistantUiState
 import com.eleckoi.android.feature.studio.ui.assistant.AiCreationAssistantViewModel
@@ -25,13 +25,11 @@ internal fun CreationAssistantOverlays(
             configs = state.modelConfigs,
             selectedConfigId = state.selectedModelConfigId,
             selectedModel = state.selectedModelId,
-            streamEnabled = null,
             appearance = appearance,
             onDismiss = onDismissModelPicker,
             onSelect = { configId, modelId ->
                 viewModel.onIntent(AiCreationAssistantIntent.ChangeModel(configId, modelId))
             },
-            onStreamChange = {},
             onSaveConfig = viewModel::saveModelConfig,
             onRefreshModels = viewModel::refreshModels,
         )

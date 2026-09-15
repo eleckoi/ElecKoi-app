@@ -297,7 +297,6 @@ internal fun buildRoleplayTranscriptModel(
             selectedOpeningIndex = if (message.id == OpeningMessageId) selectedOpeningIndex else -1,
             hasAgentProcess = message.hasAgentProcessRecord(),
             regenerateEnabled = message.id != OpeningMessageId,
-            showAvatarInitial = !(message.role == MessageRole.User && avatarShape == ChatAvatarShape.Portrait),
             liveStatus = liveStatus?.let { status ->
                 RoleplayTranscriptLiveStatus(
                     label = status.label,
@@ -363,7 +362,7 @@ internal fun buildRoleplayTranscriptModel(
             line = reading.mobileLine.toCssColor(),
             jumpSurface = appearance.mobileSurface.copy(alpha = 0.96f).toCssColor(),
             avatarBackground = selection.activeContainer.toCssColor(),
-            avatarInitial = selection.indicator.toCssColor(),
+            avatarPlaceholder = selection.indicator.toCssColor(),
             fontSizePx = resolveChatBodyFontSizeSp(messageFontSize),
             lineHeightPx = resolveChatBodyLineHeightSp(messageFontSize, lineHeightMultiplier),
             letterSpacingPx = letterSpacing.coerceIn(-1f, 4f),

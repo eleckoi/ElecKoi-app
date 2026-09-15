@@ -16,9 +16,14 @@ import com.eleckoi.android.feature.modelconfig.ui.ModelTestStatus
 import com.eleckoi.android.feature.modelconfig.ui.ModelTestStep
 import com.eleckoi.android.feature.modelconfig.ui.normalizeProviderId
 
-internal class ModelSettingsEditorState(initialForm: ModelConfig, initialDirty: Boolean) {
+internal class ModelSettingsEditorState(
+    initialForm: ModelConfig,
+    initialDirty: Boolean,
+    initialNewDraft: Boolean = false,
+) {
     var form by mutableStateOf(initialForm)
     var dirty by mutableStateOf(initialDirty)
+    var isNewDraft by mutableStateOf(initialNewDraft)
     var saveState by mutableStateOf("idle")
     var loadingModels by mutableStateOf(false)
     var testing by mutableStateOf(false)
@@ -28,14 +33,23 @@ internal class ModelSettingsEditorState(initialForm: ModelConfig, initialDirty: 
     var apiFormatSheetOpen by mutableStateOf(false)
     var modelPickerOpen by mutableStateOf(false)
     var testState by mutableStateOf<ModelTestState?>(null)
+    var unsavedDialogOpen by mutableStateOf(false)
+    private var pendingDraftAction: (() -> Unit)? = null
+
+    val hasUnsavedChanges: Boolean
+        get() = dirty || isNewDraft
+
+    val saving: Boolean
+        get() = saveState == "saving"
 
     fun syncFrom(configs: List<ModelConfig>, target: ModelTarget) {
-        if (dirty) return
+        if (hasUnsavedChanges || saving) return
         val current = configs.firstOrNull { it.id == form.id }
         form = current ?: resolveInitialConfig(configs, target)
         // A draft becomes dirty only after an actual user edit. Merely opening the provider
         // picker must not persist an empty channel during the first Room synchronization.
         dirty = false
+        isNewDraft = configs.none { it.id == form.id }
         saveState = "idle"
         testMessage = ""
     }
@@ -51,16 +65,55 @@ internal class ModelSettingsEditorState(initialForm: ModelConfig, initialDirty: 
         saveState = "saving"
     }
 
-    fun markSaved() {
+    fun markSaved(saved: ModelConfig) {
+        form = saved
         dirty = false
+        isNewDraft = false
         saveState = "saved"
+    }
+
+    fun markSaveFailed(message: String) {
+        saveState = "idle"
+        testMessage = message
     }
 
     fun selectConfig(selected: ModelConfig) {
         form = selected
         dirty = false
+        isNewDraft = false
         saveState = "idle"
         testMessage = ""
+    }
+
+    fun requestDraftReplacement(action: () -> Unit) {
+        if (!hasUnsavedChanges) {
+            action()
+            return
+        }
+        pendingDraftAction = action
+        unsavedDialogOpen = true
+    }
+
+    fun cancelDraftReplacement() {
+        pendingDraftAction = null
+        unsavedDialogOpen = false
+    }
+
+    fun discardDraftAndContinue() {
+        val action = pendingDraftAction
+        pendingDraftAction = null
+        unsavedDialogOpen = false
+        dirty = false
+        isNewDraft = false
+        action?.invoke()
+    }
+
+    fun savedDraftAndContinue(saved: ModelConfig) {
+        val action = pendingDraftAction
+        pendingDraftAction = null
+        unsavedDialogOpen = false
+        markSaved(saved)
+        action?.invoke()
     }
 
     fun startFetchModels(): Boolean {
@@ -73,8 +126,8 @@ internal class ModelSettingsEditorState(initialForm: ModelConfig, initialDirty: 
         loadingModels = false
         result.onSuccess { fetched ->
             form = fetched
-            dirty = false
-            saveState = "saved"
+            dirty = true
+            saveState = "idle"
             testMessage = ""
             modelPickerOpen = true
         }.onFailure { error ->
@@ -108,9 +161,6 @@ internal class ModelSettingsEditorState(initialForm: ModelConfig, initialDirty: 
     // The models call proves the address and key in one real request, so both rows settle together.
     fun finishConnectionStage(result: Result<ModelConfig>) {
         result.onSuccess { fetched ->
-            form = fetched
-            dirty = false
-            saveState = "saved"
             updateStep(0) { it.copy(status = ModelTestStatus.Passed) }
             updateStep(1) {
                 it.copy(status = ModelTestStatus.Passed, detail = "${fetched.modelOptions.size} 个")
@@ -153,8 +203,9 @@ internal class ModelSettingsEditorState(initialForm: ModelConfig, initialDirty: 
         testMessage = ""
     }
 
-    fun stopAutosaveForDelete(): String {
+    fun prepareForDelete(): String {
         dirty = false
+        isNewDraft = false
         saveState = "idle"
         testMessage = ""
         return form.id
@@ -202,6 +253,7 @@ internal fun rememberModelSettingsEditorState(
             // Match the reference implementation: opening a provider is not itself an edit.
             // This prevents an accidental tap from leaving a blank provider in the library.
             initialDirty = false,
+            initialNewDraft = target.draftId.isNotBlank(),
         )
     }
     LaunchedEffect(configs, target) {

@@ -10,7 +10,7 @@ import com.eleckoi.android.engine.agent.background.AgentRunManager
 import com.eleckoi.android.app.service.chat.ChatGenerationRunCoordinator
 import com.eleckoi.android.engine.agent.eleckoi.conversation.PagedConversationTurn
 import com.eleckoi.android.engine.agent.tools.AgentToolContextSnapshot
-import com.eleckoi.android.feature.characters.modes.story.presets.model.StoryPreset
+import com.eleckoi.android.feature.characters.presets.model.AgentPreset
 import com.eleckoi.android.engine.generation.config.ModelConfigCollection
 import com.eleckoi.android.engine.generation.config.ModelConfigRepository
 import com.eleckoi.android.engine.generation.model.ModelConfig
@@ -27,6 +27,7 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.data.Se
 import com.eleckoi.android.feature.characters.modes.story.regex.data.RegexRuleRepository
 import com.eleckoi.android.feature.chat.data.CharacterAgentGenerationService
 import com.eleckoi.android.feature.chat.data.ChatSendResult
+import com.eleckoi.android.feature.chat.data.ChatDeleteMessagesResult
 import com.eleckoi.android.feature.chat.data.PreparedChatRegeneration
 import com.eleckoi.android.feature.chat.data.ChatSessionStore
 import com.eleckoi.android.feature.chat.data.ChatInputImageStore
@@ -36,6 +37,7 @@ import com.eleckoi.android.feature.chat.model.ChatDraft
 import com.eleckoi.android.feature.chat.model.ChatListItem
 import com.eleckoi.android.feature.chat.model.ChatMessage
 import com.eleckoi.android.feature.chat.model.ChatUserImageAttachment
+import com.eleckoi.android.feature.chat.model.ChatEncodedImageInput
 import com.eleckoi.android.feature.modelconfig.model.ChatModelSelection
 import com.eleckoi.android.feature.chat.model.ChatSession
 import com.eleckoi.android.feature.settings.data.appearance.AppearanceRepository
@@ -73,13 +75,19 @@ internal class ChatServiceImpl(
     private val generationAttempts: GenerationAttemptRepository,
     private val inputImages: ChatInputImageStore,
     private val displayCompatibility: MessageDisplayCompatibility,
-    private val toolModelConfigId: (scopeId: String, groupId: String) -> String,
+    private val activeAgentPreset: suspend () -> AgentPreset,
     private val captureProviderRequests: Boolean,
 ) : ChatService {
     @Volatile
     private var characterAgentGeneration: CharacterAgentGenerationService? = null
     @Volatile
     private var agentRunManager: AgentRunManager? = null
+    @Volatile
+    private var deleteObsoleteRuntimeSessions: (Set<String>) -> Unit = {}
+
+    internal fun setRuntimeSessionCleanup(cleanup: (Set<String>) -> Unit) {
+        deleteObsoleteRuntimeSessions = cleanup
+    }
     private val sessionCoordinator = ChatSessionCoordinator(
         characters = characters,
         sessions = sessions,
@@ -88,7 +96,6 @@ internal class ChatServiceImpl(
         variableConfig = variableConfig,
         variableRuntime = variableRuntime,
         creatorWorkspaces = creatorWorkspaces,
-        modelSelections = modelSelections,
         settleOrphanedPendingResponses = { sessionId ->
             characterAgentGeneration
                 ?.settleOrphanedPendingResponses(sessionId)
@@ -110,7 +117,7 @@ internal class ChatServiceImpl(
         appearance = appearance,
         replyImageGenerator = replyImageGenerator,
         generationAttempts = generationAttempts,
-        toolModelConfigId = toolModelConfigId,
+        activeAgentPreset = activeAgentPreset,
         projectDraft = { session -> draftProjector.project(session) },
     )
     private val storyStateCoordinator = ChatStoryStateCoordinator(
@@ -141,10 +148,10 @@ internal class ChatServiceImpl(
         agentSessions: AgentSessionFactory,
         runtime: LocalRuntimeGateway,
         virtualFileSearch: AgentVirtualFileSearch,
-        toolContextSnapshot: (String) -> AgentToolContextSnapshot,
+        toolContextSnapshot: (Set<String>) -> AgentToolContextSnapshot,
         agentRuns: AgentRunManager,
         publishRemoteDshTurnImages: (String, List<AgentInputImage>) -> Unit,
-        activeStoryPreset: suspend () -> StoryPreset,
+        activeAgentPreset: suspend () -> AgentPreset,
     ) {
         check(characterAgentGeneration == null) { "角色 Agent 运行时已经绑定" }
         check(agentRunManager == null) { "后台 Agent 运行管理器已经绑定" }
@@ -162,11 +169,10 @@ internal class ChatServiceImpl(
             agentSessions = agentSessions,
             virtualFileSearch = virtualFileSearch,
             toolContextSnapshot = toolContextSnapshot,
-            toolModelConfigId = toolModelConfigId,
             prepareDraftProjection = draftProjector::prepareStreaming,
             replyImageGenerator = replyImageGenerator,
             generationAttempts = generationAttempts,
-            activeStoryPreset = activeStoryPreset,
+            activeAgentPreset = activeAgentPreset,
             publishRemoteDshTurnImages = publishRemoteDshTurnImages,
             captureProviderRequests = captureProviderRequests,
         )
@@ -217,24 +223,16 @@ internal class ChatServiceImpl(
         sessionCoordinator.lastActiveChatSession()?.let { session ->
             val character = characters.characterById(session.characterId)
             if (character != null) {
-                val currentMode = sessionCoordinator.normalizeCharacterMode(character.characterMode)
-                if (sessionCoordinator.normalizeCharacterMode(session.characterMode) == currentMode) {
-                    return draftFromSession(sessionCoordinator.rememberChatSession(session))
-                }
-                val currentModeSession = sessionCoordinator.rememberedChatSession(character.id, currentMode)
-                    ?: sessionCoordinator.latestSession(character, currentMode)
-                    ?: sessionCoordinator.createChat(character.id, currentMode)
-                return draftFromSession(sessionCoordinator.rememberChatSession(currentModeSession))
+                return draftFromSession(sessionCoordinator.rememberChatSession(session))
             }
         }
         val payload = characters.loadCharacters()
         val character = payload.items.firstOrNull { it.id == payload.activeCharacterId }
             ?: payload.items.firstOrNull()
             ?: return null
-        val mode = sessionCoordinator.normalizeCharacterMode(character.characterMode)
-        val session = sessionCoordinator.rememberedChatSession(character.id, mode)
-            ?: sessionCoordinator.latestSession(character, mode)
-            ?: sessionCoordinator.createChat(character.id, mode)
+        val session = sessionCoordinator.rememberedChatSession(character.id)
+            ?: sessionCoordinator.latestSession(character)
+            ?: sessionCoordinator.createChat(character.id)
         return draftFromSession(sessionCoordinator.rememberChatSession(session))
     }
 
@@ -247,37 +245,28 @@ internal class ChatServiceImpl(
     override suspend fun previewChatDraft(sessionId: String): ChatDraft =
         draftFromSession(sessionCoordinator.loadChat(sessionId, touch = false))
 
-    override suspend fun nextChatDraftForCharacter(characterId: String, characterMode: String): ChatDraft? {
-        val mode = sessionCoordinator.normalizeCharacterMode(characterMode)
+    override suspend fun nextChatDraftForCharacter(characterId: String): ChatDraft? {
         return chatList()
-            .firstOrNull { it.characterId == characterId && it.characterMode == mode }
+            .firstOrNull { it.characterId == characterId }
             ?.let { loadChatDraft(it.id) }
     }
 
-    override suspend fun chatDraftForCharacter(characterId: String, characterMode: String?): ChatDraft {
+    override suspend fun chatDraftForCharacter(characterId: String): ChatDraft {
         val character = characters.characterById(characterId)
             ?: throw ElecKoiDataException("角色不存在")
-        // Product entry points follow the role's persisted current mode. An explicit mode can be
-        // stale when the user switches modes and returns through the home Messages entry.
-        val currentMode = sessionCoordinator.normalizeCharacterMode(character.characterMode)
-        val requestedMode = characterMode?.let(sessionCoordinator::normalizeCharacterMode)
-        val mode = requestedMode?.takeIf { it == currentMode } ?: currentMode
-        val session = sessionCoordinator.rememberedChatSession(character.id, mode)
-            ?: sessionCoordinator.latestSession(character, mode)
-            ?: sessionCoordinator.createChat(character.id, mode)
+        val session = sessionCoordinator.rememberedChatSession(character.id)
+            ?: sessionCoordinator.latestSession(character)
+            ?: sessionCoordinator.createChat(character.id)
         return draftFromSession(sessionCoordinator.rememberChatSession(session))
     }
 
-    override suspend fun createNewChat(characterId: String, characterMode: String): ChatDraft {
-        val mode = sessionCoordinator.normalizeCharacterMode(characterMode)
+    override suspend fun createNewChat(characterId: String): ChatDraft {
         val character = characters.characterById(characterId)
             ?: throw ElecKoiDataException("角色不存在")
-        sessionCoordinator.requireCurrentCharacterMode(characterId, mode)
-        val previous = sessionCoordinator.latestSession(character, mode)
+        val previous = sessionCoordinator.latestSession(character)
         val inheritedPermissionMode = previous?.permissionMode
         val created = sessionCoordinator.createChat(
             characterId = characterId,
-            characterMode = mode,
             permissionMode = inheritedPermissionMode,
         )
         inheritedPermissionMode?.let { permissionMode ->
@@ -299,8 +288,11 @@ internal class ChatServiceImpl(
             model = selection.model.ifBlank { selected.model },
         )
         if (normalized.model.isBlank()) throw ElecKoiDataException("模型名称不能为空")
-        modelService.saveDefaultConversationModelSelection(normalized.configId, normalized.model)
-        val session = sessions.saveModelSelection(sessionId, normalized)
+        modelService.saveDefaultConversationModelSelection(
+            normalized.configId,
+            normalized.model,
+        )
+        val session = sessions.load(sessionId, touch = false)
         return draftFromSession(session, selected.copy(model = normalized.model))
     }
 
@@ -359,6 +351,10 @@ internal class ChatServiceImpl(
     override suspend fun prepareInputImages(uriValues: List<String>): List<ChatUserImageAttachment> =
         inputImages.prepare(uriValues)
 
+    override suspend fun prepareEncodedInputImages(
+        images: List<ChatEncodedImageInput>,
+    ): List<ChatUserImageAttachment> = inputImages.prepareEncoded(images)
+
     override fun discardInputImage(image: ChatUserImageAttachment) {
         inputImages.delete(image)
     }
@@ -368,10 +364,23 @@ internal class ChatServiceImpl(
         message: String,
         inputImages: List<ChatUserImageAttachment>,
         onDelta: (ChatDraft) -> Unit,
+        onUserTurnPersisted: (ChatDraft, String) -> Unit,
     ): ChatSendResult {
-        sessionCoordinator.requireCurrentCharacterMode(draft.session)
         uiPreferences.restoreChatEntry(draft.session.id)
-        return generationRunCoordinator.sendMessage(draft, message, inputImages, onDelta)
+        return generationRunCoordinator.sendMessage(draft, message, inputImages, onDelta, onUserTurnPersisted)
+    }
+
+    override suspend fun deleteMessagesFrom(sessionId: String, messageId: String): ChatDeleteMessagesResult {
+        val removed = withContext(Dispatchers.IO) { sessions.deleteMessagesFrom(sessionId, messageId) }
+        withContext(Dispatchers.IO) {
+            deleteObsoleteRuntimeSessions(removed.obsoleteRuntimeThreadIds)
+        }
+        draftProjector.clearCaches()
+        return ChatDeleteMessagesResult(
+            draft = draftProjector.project(removed.session),
+            deletedMessageIds = removed.deletedMessageIds,
+            remainingMessageCount = removed.remainingMessageCount,
+        )
     }
 
     override suspend fun prepareRegeneration(
@@ -380,7 +389,6 @@ internal class ChatServiceImpl(
         replacementMessage: String?,
         pendingMessageId: String,
     ): PreparedChatRegeneration {
-        sessionCoordinator.requireCurrentCharacterMode(draft.session)
         val prepared = characterAgent().prepareRegeneration(
             draft = draft,
             targetMessageId = targetMessageId,

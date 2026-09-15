@@ -91,7 +91,6 @@ class RoleplayTranscriptPatchPlannerTest {
             selectedOpeningIndex = -1,
             hasAgentProcess = false,
             regenerateEnabled = true,
-            showAvatarInitial = true,
         )
     }
 
@@ -99,7 +98,7 @@ class RoleplayTranscriptPatchPlannerTest {
         text = "#fff", bodyText = "#fff", italicText = "#fff", underlineText = "#fff",
         quoteText = "#fff", inlineCodeText = "#fff", muted = "#aaa", soft = "#888",
         accent = "#09f", panel = "#111", line = "#333", jumpSurface = "#fff",
-        avatarBackground = "#222", avatarInitial = "#fff", fontSizePx = 16f,
+        avatarBackground = "#222", avatarPlaceholder = "#fff", fontSizePx = 16f,
         lineHeightPx = 24f, letterSpacingPx = 0f, paragraphSpacingPx = 8f,
         nameFontSizePx = 16f, nameLineHeightPx = 22f, avatarWidthPx = 48f,
         avatarHeightPx = 48f, avatarRadiusPx = 12f, avatarGapPx = 12f,

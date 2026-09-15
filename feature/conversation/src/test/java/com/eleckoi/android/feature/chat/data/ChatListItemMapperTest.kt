@@ -1,5 +1,7 @@
 package com.eleckoi.android.feature.chat.data
 
+import com.eleckoi.android.feature.characters.model.CharacterCard
+import com.eleckoi.android.feature.characters.model.CharacterSlot
 import com.eleckoi.android.foundation.storage.room.ChatListRoomRow
 import com.eleckoi.android.foundation.storage.room.ChatSessionEntity
 import org.junit.Assert.assertEquals
@@ -14,7 +16,36 @@ class ChatListItemMapperTest {
         assertEquals("character-old-import-id-0", item.characterId)
         assertEquals("旧导入角色", item.characterName)
         assertEquals("content://old-avatar", item.characterAvatar)
+        assertEquals("content://old-avatar", item.characterCover)
         assertEquals("旧消息", item.summary)
+    }
+
+    @Test
+    fun `message list uses the dedicated portrait and falls back to avatar`() {
+        val character = CharacterSlot(
+            id = "character-live",
+            name = "角色",
+            avatar = "content://slot-avatar",
+            coverImage = "content://slot-cover",
+            group = "",
+            folder = "",
+            persona = CharacterCard(
+                assistantAvatar = "content://persona-avatar",
+                assistantCover = "content://persona-cover",
+            ),
+        )
+
+        val portraitItem = legacyRow(1).toChatListItem(character = character, snapshot = null)
+        val fallbackItem = legacyRow(2).toChatListItem(
+            character = character.copy(
+                coverImage = "",
+                persona = character.persona.copy(assistantCover = ""),
+            ),
+            snapshot = null,
+        )
+
+        assertEquals("content://persona-cover", portraitItem.characterCover)
+        assertEquals("content://persona-avatar", fallbackItem.characterCover)
     }
 
     @Test
@@ -39,7 +70,6 @@ class ChatListItemMapperTest {
             characterId = "character-old-import-id-$index",
             characterName = "旧导入角色",
             characterAvatar = "content://old-avatar",
-            characterMode = "agent",
             historySummary = "旧消息",
             historyMessageCount = 2,
             historyUserMessageCount = 1,

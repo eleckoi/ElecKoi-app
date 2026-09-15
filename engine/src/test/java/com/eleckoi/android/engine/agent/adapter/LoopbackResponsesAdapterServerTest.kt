@@ -22,6 +22,7 @@ import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.URI
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -67,7 +68,7 @@ class LoopbackResponsesAdapterServerTest {
                     ),
                 ),
             ),
-            routeToolScopeId = "character:test",
+            routeEnabledToolGroupIds = emptySet(),
             routeCaptureProviderRequests = false,
         )
         server.beginSessionTurn(
@@ -113,7 +114,8 @@ class LoopbackResponsesAdapterServerTest {
 
         assertEquals(200, status)
         assertEquals("anthropic-messages", response.string("api"))
-        assertEquals("high", response.string("reasoningEffort"))
+        assertFalse("reasoningEffort" in response)
+        assertEquals("default", response.string("wireProfile"))
         assertEquals("claude-sonnet-test", response.string("model"))
         assertEquals(32, response.string("requestToken")!!.length)
         assertEquals(listOf("user", "user"), messages.map { it.string("role") })
@@ -124,39 +126,77 @@ class LoopbackResponsesAdapterServerTest {
     }
 
     @Test
-    fun `prepares DeepSeek Chat through pi-ai thinking dialect`() = runBlocking {
+    fun `prepares Kimi K3 with its real pi-ai capability profile`() = runBlocking {
         val server = LoopbackResponsesAdapterServer(
             modelConfig = ModelConfig(apiKey = "unused", model = "route"),
             scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
             tokenFactory = { "t".repeat(32) },
         )
         val endpoint = server.start()
-        val option = ModelOption(id = "deepseek-test", reasoningEffort = "max")
+        val option = ModelOption(id = "kimi-k3", reasoningEffort = "max")
         val owner = server.registerSessionRoute(
-            routeKey = "deepseek-chat",
+            routeKey = "kimi-chat",
             routeModelConfig = ModelConfig(
-                provider = "deepseek",
+                provider = "moonshot",
                 apiKey = "secret-key",
                 model = option.id,
                 modelOptions = listOf(option),
                 apiFormat = ModelApiFormat.ChatCompletions,
             ),
-            routeToolScopeId = "character:test",
+            routeEnabledToolGroupIds = emptySet(),
             routeCaptureProviderRequests = false,
         )
-        server.beginSessionTurn("deepseek-chat", owner, "hello")
+        server.beginSessionTurn("kimi-chat", owner, "hello")
 
         val (status, body) = postJson(
             endpoint.baseUrl.removeSuffix("/v1") + "/host-tools/provider/prepare",
-            """{"provider":"eleckoi-bridge","model":"route","sessionId":"deepseek-chat","messages":[{"id":"u","role":"user","content":[{"type":"text","text":"hello"}],"source":{"kind":"user"}}]}""",
+            """{"provider":"eleckoi-bridge","model":"route","sessionId":"kimi-chat","messages":[{"id":"u","role":"user","content":[{"type":"text","text":"hello"}],"source":{"kind":"user"}}]}""",
         )
         val response = ElecKoiJson.parseToJsonElement(body).jsonObject
 
         assertEquals(200, status)
-        assertEquals("openai-completions-thinking", response.string("api"))
+        assertEquals("openai-completions", response.string("api"))
+        assertEquals("kimi-k3", response.string("wireProfile"))
         assertEquals("max", response.string("reasoningEffort"))
 
-        server.endSessionTurn("deepseek-chat", owner)
+        server.endSessionTurn("kimi-chat", owner)
+        server.stop()
+    }
+
+    @Test
+    fun `unsupported Kimi off effort is omitted instead of becoming none`() = runBlocking {
+        val server = LoopbackResponsesAdapterServer(
+            modelConfig = ModelConfig(apiKey = "unused", model = "route"),
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+            tokenFactory = { "o".repeat(32) },
+        )
+        val endpoint = server.start()
+        val option = ModelOption(id = "kimi-k3", reasoningEffort = "off")
+        val owner = server.registerSessionRoute(
+            routeKey = "kimi-off",
+            routeModelConfig = ModelConfig(
+                provider = "moonshot",
+                apiKey = "secret-key",
+                model = option.id,
+                modelOptions = listOf(option),
+                apiFormat = ModelApiFormat.ChatCompletions,
+            ),
+            routeEnabledToolGroupIds = emptySet(),
+            routeCaptureProviderRequests = false,
+        )
+        server.beginSessionTurn("kimi-off", owner, "hello")
+
+        val (status, body) = postJson(
+            endpoint.baseUrl.removeSuffix("/v1") + "/host-tools/provider/prepare",
+            """{"provider":"eleckoi-bridge","model":"route","sessionId":"kimi-off","messages":[{"id":"u","role":"user","content":[{"type":"text","text":"hello"}],"source":{"kind":"user"}}]}""",
+        )
+        val response = ElecKoiJson.parseToJsonElement(body).jsonObject
+
+        assertEquals(200, status)
+        assertEquals("kimi-k3", response.string("wireProfile"))
+        assertFalse("reasoningEffort" in response)
+
+        server.endSessionTurn("kimi-off", owner)
         server.stop()
     }
 
@@ -199,7 +239,7 @@ class LoopbackResponsesAdapterServerTest {
                 model = "claude-sonnet-test",
                 apiFormat = ModelApiFormat.AnthropicMessages,
             ),
-            routeToolScopeId = "character:test",
+            routeEnabledToolGroupIds = emptySet(),
             routeCaptureProviderRequests = false,
         )
         server.beginSessionTurn("native-claude", owner, "hello")
@@ -249,6 +289,8 @@ class LoopbackResponsesAdapterServerTest {
         assertTrue(upstreamRequest.body.contains("\"name\":\"weather\""))
         assertTrue(upstreamRequest.body.contains("\"type\":\"tool_use\""))
         assertTrue(upstreamRequest.body.contains("\"type\":\"tool_result\""))
+        assertFalse(upstreamRequest.body.contains("\"temperature\""))
+        assertFalse(upstreamRequest.body.contains("\"top_p\""))
         assertTrue(downstream.contains("event: message_start"))
         assertFalse(downstream.contains("response.completed"))
 
@@ -297,7 +339,7 @@ class LoopbackResponsesAdapterServerTest {
                 model = "gpt-test",
                 apiFormat = ModelApiFormat.Responses,
             ),
-            routeToolScopeId = "character:test",
+            routeEnabledToolGroupIds = emptySet(),
             routeCaptureProviderRequests = false,
         )
         server.beginSessionTurn("native-responses", owner, "hello")
@@ -383,11 +425,11 @@ class LoopbackResponsesAdapterServerTest {
                 baseUrl = "http://127.0.0.1:${upstream.localPort}/v1",
                 model = "chat-test",
                 modelOptions = listOf(
-                    ModelOption(id = "chat-test", temperature = 0.35, topP = 0.8),
+                    ModelOption(id = "chat-test", temperature = 0.0, topP = 0.0),
                 ),
                 apiFormat = ModelApiFormat.ChatCompletions,
             ),
-            routeToolScopeId = "character:test",
+            routeEnabledToolGroupIds = emptySet(),
             routeCaptureProviderRequests = false,
         )
         server.beginSessionTurn("native-chat", owner, "hello")
@@ -398,15 +440,21 @@ class LoopbackResponsesAdapterServerTest {
         val prepared = ElecKoiJson.parseToJsonElement(prepareBody).jsonObject
         assertEquals("openai-completions", prepared.string("api"))
         assertEquals(
-            0.35,
+            0.0,
             (prepared["request"]!!.jsonObject["temperature"] as JsonPrimitive).content.toDouble(),
+            0.0,
+        )
+        assertEquals(
+            0.0,
+            (prepared["request"]!!.jsonObject["topP"] as JsonPrimitive).content.toDouble(),
             0.0,
         )
         val wirePayload = """
             {
               "model":"eleckoi-wire",
               "stream":true,
-              "temperature":0.35,
+              "temperature":0,
+              "top_p":0,
               "messages":[
                 {"role":"user","content":"weather?"},
                 {"role":"assistant","content":null,"tool_calls":[{"id":"call-weather","type":"function","function":{"name":"weather","arguments":"{\"city\":\"Taipei\"}"}}]},
@@ -430,8 +478,8 @@ class LoopbackResponsesAdapterServerTest {
         assertEquals("POST /v1/chat/completions HTTP/1.1", upstreamRequest.requestLine)
         assertEquals("Bearer chat-secret", upstreamRequest.headers["authorization"])
         assertTrue(upstreamRequest.body.contains("\"model\":\"chat-test\""))
-        assertTrue(upstreamRequest.body.contains("\"temperature\":0.35"))
-        assertTrue(upstreamRequest.body.contains("\"top_p\":0.8"))
+        assertTrue(upstreamRequest.body.contains("\"temperature\":0"))
+        assertTrue(upstreamRequest.body.contains("\"top_p\":0"))
         assertFalse(upstreamRequest.body.contains("eleckoi_internal_route_"))
         assertTrue(upstreamRequest.body.contains("\"name\":\"weather\""))
         assertTrue(upstreamRequest.body.contains("\"tool_calls\""))
@@ -443,6 +491,116 @@ class LoopbackResponsesAdapterServerTest {
         upstream.close()
         upstreamJob.await()
         Unit
+    }
+
+    @Test
+    fun `keeps Top P bound to its owning session when chats request concurrently`() = runBlocking {
+        val upstreamA = ServerSocket().apply {
+            bind(InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0))
+        }
+        val upstreamB = ServerSocket().apply {
+            bind(InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0))
+        }
+        val capturedA = CompletableDeferred<CapturedRequest>()
+        val capturedB = CompletableDeferred<CapturedRequest>()
+        suspend fun serveOnce(server: ServerSocket, captured: CompletableDeferred<CapturedRequest>) {
+            server.accept().use { socket ->
+                captured.complete(readRequest(socket.getInputStream()))
+                val response = (
+                    "HTTP/1.1 200 OK\r\n" +
+                        "Content-Type: text/event-stream\r\n" +
+                        "Connection: close\r\n\r\n" +
+                        "data: {\"id\":\"chatcmpl_sampling\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\"},\"finish_reason\":null}]}\r\n\r\n" +
+                        "data: [DONE]\r\n\r\n"
+                    )
+                socket.getOutputStream().apply {
+                    write(response.toByteArray(Charsets.UTF_8))
+                    flush()
+                }
+            }
+        }
+        val upstreamJobA = async(Dispatchers.IO) { serveOnce(upstreamA, capturedA) }
+        val upstreamJobB = async(Dispatchers.IO) { serveOnce(upstreamB, capturedB) }
+        val tokenIndex = AtomicInteger()
+        val server = LoopbackResponsesAdapterServer(
+            modelConfig = ModelConfig(apiKey = "unused", model = "route"),
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+            tokenFactory = {
+                when (tokenIndex.getAndIncrement()) {
+                    0 -> "a".repeat(32)
+                    else -> "b".repeat(32)
+                }
+            },
+        )
+        val endpoint = server.start()
+        fun routeConfig(name: String, secret: String, port: Int, topP: Double) = ModelConfig(
+            provider = "custom",
+            apiKey = secret,
+            baseUrl = "http://127.0.0.1:$port/v1",
+            model = name,
+            modelOptions = listOf(ModelOption(id = name, topP = topP)),
+            apiFormat = ModelApiFormat.ChatCompletions,
+        )
+        val ownerA = server.registerSessionRoute(
+            routeKey = "sampling-session-a",
+            routeModelConfig = routeConfig("model-a", "secret-a", upstreamA.localPort, 0.21),
+            routeEnabledToolGroupIds = emptySet(),
+            routeCaptureProviderRequests = false,
+        )
+        val ownerB = server.registerSessionRoute(
+            routeKey = "sampling-session-b",
+            routeModelConfig = routeConfig("model-b", "secret-b", upstreamB.localPort, 0.87),
+            routeEnabledToolGroupIds = emptySet(),
+            routeCaptureProviderRequests = false,
+        )
+        server.beginSessionTurn("sampling-session-a", ownerA, "hello a")
+        server.beginSessionTurn("sampling-session-b", ownerB, "hello b")
+
+        suspend fun prepare(sessionId: String, message: String): JsonObject {
+            val (_, responseBody) = postJson(
+                endpoint.baseUrl.removeSuffix("/v1") + "/host-tools/provider/prepare",
+                """{"provider":"eleckoi-bridge","model":"route","sessionId":"$sessionId","messages":[{"id":"u","role":"user","content":[{"type":"text","text":"$message"}],"source":{"kind":"user"}}]}""",
+            )
+            return ElecKoiJson.parseToJsonElement(responseBody).jsonObject
+        }
+        fun wirePayload(token: String, message: String, topP: Double): String =
+            """{"model":"eleckoi-wire","stream":true,"top_p":$topP,"messages":[{"role":"user","content":"$message"}],"tools":[{"type":"function","function":{"name":"eleckoi_internal_route_$token","description":"internal","parameters":{"type":"object","properties":{}}}}]}"""
+
+        try {
+            val preparedA = prepare("sampling-session-a", "hello a")
+            val preparedB = prepare("sampling-session-b", "hello b")
+            assertEquals(0.21, (preparedA["request"]!!.jsonObject["topP"] as JsonPrimitive).content.toDouble(), 0.0)
+            assertEquals(0.87, (preparedB["request"]!!.jsonObject["topP"] as JsonPrimitive).content.toDouble(), 0.0)
+            val wireUrl = endpoint.baseUrl.removeSuffix("/v1") + "/provider-wire/chat/v1/chat/completions"
+            val responseA = async(Dispatchers.IO) {
+                postJson(wireUrl, wirePayload(preparedA.string("requestToken")!!, "hello a", 0.21))
+            }
+            val responseB = async(Dispatchers.IO) {
+                postJson(wireUrl, wirePayload(preparedB.string("requestToken")!!, "hello b", 0.87))
+            }
+
+            assertEquals(200, responseA.await().first)
+            assertEquals(200, responseB.await().first)
+            val requestA = withTimeout(2_000) { capturedA.await() }
+            val requestB = withTimeout(2_000) { capturedB.await() }
+            val jsonA = ElecKoiJson.parseToJsonElement(requestA.body).jsonObject
+            val jsonB = ElecKoiJson.parseToJsonElement(requestB.body).jsonObject
+
+            assertEquals("Bearer secret-a", requestA.headers["authorization"])
+            assertEquals("Bearer secret-b", requestB.headers["authorization"])
+            assertEquals("model-a", jsonA.string("model"))
+            assertEquals("model-b", jsonB.string("model"))
+            assertEquals(0.21, (jsonA["top_p"] as JsonPrimitive).content.toDouble(), 0.0)
+            assertEquals(0.87, (jsonB["top_p"] as JsonPrimitive).content.toDouble(), 0.0)
+        } finally {
+            server.endSessionTurn("sampling-session-a", ownerA)
+            server.endSessionTurn("sampling-session-b", ownerB)
+            server.stop()
+            upstreamA.close()
+            upstreamB.close()
+            upstreamJobA.await()
+            upstreamJobB.await()
+        }
     }
 
     @Test
@@ -481,7 +639,7 @@ class LoopbackResponsesAdapterServerTest {
                 model = "gemini-test",
                 apiFormat = ModelApiFormat.GoogleGemini,
             ),
-            routeToolScopeId = "character:test",
+            routeEnabledToolGroupIds = emptySet(),
             routeCaptureProviderRequests = false,
         )
         server.beginSessionTurn("native-gemini", owner, "hello")
@@ -565,7 +723,7 @@ class LoopbackResponsesAdapterServerTest {
         server.registerSessionRoute(
             routeKey = "pressure-session",
             routeModelConfig = ModelConfig(apiKey = "secret-key", model = "test-model"),
-            routeToolScopeId = "character:test",
+            routeEnabledToolGroupIds = emptySet(),
             routeCaptureProviderRequests = false,
             onContextPressure = { sample -> received.complete(sample) },
         )
@@ -628,7 +786,7 @@ class LoopbackResponsesAdapterServerTest {
         val ownerToken = server.registerSessionRoute(
             routeKey = "tool-session",
             routeModelConfig = ModelConfig(apiKey = "secret-key", model = "test-model"),
-            routeToolScopeId = "character:test",
+            routeEnabledToolGroupIds = emptySet(),
             routeDynamicTools = listOf(tool),
             routeCaptureProviderRequests = false,
         )
@@ -1210,7 +1368,7 @@ class LoopbackResponsesAdapterServerTest {
                 model = "child-model",
                 apiFormat = ModelApiFormat.ChatCompletions,
             ),
-            routeToolScopeId = "character:parent",
+            routeEnabledToolGroupIds = emptySet(),
             routeCaptureProviderRequests = false,
         )
         server.beginSessionTurn(
@@ -1269,7 +1427,7 @@ class LoopbackResponsesAdapterServerTest {
         }
         val capturedA = CompletableDeferred<CapturedRequest>()
         val capturedB = CompletableDeferred<CapturedRequest>()
-        val filteredScopes = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+        val filteredSelections = java.util.Collections.synchronizedSet(mutableSetOf<Set<String>>())
         fun serve(upstream: ServerSocket, captured: CompletableDeferred<CapturedRequest>) =
             async(Dispatchers.IO) {
                 upstream.accept().use { socket ->
@@ -1294,8 +1452,8 @@ class LoopbackResponsesAdapterServerTest {
             scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
             tokenFactory = { "m".repeat(32) },
             legacyResponsesProbeEnabled = true,
-            toolRequestFilter = { scopeId, request ->
-                filteredScopes += scopeId
+            toolRequestFilter = { enabledGroupIds, request ->
+                filteredSelections += enabledGroupIds
                 request
             },
         )
@@ -1309,7 +1467,7 @@ class LoopbackResponsesAdapterServerTest {
                 apiFormat = ModelApiFormat.ChatCompletions,
             ),
             routeSystemInstructions = "session-system-a",
-            routeToolScopeId = "character:a",
+            routeEnabledToolGroupIds = setOf("tool:a"),
             routeCaptureProviderRequests = false,
         )
         val ownerB = server.registerSessionRoute(
@@ -1321,7 +1479,7 @@ class LoopbackResponsesAdapterServerTest {
                 apiFormat = ModelApiFormat.ChatCompletions,
             ),
             routeSystemInstructions = "session-system-b",
-            routeToolScopeId = "character:b",
+            routeEnabledToolGroupIds = setOf("tool:b"),
             routeCaptureProviderRequests = false,
         )
         server.beginSessionTurn("thread-route-a", ownerA, "A")
@@ -1358,7 +1516,7 @@ class LoopbackResponsesAdapterServerTest {
         assertTrue(requestB.body.contains("shared-harness-system"))
         assertTrue(requestB.body.contains("session-system-b"))
         assertFalse(requestB.body.contains("session-system-a"))
-        assertEquals(setOf("character:a", "character:b"), filteredScopes)
+        assertEquals(setOf(setOf("tool:a"), setOf("tool:b")), filteredSelections)
 
         server.unregisterSessionRoute("thread-route-a", ownerA)
         server.unregisterSessionRoute("thread-route-b", ownerB)

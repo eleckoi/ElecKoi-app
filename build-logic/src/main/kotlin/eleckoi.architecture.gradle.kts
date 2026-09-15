@@ -23,15 +23,10 @@ val allowedProjectDependencies = mapOf(
         ":foundation:storage",
     ),
     ":feature:appfont" to emptySet(),
-    ":feature:agenttools" to setOf(
-        ":engine",
-        ":feature:conversation",
-        ":feature:modelconfig",
-        ":foundation:design",
-    ),
     ":feature:characters" to setOf(
         ":compatibility:mvu",
         ":engine",
+        ":feature:modelconfig",
         ":foundation:design",
         ":foundation:serialization",
         ":foundation:storage",
@@ -90,7 +85,6 @@ val allowedProjectDependencies = mapOf(
     ":app" to setOf(
         ":compatibility:mvu",
         ":feature:studio",
-        ":feature:agenttools",
         ":feature:appfont",
         ":feature:characters",
         ":feature:conversation",
@@ -118,7 +112,6 @@ val ownedPackages = mapOf(
     ":engine" to setOf("com.eleckoi.android.engine"),
     ":sdk:author" to setOf("com.eleckoi.android.sdk.author"),
     ":compatibility:mvu" to setOf("com.eleckoi.android.compatibility.mvu"),
-    ":feature:agenttools" to setOf("com.eleckoi.android.feature.agenttools"),
     ":feature:appfont" to setOf("com.eleckoi.android.feature.appfont"),
     ":feature:characters" to setOf("com.eleckoi.android.feature.characters"),
     ":feature:conversation" to setOf(

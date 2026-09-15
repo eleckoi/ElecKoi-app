@@ -63,6 +63,18 @@ class GenerationAttemptRepository(
     private val activeAttemptIds = ConcurrentHashMap.newKeySet<String>()
     private val mutationLock = Any()
 
+    internal fun deleteForMessagesInTransaction(
+        conversationId: String,
+        messageIds: List<String>,
+    ): Set<String> {
+        check(database.inTransaction()) { "生成记录必须与聊天分支在同一事务中删除" }
+        if (messageIds.isEmpty()) return emptySet()
+        val removed = dao.forMessages(conversationId, messageIds)
+        dao.deleteForMessages(conversationId, messageIds)
+        removed.forEach { activeAttemptIds.remove(it.id) }
+        return removed.mapNotNull { it.outputPath.takeIf(String::isNotBlank) }.toSet()
+    }
+
     fun beginReply(
         conversationId: String,
         userMessageId: String,

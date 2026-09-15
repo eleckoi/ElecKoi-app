@@ -1,6 +1,10 @@
 package com.eleckoi.android.sdk.author
 
+import android.net.Uri
+import android.webkit.MimeTypeMap
+import android.webkit.WebResourceResponse
 import com.eleckoi.android.foundation.serialization.ElecKoiJson
+import com.eleckoi.android.sdk.author.audio.AuthorAudioHost
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -11,6 +15,11 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.merge
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import java.io.File
+import java.io.FileInputStream
 
 class AuthorApiRouter(
     private val environment: AuthorApiEnvironment,
@@ -20,9 +29,39 @@ class AuthorApiRouter(
 
     fun eventFlow(): Flow<AuthorApiEvent> {
         if (AuthorApiPermission.EventsRead !in environment.permissions) return emptyFlow()
-        return environment.runtime.chatGateway?.authorEvents
-            ?.filter { event -> AuthorApiEventAccess.canReceive(event.name, environment.permissions) }
-            ?: emptyFlow()
+        val conversationId = environment.runtime.chatGateway?.snapshot()?.draft?.session?.id
+            ?: environment.runtime.currentMessage?.conversationId.orEmpty()
+        val chatEvents = environment.runtime.chatGateway?.authorEvents ?: emptyFlow()
+        val audioEvents = AuthorAudioHost.events.filter { event ->
+            event.payload.jsonObject["conversationId"]?.jsonPrimitive?.content == conversationId
+        }
+        return merge(chatEvents, audioEvents)
+            .filter { event -> AuthorApiEventAccess.canReceive(event.name, environment.permissions) }
+    }
+
+    fun runtimeResource(requestedPath: String): WebResourceResponse? {
+        val parts = requestedPath
+            .removePrefix(AuthorMediaRuntimePrefix)
+            .split('/')
+            .map(Uri::decode)
+        if (!requestedPath.startsWith(AuthorMediaRuntimePrefix) || parts.size != 2) return null
+        val (messageId, attachmentId) = parts
+        val runtime = environment.runtime
+        val messages = runtime.chatGateway?.snapshot()?.draft?.session?.messages
+            ?: runtime.chatSession?.messages
+            ?: runtime.currentMessage?.let(::listOf)
+            ?: return null
+        val media = messages.firstOrNull { it.id == messageId }
+            ?.attachments
+            ?.firstOrNull { it.id == attachmentId }
+            ?: return null
+        val file = File(media.sourcePath).takeIf { media.sourcePath.isNotBlank() && it.isFile }
+            ?: return null
+        val mimeType = media.mimeType.ifBlank {
+            MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension.lowercase())
+                ?: "application/octet-stream"
+        }
+        return runCatching { WebResourceResponse(mimeType, null, FileInputStream(file)) }.getOrNull()
     }
 
     suspend fun route(rawRequest: String): String {
@@ -77,27 +116,27 @@ class AuthorApiRouter(
     }
 }
 
+private const val AuthorMediaRuntimePrefix = "author-media/"
+
 /**
  * Events are another read surface, not a permission bypass around the request router.
  * Unknown event names deliberately fail closed until their payload contract is classified.
  */
 internal object AuthorApiEventAccess {
-    private val requiredDataPermission = mapOf(
-        "context.changed" to AuthorApiPermission.ContextRead,
-        "variables.changed" to AuthorApiPermission.VariablesRead,
-        "opening.changed" to AuthorApiPermission.OpeningsRead,
+    private val eventPermissions = listOf(
         "messages.changed" to AuthorApiPermission.MessagesRead,
-        "message.delta" to AuthorApiPermission.MessagesRead,
-        "chat.changed" to AuthorApiPermission.ChatRead,
-        "generation.started" to AuthorApiPermission.ChatRead,
-        "generation.completed" to AuthorApiPermission.ChatRead,
-        "generation.stopped" to AuthorApiPermission.ChatRead,
-        "generation.failed" to AuthorApiPermission.ChatRead,
-        "model.changed" to AuthorApiPermission.ChatRead,
-        "input.changed" to AuthorApiPermission.InputRead,
+        "agent.output.delta" to AuthorApiPermission.ChatRead,
+        "agent.run.finished" to AuthorApiPermission.ChatRead,
+        "agent.run.failed" to AuthorApiPermission.ChatRead,
+        "agent.state.changed" to AuthorApiPermission.ChatRead,
+        "agent.process.updated" to AuthorApiPermission.ChatRead,
+        "agent.generation.stats" to AuthorApiPermission.ChatRead,
+        "audio.state.changed" to AuthorApiPermission.AudioRead,
+        "audio.time.updated" to AuthorApiPermission.AudioRead,
     )
+    private val requiredDataPermission = eventPermissions.toMap()
 
-    val knownEventNames: Set<String> = requiredDataPermission.keys
+    val knownEventNames: List<String> = eventPermissions.map { it.first }
 
     fun canReceive(name: String, permissions: Set<AuthorApiPermission>): Boolean {
         if (AuthorApiPermission.EventsRead !in permissions) return false

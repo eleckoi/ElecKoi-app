@@ -60,15 +60,20 @@ class ModelsViewModel(
         return modelService.blankModelConfig(providerId).toDraftModelTarget()
     }
 
-    fun saveModelConfig(config: ModelConfig) {
+    fun saveModelConfig(
+        config: ModelConfig,
+        onResult: (Result<ModelConfig>) -> Unit = {},
+    ) {
         viewModelScope.launch {
-            runCatching {
+            val result = runCatching {
                 withContext(Dispatchers.IO) { modelService.saveModelConfig(config) }
-            }.onSuccess {
+            }
+            result.onSuccess {
                 _uiState.update { it.copy(errorMessage = "") }
             }.onFailure { error ->
                 _uiState.update { it.copy(errorMessage = error.message ?: "保存模型配置失败") }
             }
+            onResult(result)
         }
     }
 
@@ -100,15 +105,13 @@ class ModelsViewModel(
         viewModelScope.launch {
             val result = runCatching {
                 withContext(Dispatchers.IO) {
-                    val saved = modelService.saveModelConfig(config)
-                    modelService.testModelConnection(saved)
-                    saved
+                    modelService.testModelConnection(config)
                 }
             }
             result.onFailure { error ->
                 _uiState.update { it.copy(errorMessage = error.message ?: "测试模型连接失败") }
             }
-            onResult(result.map { })
+            onResult(result)
         }
     }
 

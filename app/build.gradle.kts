@@ -36,26 +36,6 @@ abstract class StageRustJniLibrary @Inject constructor(
     }
 }
 
-abstract class StageProjectLicenseAsset @Inject constructor(
-    private val fileSystemOperations: FileSystemOperations,
-) : DefaultTask() {
-    @get:InputFile
-    @get:PathSensitive(PathSensitivity.RELATIVE)
-    abstract val inputLicense: RegularFileProperty
-
-    @get:OutputDirectory
-    abstract val outputDirectory: DirectoryProperty
-
-    @TaskAction
-    fun stage() {
-        fileSystemOperations.sync {
-            from(inputLicense)
-            into(outputDirectory.dir("licenses"))
-            rename { "ElecKoi-AGPL-3.0-or-later.txt" }
-        }
-    }
-}
-
 plugins {
     id("eleckoi.android.application")
     id("eleckoi.android.compose")
@@ -66,7 +46,6 @@ plugins {
 val elecKoiNdkVersion = "27.2.12479018"
 val elecKoiPackagedAbis = setOf("arm64-v8a")
 val generatedEmbeddedRuntimeAssets = layout.buildDirectory.dir("generated/embeddedRuntimeAssets")
-val generatedProjectLicenseAssets = layout.buildDirectory.dir("generated/projectLicenseAssets")
 val roleplayVirtualAsset = file("src/main/assets/web-runtime/tanstack-virtual-core-3.17.8.min.js")
 val roleplayVirtualAssetSha256 = "79af7c30c1855800cf60f0675a3e9f6affbaa038eb950d270647b28597772fc4"
 
@@ -179,8 +158,8 @@ android {
     defaultConfig {
         applicationId = "com.eleckoi.android"
         targetSdk = 37
-        versionCode = 5
-        versionName = "0.1.4"
+        versionCode = 1
+        versionName = "0.1.0"
         ndk {
             // The embedded workspace runtime is arm64-only; keep the Rust Markdown bridge and
             // packaged runtime on the same explicit ABI instead of producing unusable APK slices.
@@ -346,7 +325,6 @@ androidComponents.onVariants { variant ->
 dependencies {
     implementation(project(":compatibility:mvu"))
     implementation(project(":feature:studio"))
-    implementation(project(":feature:agenttools"))
     implementation(project(":feature:appfont"))
     implementation(project(":feature:characters"))
     implementation(project(":feature:conversation"))
@@ -463,13 +441,6 @@ val stageEmbeddedRuntimeAssets by tasks.registering(StageEmbeddedRuntimeAssets::
     outputDirectory.set(generatedEmbeddedRuntimeAssets)
 }
 
-val stageProjectLicenseAsset by tasks.registering(StageProjectLicenseAsset::class) {
-    group = "build"
-    description = "Stages ElecKoi's root license as an APK asset."
-    inputLicense.set(rootProject.layout.projectDirectory.file("LICENSE"))
-    outputDirectory.set(generatedProjectLicenseAssets)
-}
-
 val invalidatePackagedApksOnRuntimeCatalogChange by tasks.registering(
     InvalidatePackagedApksOnRuntimeCatalogChange::class,
 ) {
@@ -482,9 +453,6 @@ val invalidatePackagedApksOnRuntimeCatalogChange by tasks.registering(
 
 androidComponents.onVariants { variant ->
     variant.sources.assets?.addGeneratedSourceDirectory(stageEmbeddedRuntimeAssets) {
-        it.outputDirectory
-    }
-    variant.sources.assets?.addGeneratedSourceDirectory(stageProjectLicenseAsset) {
         it.outputDirectory
     }
 }

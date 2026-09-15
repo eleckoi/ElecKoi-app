@@ -16,7 +16,7 @@ internal val RoleplayTranscriptStyles = """
       --line: rgba(255,255,255,.18);
       --jump-surface: rgba(36,36,37,.96);
       --avatar-background: rgba(255,255,255,.075);
-      --avatar-initial: rgba(255,255,255,.48);
+      --avatar-placeholder: rgba(255,255,255,.48);
       --code-foreground: #f3f1ec;
       --code-background: #232323;
       --code-border: rgba(255,255,255,.18);
@@ -34,6 +34,7 @@ internal val RoleplayTranscriptStyles = """
       --horizontal-padding: 10px;
       --reply-gap: 4px;
       --turn-gap: 5px;
+      --roleplay-text-shadow: 0 0 1px rgba(0,0,0,.3);
     }
     * { box-sizing: border-box; }
     html, body { min-height: 100%; margin: 0; background: transparent; overflow-anchor: none; }
@@ -48,7 +49,7 @@ internal val RoleplayTranscriptStyles = """
       font-size: var(--font-size);
       line-height: var(--line-height);
       letter-spacing: var(--letter-spacing);
-      text-shadow: 0 0 2px rgba(0,0,0,.5);
+      text-shadow: var(--roleplay-text-shadow);
       -webkit-text-size-adjust: 100%;
       overflow-wrap: anywhere;
     }
@@ -92,13 +93,13 @@ internal val RoleplayTranscriptStyles = """
       justify-content: center;
       border-radius: var(--avatar-radius);
       background: var(--avatar-background);
-      color: var(--avatar-initial);
+      color: var(--avatar-placeholder);
       overflow: hidden;
       user-select: none;
       -webkit-tap-highlight-color: transparent;
     }
     .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .avatar-initial { font-size: calc(var(--avatar-width) * .34); font-weight: 650; }
+    .avatar-placeholder { width: 58%; height: 58%; fill: currentColor; }
     .pager {
       display: grid;
       grid-template-columns: 14px minmax(24px, 1fr) 14px;

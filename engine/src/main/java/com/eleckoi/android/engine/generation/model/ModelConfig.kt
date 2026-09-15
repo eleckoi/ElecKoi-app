@@ -70,12 +70,6 @@ data class ModelConfig(
     val apiKeyNeedsReentry: Boolean = false,
     /** Extra headers sent with every request to this endpoint. Gateways often require them. */
     val customHeaders: Map<String, String> = emptyMap(),
-    /**
-     * Whether the last connection test saw the endpoint honour a tool call. Null means untested.
-     * Agent mode needs tool calling, so this being false is worth surfacing before the user relies
-     * on the config rather than after a request fails mid-conversation.
-     */
-    val supportsTools: Boolean? = null,
     /** The selected image-provider configuration; feature access is controlled by tool switches. */
     val enabled: Boolean = false,
     val imageSettings: ImageGenerationSettings = ImageGenerationSettings(),
@@ -266,10 +260,10 @@ data class ModelOption(
     val autoCompactTokenLimit: Int? = null,
     /** Optional per-request output cap. Null leaves the limit to the upstream model/provider. */
     val maxOutputTokens: Int? = null,
-    /** Optional sampling temperature. New models follow ElecKoi's neutral default of 1. */
-    val temperature: Double? = 1.0,
-    /** Optional nucleus-sampling threshold. */
-    val topP: Double? = 1.0,
+    /** Optional sampling temperature. Null leaves the parameter to the provider default. */
+    val temperature: Double? = null,
+    /** Optional nucleus-sampling threshold. Null leaves the parameter to the provider default. */
+    val topP: Double? = null,
     /** Selected DSH reasoning effort id. Null preserves the provider/model default. */
     val reasoningEffort: String? = null,
     /** Null follows the connection format; non-null overrides it for this model only. */

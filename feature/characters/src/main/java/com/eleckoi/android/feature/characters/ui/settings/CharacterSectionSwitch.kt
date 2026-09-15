@@ -37,7 +37,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.eleckoi.android.feature.characters.model.CharacterMode
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.foundation.design.components.AppIconPaths
 import com.eleckoi.android.foundation.design.components.StrokeSvgIcon
@@ -45,20 +44,11 @@ import com.eleckoi.android.foundation.design.paperCutPalette
 
 internal enum class CharacterSettingsSection(
     val label: String,
-    val characterMode: CharacterMode?,
     val iconPaths: List<String>? = null,
     val materialIcon: ImageVector? = null,
 ) {
-    Profile("简介", null, iconPaths = AppIconPaths.User),
-    Story("剧情小说", CharacterMode.Story, materialIcon = Icons.AutoMirrored.Outlined.MenuBook),
-    Agent("智能体", CharacterMode.Agent, iconPaths = AppIconPaths.Bot);
-
-    companion object {
-        fun fromCharacterMode(mode: CharacterMode): CharacterSettingsSection = when (mode) {
-            CharacterMode.Story -> Story
-            CharacterMode.Agent -> Agent
-        }
-    }
+    Profile("简介", iconPaths = AppIconPaths.User),
+    Story("剧情小说", materialIcon = Icons.AutoMirrored.Outlined.MenuBook),
 }
 
 @Composable

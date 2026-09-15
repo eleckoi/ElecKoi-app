@@ -10,9 +10,7 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.S
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryVersion
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isFixedEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isOpeningEntry
-import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isRoleplayPlanEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.settingLibraryOpeningEntry
-import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.settingLibraryRoleplayPlanEntry
 import com.eleckoi.android.foundation.storage.ElecKoiDataException
 import com.eleckoi.android.foundation.storage.newId
 import com.eleckoi.android.foundation.storage.nowIso
@@ -100,13 +98,6 @@ internal object SettingLibraryNormalizer {
                 updatedAt = if (touchUpdatedAt) now else sourceOpening.updatedAt.ifBlank { now },
             ),
         )
-        val sourceRoleplayPlan = source.entries.firstOrNull { it.isRoleplayPlanEntry() }
-        val roleplayPlan = settingLibraryRoleplayPlanEntry(
-            sourceRoleplayPlan?.copy(
-                createdAt = sourceRoleplayPlan.createdAt.ifBlank { now },
-                updatedAt = if (touchUpdatedAt) now else sourceRoleplayPlan.updatedAt.ifBlank { now },
-            ),
-        )
         val promptPositions = normalizePromptPositions(source.promptPositions, now, touchUpdatedAt)
         val promptPositionIds = promptPositions.mapTo(hashSetOf()) { it.id }
         val normalizedUserEntries = source.entries
@@ -129,7 +120,7 @@ internal object SettingLibraryNormalizer {
             .eachCount()
             .filterValues { count -> count > 1 }
             .keys
-        val entries = listOf(opening, roleplayPlan) + normalizedUserEntries.map { entry ->
+        val entries = listOf(opening) + normalizedUserEntries.map { entry ->
             val key = (entry.promptPositionId.ifBlank { entry.position?.storageValue.orEmpty() }) to entry.order
             if (
                 entry.triggerMode == SettingLibraryTriggerMode.Always &&

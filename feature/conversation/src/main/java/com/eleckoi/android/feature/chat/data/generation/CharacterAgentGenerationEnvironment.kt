@@ -3,11 +3,8 @@ package com.eleckoi.android.feature.chat.data
 import com.eleckoi.android.engine.generation.config.ModelConfigRepository
 import com.eleckoi.android.engine.generation.model.ModelConfig
 import com.eleckoi.android.engine.workspace.storage.CreatorWorkspaceRepository
-import com.eleckoi.android.feature.characters.model.CharacterMode
 import com.eleckoi.android.feature.chat.model.ChatDraft
 import com.eleckoi.android.feature.chat.model.ChatSession
-import com.eleckoi.android.feature.modelconfig.model.ChatModelSelection
-import com.eleckoi.android.feature.modelconfig.model.ModelParameters
 import com.eleckoi.android.foundation.storage.ElecKoiDataException
 import com.eleckoi.android.foundation.storage.nowIso
 
@@ -17,17 +14,15 @@ internal class CharacterAgentGenerationEnvironment(
     private val sessions: ChatSessionStore,
 ) {
     suspend fun ensureWorkspace(session: ChatSession): ChatSession {
-        val mode = CharacterMode.fromStorage(session.characterMode)
         val existing = session.workspaceId.takeIf(String::isNotBlank)
             ?.let { workspaces.get(it) }
             ?.takeIf { workspace ->
                 workspace.linkedCharacterId == session.characterId &&
-                    workspace.linkedCharacterMode == mode.storageValue
+                    workspace.characterOwned
             }
-        val workspace = existing ?: workspaces.ensureCharacterModeWorkspace(
+        val workspace = existing ?: workspaces.ensureCharacterWorkspace(
             characterId = session.characterId,
-            characterMode = mode.storageValue,
-            name = "${session.characterName.ifBlank { session.title }} · ${mode.label}",
+            name = "${session.characterName.ifBlank { session.title }} · 剧情小说",
         )
         return if (session.workspaceId == workspace.id) {
             session
@@ -46,16 +41,5 @@ internal class CharacterAgentGenerationEnvironment(
             throw ElecKoiDataException("请先选择可用的 Agent 模型配置")
         }
         return result
-    }
-
-    fun applyModelSelection(session: ChatSession, config: ModelConfig): ChatSession {
-        val current = session.modelSettings["chat"]
-        val selection = ChatModelSelection(
-            capability = "chat",
-            configId = config.id,
-            model = config.model,
-            parameters = current?.parameters ?: ModelParameters(),
-        )
-        return session.copy(modelSettings = session.modelSettings + ("chat" to selection))
     }
 }

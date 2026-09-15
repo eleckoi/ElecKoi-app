@@ -184,7 +184,7 @@ class RuntimePaths(context: Context) {
                 segments[1] == workspaceId && segments[2] == "project"
             segments.size == 4 && segments[0] == "characters" ->
                 CharacterId.matches(segments[1]) &&
-                    segments[2] in CharacterModeDirectories &&
+                    segments[2] == CharacterWorkspaceDirectory &&
                     segments[3] == "project"
             else -> false
         }
@@ -194,7 +194,7 @@ class RuntimePaths(context: Context) {
         const val PersistentHarnessWorkspaceId = "persistent-dsh-runtime"
         private val WorkspaceId = Regex("^[A-Za-z0-9_-]{1,80}$")
         private val CharacterId = Regex("^[A-Za-z0-9_-]{1,128}$")
-        private val CharacterModeDirectories = setOf("智能体", "剧情小说")
+        private const val CharacterWorkspaceDirectory = "剧情小说"
         private val RuntimeVersion = Regex("^[A-Za-z0-9._-]{1,120}$")
         private val NativeHostName = Regex("^lib[A-Za-z0-9_-]+\\.so$")
         private val CommandId = Regex("^[A-Za-z0-9_-]{1,100}$")

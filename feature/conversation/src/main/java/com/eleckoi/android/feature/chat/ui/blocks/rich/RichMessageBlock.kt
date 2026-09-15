@@ -26,6 +26,7 @@ import com.eleckoi.android.feature.chat.model.ChatMessage
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.sdk.author.AuthorApiEnvironment
 import com.eleckoi.android.sdk.author.AuthorApiRouter
+import com.eleckoi.android.sdk.author.AuthorChatGateway
 import com.eleckoi.android.sdk.author.AuthorFrontendSdk
 import com.eleckoi.android.feature.chat.ui.author.toAuthorSnapshot
 import kotlin.math.abs
@@ -40,6 +41,7 @@ internal fun RichMessageBlock(
     fontSize: TextUnit,
     lineHeight: TextUnit,
     letterSpacing: TextUnit,
+    authorGateway: AuthorChatGateway,
     modifier: Modifier = Modifier,
     onContentReady: () -> Unit,
 ) {
@@ -107,6 +109,7 @@ internal fun RichMessageBlock(
                         fontSize = fontSize,
                         lineHeight = lineHeight,
                         letterSpacing = letterSpacing,
+                        authorGateway = authorGateway,
                         viewportWidthDp = viewportWidthDp,
                         modifier = Modifier.graphicsLayer {
                             alpha = if (layer.pending) 0f else 1f
@@ -142,6 +145,7 @@ private fun RichMessageBlockContent(
     fontSize: TextUnit,
     lineHeight: TextUnit,
     letterSpacing: TextUnit,
+    authorGateway: AuthorChatGateway,
     viewportWidthDp: Int,
     modifier: Modifier,
     onContentReady: () -> Unit,
@@ -162,15 +166,19 @@ private fun RichMessageBlockContent(
             dark = appearance.isDark,
         )
     }
-    val authorApiSource = remember(context.applicationContext) {
-        AuthorFrontendSdk.source(context.applicationContext)
+    val authorRuntimeHead = remember(context.applicationContext) {
+        AuthorFrontendSdk.documentHead(context.applicationContext)
     }
     val snapshotKey = remember(message.variableStateJson) {
         richMessageSnapshotKey(message.variableStateJson)
     }
     val messageSnapshot = message.toAuthorSnapshot()
-    val authorEnvironment = remember(message.id, snapshotKey) {
-        AuthorApiEnvironment.forInlineMessage(context.applicationContext, messageSnapshot)
+    val authorEnvironment = remember(message.id, snapshotKey, authorGateway) {
+        AuthorApiEnvironment.forInlineMessage(
+            appContext = context.applicationContext,
+            message = messageSnapshot,
+            messageGateway = authorGateway,
+        )
     }
     SideEffect {
         authorEnvironment.runtime.currentMessage = messageSnapshot
@@ -179,11 +187,11 @@ private fun RichMessageBlockContent(
     val authorApiRouter = remember(context.applicationContext, authorEnvironment) {
         AuthorApiRouter(authorEnvironment)
     }
-    val html = remember(document, theme, authorApiSource) {
+    val html = remember(document, theme, authorRuntimeHead) {
         buildRichMessageHtml(
             document = document,
             theme = theme,
-            authorApiSource = authorApiSource,
+            authorRuntimeHead = authorRuntimeHead,
         )
     }
     val bindingKey = remember(document.contentKey, theme, snapshotKey, viewportWidthDp) {

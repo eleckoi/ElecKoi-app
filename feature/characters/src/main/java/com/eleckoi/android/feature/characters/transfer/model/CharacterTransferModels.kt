@@ -10,6 +10,11 @@ enum class CharacterImportSource {
     SillyTavern,
 }
 
+enum class CharacterExportFormat(val extension: String, val mediaType: String) {
+    Png(extension = "png", mediaType = "image/png"),
+    Json(extension = "json", mediaType = "application/json"),
+}
+
 data class CharacterImportPreview(
     val token: String,
     val items: List<CharacterImportPreviewItem>,
@@ -31,6 +36,7 @@ data class CharacterImportPreviewItem(
 data class ExportedCharacterCard(
     val characterId: String,
     val name: String,
+    val format: CharacterExportFormat,
     val file: File,
 )
 
@@ -39,15 +45,13 @@ internal data class PortableCharacterPackage(
     val assets: List<PortableAsset> = emptyList(),
     val settingLibraryJson: String = "",
     val variableConfigJson: String = "",
-    val frontends: List<PortableFrontendProject> = emptyList(),
+    val regexRules: List<RegexRule> = emptyList(),
 )
 
 internal data class PortableCharacter(
     val name: String,
     val group: String,
-    val characterMode: String,
     val frontendBeautyEnabled: Boolean,
-    val assistantPrompt: String,
     val profileAge: String,
     val profileSex: String,
     val profileHeight: String,
@@ -56,27 +60,11 @@ internal data class PortableCharacter(
     val imagePrompt: String,
     val opening: String,
     val showOpening: Boolean,
-    val chatBackgroundOpacity: Float,
-    val chatBackgroundBlur: Float,
-    val chatBackgroundScrim: Float,
-    val chatBackgroundMode: String = "card",
 )
 
 internal data class PortableAsset(
     val key: String,
     val mediaType: String,
-    val bytes: ByteArray,
-)
-
-internal data class PortableFrontendProject(
-    val name: String,
-    val entryFile: String,
-    val selected: Boolean,
-    val files: List<PortableProjectFile>,
-)
-
-internal data class PortableProjectFile(
-    val path: String,
     val bytes: ByteArray,
 )
 

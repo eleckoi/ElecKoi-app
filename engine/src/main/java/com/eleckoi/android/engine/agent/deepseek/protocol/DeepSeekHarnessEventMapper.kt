@@ -218,9 +218,32 @@ internal class DeepSeekHarnessEventMapper {
                         "reasoning-$turnId-$step-$index",
                         index,
                         delta,
+                        step,
+                        time,
                     ),
                 )
             }.orEmpty()
+            "tool-call-delta" -> {
+                val name = chunk.string("name")
+                val argumentsDelta = chunk.string("argumentsDelta").orEmpty()
+                val observed = name != null || argumentsDelta.isNotEmpty()
+                if (!observed) {
+                    emptyList()
+                } else {
+                    listOf(
+                        AgentSessionEvent.AssistantDelta(
+                            threadId = threadId,
+                            turnId = turnId,
+                            itemId = itemId,
+                            delta = argumentsDelta.ifEmpty { name.orEmpty() },
+                            step = step,
+                            observedAtMillis = time,
+                            visible = false,
+                            tokenObserved = true,
+                        ),
+                    )
+                }
+            }
             "usage" -> mapUsage(threadId, turnId, step, chunk.obj("usage"))
             else -> emptyList()
         }
@@ -258,19 +281,22 @@ internal class DeepSeekHarnessEventMapper {
                     observedAtMillis = time,
                 ),
             )
+            // DSH's assistant/message is the LLM completion boundary even when the response only
+            // contains reasoning or a native tool call. A blank summary remains invisible in the
+            // timeline, but the boundary is required for session-stats timing parity.
+            add(
+                AgentSessionEvent.WorkItemCompleted(
+                    threadId = threadId,
+                    turnId = turnId,
+                    itemId = messageId,
+                    type = AgentWorkItemType.AssistantMessage,
+                    status = AgentWorkStatus.Completed,
+                    summary = text,
+                    completedAtMillis = time,
+                    step = step,
+                ),
+            )
             if (text.isNotBlank()) {
-                add(
-                    AgentSessionEvent.WorkItemCompleted(
-                        threadId = threadId,
-                        turnId = turnId,
-                        itemId = messageId,
-                        type = AgentWorkItemType.AssistantMessage,
-                        status = AgentWorkStatus.Completed,
-                        summary = text,
-                        completedAtMillis = time,
-                        step = step,
-                    ),
-                )
                 add(
                     AgentSessionEvent.ModelHistoryItemCompleted(
                         threadId,

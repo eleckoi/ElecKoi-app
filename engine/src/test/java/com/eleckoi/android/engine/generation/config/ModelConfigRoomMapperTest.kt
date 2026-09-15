@@ -101,6 +101,23 @@ class ModelConfigRoomMapperTest {
     }
 
     @Test
+    fun `blank sampling values stay null and are not written to room json`() {
+        val source = ModelConfig(
+            id = "config-provider-defaults",
+            model = "custom-model",
+            modelOptions = listOf(ModelOption(id = "custom-model")),
+        )
+
+        val entity = source.toEntity(codec)
+        val restored = entity.toModelConfig(codec).modelOptions.single()
+
+        assertFalse(entity.modelOptionsJson.contains("temperature"))
+        assertFalse(entity.modelOptionsJson.contains("topP"))
+        assertEquals(null, restored.temperature)
+        assertEquals(null, restored.topP)
+    }
+
+    @Test
     fun `selected api format survives room mapping and unknown values fail fast`() {
         ModelApiFormat.entries.forEach { format ->
             val restored = ModelConfig(id = "config-format", apiFormat = format)

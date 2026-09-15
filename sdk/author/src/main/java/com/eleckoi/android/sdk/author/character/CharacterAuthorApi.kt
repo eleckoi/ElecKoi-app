@@ -9,10 +9,16 @@ internal object CharacterAuthorApi {
     val routes = listOf(
         AuthorApiRoute(AuthorApiCatalog.require("character.current")) { environment, _ ->
             val runtime = environment.runtime
-            buildJsonObject {
-                put("available", runtime.characterId.isNotBlank())
-                put("id", runtime.characterId)
-                put("name", runtime.characterName)
+            val session = runtime.chatGateway?.snapshot()?.draft?.session ?: runtime.chatSession
+            if (session == null && runtime.characterId.isBlank()) {
+                kotlinx.serialization.json.JsonNull
+            } else {
+                buildJsonObject {
+                    put("id", session?.characterId ?: runtime.characterId)
+                    put("name", session?.characterName ?: runtime.characterName)
+                    put("avatar", session?.characterAvatar.orEmpty())
+                    put("persona", session?.characterPersona ?: buildJsonObject {})
+                }
             }
         },
     )

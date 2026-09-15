@@ -60,7 +60,7 @@ class LoopbackResponsesAdapterServer(
     private val requestCaptureConversationId: String = "",
     private val captureProviderRequests: Boolean = false,
     private val legacyResponsesProbeEnabled: Boolean = false,
-    private val toolRequestFilter: (String, JsonObject) -> JsonObject = { _, request -> request },
+    private val toolRequestFilter: (Set<String>, JsonObject) -> JsonObject = { _, request -> request },
     private val dynamicTools: List<AgentDynamicTool> = emptyList(),
     deepSeekFileUploadIndex: File? = null,
 ) {
@@ -160,7 +160,7 @@ class LoopbackResponsesAdapterServer(
         routeSubagentModelConfig: ModelConfig? = null,
         routeSystemInstructions: String = "",
         routeHistoryCompactionInstructions: String? = null,
-        routeToolScopeId: String,
+        routeEnabledToolGroupIds: Set<String>,
         routeDynamicTools: List<AgentDynamicTool> = emptyList(),
         routeRequestCaptureWorkspaceId: String = "",
         routeRequestCaptureConversationId: String = "",
@@ -174,7 +174,7 @@ class LoopbackResponsesAdapterServer(
             routeSubagentModelConfig = routeSubagentModelConfig,
             routeSystemInstructions = routeSystemInstructions,
             routeHistoryCompactionInstructions = routeHistoryCompactionInstructions,
-            routeToolScopeId = routeToolScopeId,
+            routeEnabledToolGroupIds = routeEnabledToolGroupIds,
             routeDynamicTools = routeDynamicTools,
             routeRequestCaptureWorkspaceId = routeRequestCaptureWorkspaceId,
             routeRequestCaptureConversationId = routeRequestCaptureConversationId,
@@ -344,7 +344,7 @@ class LoopbackResponsesAdapterServer(
             projectedRequest.withAdditionalSystemInstructions(route.systemInstructions)
         }
         val filteredRequest = runCatching {
-            toolRequestFilter(route.toolScopeId, routedRequest)
+            toolRequestFilter(route.enabledToolGroupIds, routedRequest)
         }.getOrElse { error ->
             writeJsonError(output, 400, error.message ?: "Responses 工具过滤失败")
             return

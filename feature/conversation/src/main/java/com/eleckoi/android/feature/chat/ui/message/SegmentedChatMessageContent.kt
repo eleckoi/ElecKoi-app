@@ -18,6 +18,7 @@ import com.eleckoi.android.feature.chat.roleplay.protocol.RoleplayImagePlacement
 import com.eleckoi.android.feature.chat.roleplay.protocol.parseRoleplayImagePlacements
 import com.eleckoi.android.feature.chat.ui.blocks.image.GeneratedImageGallery
 import com.eleckoi.android.foundation.design.AppearanceTheme
+import com.eleckoi.android.sdk.author.AuthorChatGateway
 
 @Composable
 internal fun SegmentedChatMessageContent(
@@ -28,6 +29,7 @@ internal fun SegmentedChatMessageContent(
     fontSize: TextUnit,
     lineHeight: TextUnit,
     letterSpacing: TextUnit,
+    authorGateway: AuthorChatGateway,
     paragraphSpacing: Float,
     messageContainerVisible: Boolean,
     visualGeneration: Int,
@@ -127,6 +129,7 @@ internal fun SegmentedChatMessageContent(
                         fontSize = fontSize,
                         lineHeight = lineHeight,
                         letterSpacing = letterSpacing,
+                        authorGateway = authorGateway,
                         visualGeneration = visualGeneration,
                         onContentReady = { readyPartIds = readyPartIds + readinessId },
                         onVisualComplete = { visualPartIds = visualPartIds + readinessId },

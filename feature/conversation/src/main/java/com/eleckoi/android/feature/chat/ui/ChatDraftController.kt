@@ -170,14 +170,13 @@ internal class ChatDraftController(
         }
     }
 
-    fun createChat(characterId: String, characterMode: String) {
+    fun createChat(characterId: String) {
         resetForLoad()
         updateState {
             it.copy(
                 draft = null,
                 isDraftLoading = true,
                 chatCharacterId = characterId,
-                chatCharacterMode = characterMode,
                 historyHasMore = false,
                 historyPageLoading = false,
                 historyInitialPageReady = false,
@@ -187,7 +186,7 @@ internal class ChatDraftController(
         loadJob = scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
-                    chatService.createNewChat(characterId, characterMode)
+                    chatService.createNewChat(characterId)
                 }
             }.onSuccess { next ->
                 showPreparedDraft(next, loadedWindow = false)
@@ -199,14 +198,13 @@ internal class ChatDraftController(
         }
     }
 
-    fun openCharacterChat(characterId: String, characterMode: String?) {
+    fun openCharacterChat(characterId: String) {
         resetForLoad()
         updateState {
             it.copy(
                 draft = null,
                 isDraftLoading = true,
                 chatCharacterId = characterId,
-                chatCharacterMode = characterMode ?: it.chatCharacterMode,
                 historyHasMore = false,
                 historyPageLoading = true,
                 historyInitialPageReady = false,
@@ -216,7 +214,7 @@ internal class ChatDraftController(
         loadJob = scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
-                    chatService.chatDraftForCharacter(characterId, characterMode)
+                    chatService.chatDraftForCharacter(characterId)
                 }
             }.onSuccess { next ->
                 showPreparedDraft(next, loadedWindow = true)
@@ -264,7 +262,6 @@ internal class ChatDraftController(
                     isDraftLoading = true,
                     chatCharacterId = current.session.characterId,
                     chatCharacterName = current.session.characterName,
-                    chatCharacterMode = current.session.characterMode,
                     errorMessage = "",
                 )
             }
@@ -274,10 +271,7 @@ internal class ChatDraftController(
                 withContext(Dispatchers.IO) {
                     chatService.deleteChat(sessionId)
                     if (current?.session?.id == sessionId) {
-                        chatService.nextChatDraftForCharacter(
-                            current.session.characterId,
-                            current.session.characterMode,
-                        )
+                        chatService.nextChatDraftForCharacter(current.session.characterId)
                     } else {
                         null
                     }
@@ -337,7 +331,6 @@ internal fun ChatUiState.withDraft(next: ChatDraft): ChatUiState = copy(
     isDraftLoading = false,
     chatCharacterId = next.session.characterId,
     chatCharacterName = next.session.characterName,
-    chatCharacterMode = next.session.characterMode,
 )
 
 internal fun ChatUiState.withLoadedWindow(next: ChatDraft): ChatUiState = withDraft(next).copy(

@@ -12,7 +12,7 @@ class GitHubReleaseClientTest {
             {
               "tag_name": "v0.2.0",
               "name": "ElecKoi 0.2.0",
-              "html_url": "https://github.com/eleckoi/ElecKoi/releases/tag/v0.2.0",
+              "html_url": "https://github.com/eleckoi/ElecKoi-app/releases/tag/v0.2.0",
               "body": "修复与体验改进",
               "published_at": "2026-08-31T10:00:00Z",
               "assets": [{"name": "ignored.apk"}]

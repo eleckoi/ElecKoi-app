@@ -2,12 +2,10 @@ package com.eleckoi.android.feature.chat.ui
 
 import com.eleckoi.android.engine.agent.api.AgentPermissionMode
 import com.eleckoi.android.engine.generation.model.ModelConfig
-import com.eleckoi.android.feature.characters.model.CharacterMode
 import com.eleckoi.android.feature.chat.model.ChatDraft
 import com.eleckoi.android.feature.chat.model.ChatListItem
 import com.eleckoi.android.feature.chat.model.ChatMessage
 import com.eleckoi.android.feature.chat.model.ChatUserImageAttachment
-import com.eleckoi.android.feature.modelconfig.model.ModelParameters
 import com.eleckoi.android.feature.preferences.ChatAvatarShape
 import com.eleckoi.android.feature.preferences.ChatLayoutMode
 import com.eleckoi.android.feature.preferences.ChatWaitingAnimation
@@ -20,7 +18,6 @@ data class ChatUiState(
     val isDraftLoading: Boolean = false,
     val chatCharacterId: String = "",
     val chatCharacterName: String = "",
-    val chatCharacterMode: String = CharacterMode.Agent.storageValue,
     val input: String = "",
     val inputImages: List<ChatUserImageAttachment> = emptyList(),
     val isPreparingInputImages: Boolean = false,
@@ -34,7 +31,6 @@ data class ChatUiState(
     val assistantBubbleEnabled: Boolean = RoleplayLayoutDefaults.AssistantBubbleEnabled,
     val chatLayoutMode: ChatLayoutMode = ChatLayoutMode.Default,
     val chatRoleplayCardPanel: Boolean = RoleplayLayoutDefaults.CardPanel,
-    val chatRoleplayScrim: Float = RoleplayLayoutDefaults.Scrim,
     val chatBubbleWideLayout: Boolean = true,
     val chatBubbleCornerRadius: Float = RoleplayLayoutDefaults.BubbleCornerRadius,
     val chatAvatarSize: Float = RoleplayLayoutDefaults.AvatarSize,
@@ -62,8 +58,6 @@ data class ChatUiState(
     /** Kept separate so the Author chat API can never select an image provider as its reply model. */
     val imageModelConfigs: List<ModelConfig> = emptyList(),
     val historySaveMode: String = "all",
-    val characterModesById: Map<String, String> = emptyMap(),
-    val modeConflict: ChatModeConflict? = null,
     val appearance: AppearanceTheme = AppearanceTheme(),
 )
 
@@ -80,48 +74,17 @@ data class ChatGenerationPresentation(
     val assistantMessageId: String? = null,
 )
 
-data class ChatModeConflict(
-    val characterId: String,
-    val sessionMode: String,
-    val currentMode: String,
-)
-
 data class RequiredToolPrompt(
     val characterId: String,
     val assistantMessageId: String,
     val enabling: Boolean = false,
 )
 
-internal fun chatModeConflict(
-    characterId: String,
-    sessionMode: String,
-    currentMode: String?,
-): ChatModeConflict? {
-    val normalizedSessionMode = CharacterMode.fromStorage(sessionMode).storageValue
-    val normalizedCurrentMode = currentMode
-        ?.takeIf(String::isNotBlank)
-        ?.let { CharacterMode.fromStorage(it) }
-        ?.storageValue
-        ?: return null
-    return if (normalizedSessionMode == normalizedCurrentMode) {
-        null
-    } else {
-        ChatModeConflict(
-            characterId = characterId,
-            sessionMode = normalizedSessionMode,
-            currentMode = normalizedCurrentMode,
-        )
-    }
-}
-
 sealed interface ChatIntent {
     data object LoadInitialDraft : ChatIntent
     data class LoadDraft(val sessionId: String) : ChatIntent
     data object LoadOlderMessages : ChatIntent
-    data class OpenCharacterChat(
-        val characterId: String,
-        val characterMode: String? = null,
-    ) : ChatIntent
+    data class OpenCharacterChat(val characterId: String) : ChatIntent
     data class ApplyAppearanceTheme(val theme: AppearanceTheme) : ChatIntent
     data class InputChanged(val value: String) : ChatIntent
     data class AddInputImages(val uriValues: List<String>) : ChatIntent
@@ -130,10 +93,7 @@ sealed interface ChatIntent {
     data object StopSending : ChatIntent
     data class AcknowledgeGenerationPresentation(val generation: Int) : ChatIntent
     data object CreateChat : ChatIntent
-    data class CreateChatForCharacter(
-        val characterId: String,
-        val characterMode: String = CharacterMode.Agent.storageValue,
-    ) : ChatIntent
+    data class CreateChatForCharacter(val characterId: String) : ChatIntent
     data class OpenEditMessage(val message: ChatMessage) : ChatIntent
     data object CloseEditMessage : ChatIntent
     data class EditInputChanged(val value: String) : ChatIntent
@@ -145,7 +105,6 @@ sealed interface ChatIntent {
     data class SelectModel(
         val configId: String,
         val model: String,
-        val parameters: ModelParameters,
     ) : ChatIntent
     data class ChangeHistorySaveMode(val mode: String) : ChatIntent
     data class SaveChatBackground(
@@ -174,8 +133,6 @@ sealed interface ChatIntent {
     data object DismissRequiredToolPrompt : ChatIntent
     data object EnableRequiredSettingLibraryTool : ChatIntent
     data object DismissChatBackgroundError : ChatIntent
-    data object DismissModeConflict : ChatIntent
-    data object OpenCurrentModeChat : ChatIntent
     data class ReportError(val message: String) : ChatIntent
     data object ToggleMoreTools : ChatIntent
     data object DismissMoreTools : ChatIntent

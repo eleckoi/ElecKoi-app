@@ -19,7 +19,12 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.Sort
+import androidx.compose.material.icons.outlined.AddCircleOutline
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -43,6 +48,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
@@ -52,7 +58,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.ui.window.DialogProperties
 import com.eleckoi.android.foundation.design.AppearanceTheme
-import com.eleckoi.android.foundation.design.R
 import com.eleckoi.android.foundation.design.overlayScrim
 
 private val ModalBubbleWidth = 172.dp
@@ -96,6 +101,44 @@ data class MobileHeaderMenuAction(
     val dividerBefore: Boolean = false,
     val onClick: () -> Unit,
 )
+
+@Composable
+fun MobileHeaderOverflowGlyph(
+    appearance: AppearanceTheme,
+    modifier: Modifier = Modifier,
+) {
+    Icon(
+        imageVector = Icons.Rounded.MoreVert,
+        contentDescription = null,
+        tint = appearance.mobileText,
+        modifier = modifier.size(27.dp),
+    )
+}
+
+@Composable
+fun MobileHeaderSidebarButton(
+    appearance: AppearanceTheme,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .size(48.dp)
+            .semantics {
+                contentDescription = "打开侧边栏"
+                role = Role.Button
+            }
+            .noRippleClickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = Icons.AutoMirrored.Rounded.Sort,
+            contentDescription = null,
+            tint = appearance.mobileText,
+            modifier = Modifier.size(26.dp),
+        )
+    }
+}
 
 /** A visible but deliberately quiet Up affordance for every full-screen child destination. */
 @Composable
@@ -189,7 +232,7 @@ fun BubbleActionMenu(
                 ) {
                     Surface(
                         modifier = Modifier.width(ModalBubbleWidth),
-                        color = Color.White,
+                        color = appearance.mobileSurface,
                         shape = TopEndBubbleShape,
                         tonalElevation = 0.dp,
                         shadowElevation = 0.dp,
@@ -289,7 +332,6 @@ fun MobileProfileHeader(
                 size = 32,
                 fontSize = 13,
                 appearance = appearance,
-                fallbackImage = R.raw.default_user_avatar_circle,
             )
             Column(
                 modifier = Modifier
@@ -345,6 +387,98 @@ fun MobileProfileHeader(
                 onDismiss = { setAddMenuOpen(false) },
                 modalTopEnd = addMenuExpanded != null,
             )
+        }
+    }
+}
+
+@Composable
+fun MobileRootActionHeader(
+    title: String,
+    appearance: AppearanceTheme,
+    onOpenSidebar: () -> Unit,
+    onSearch: () -> Unit,
+    onAdd: () -> Unit,
+    addMenuActions: List<MobileHeaderMenuAction> = emptyList(),
+    addMenuExpanded: Boolean? = null,
+    onAddMenuExpandedChange: (Boolean) -> Unit = {},
+    useOverflowAction: Boolean = false,
+) {
+    var internalAddMenuOpen by remember { mutableStateOf(false) }
+    val addMenuOpen = addMenuExpanded ?: internalAddMenuOpen
+    fun setAddMenuOpen(open: Boolean) {
+        if (addMenuExpanded == null) internalAddMenuOpen = open
+        onAddMenuExpandedChange(open)
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(60.dp)
+            .padding(start = 8.dp, end = 9.dp),
+    ) {
+        MobileHeaderSidebarButton(
+            appearance = appearance,
+            onClick = onOpenSidebar,
+            modifier = Modifier.align(Alignment.CenterStart),
+        )
+        Text(
+            text = title,
+            modifier = Modifier
+                .align(Alignment.Center)
+                .fillMaxWidth()
+                .padding(horizontal = 104.dp),
+            color = appearance.mobileText,
+            fontSize = 19.sp,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Row(
+            modifier = Modifier.align(Alignment.CenterEnd),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .semantics {
+                        contentDescription = "搜索"
+                        role = Role.Button
+                    }
+                    .noRippleClickable(onClick = onSearch),
+                contentAlignment = Alignment.Center,
+            ) {
+                DshSearchGlyph(tint = appearance.mobileText, iconSize = 21.dp)
+            }
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .semantics {
+                        contentDescription = if (useOverflowAction) "更多操作" else "新增"
+                        role = Role.Button
+                    }
+                    .noRippleClickable {
+                        if (addMenuActions.isEmpty()) onAdd() else setAddMenuOpen(true)
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                if (useOverflowAction) {
+                    MobileHeaderOverflowGlyph(appearance = appearance)
+                } else {
+                    Icon(
+                        imageVector = Icons.Outlined.AddCircleOutline,
+                        contentDescription = null,
+                        tint = appearance.mobileText,
+                        modifier = Modifier.size(25.dp),
+                    )
+                }
+                BubbleActionMenu(
+                    expanded = addMenuOpen,
+                    actions = addMenuActions,
+                    appearance = appearance,
+                    onDismiss = { setAddMenuOpen(false) },
+                    modalTopEnd = addMenuExpanded != null,
+                )
+            }
         }
     }
 }

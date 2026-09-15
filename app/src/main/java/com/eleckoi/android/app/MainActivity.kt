@@ -7,7 +7,6 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.eleckoi.android.app.ui.ElecKoiApp
-import com.eleckoi.android.foundation.design.ElecKoiTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -26,9 +25,7 @@ class MainActivity : ComponentActivity() {
             window.isNavigationBarContrastEnforced = false
         }
         setContent {
-            ElecKoiTheme {
-                ElecKoiApp()
-            }
+            ElecKoiApp()
         }
     }
 }

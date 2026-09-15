@@ -19,6 +19,7 @@ import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.feature.chat.model.ChatMessage
 import com.eleckoi.android.feature.chat.model.MessageRole
 import com.eleckoi.android.feature.chat.ui.blocks.image.UserInputImageGallery
+import com.eleckoi.android.sdk.author.AuthorChatGateway
 
 data class ChatMessageContentState(
     val displayedText: String,
@@ -43,6 +44,7 @@ fun ChatMessageContent(
     fontSize: TextUnit,
     lineHeight: TextUnit,
     letterSpacing: TextUnit,
+    authorGateway: AuthorChatGateway,
     paragraphSpacing: Float,
     messageContainerVisible: Boolean,
     visualGeneration: Int,
@@ -69,6 +71,7 @@ fun ChatMessageContent(
                 fontSize = fontSize,
                 lineHeight = lineHeight,
                 letterSpacing = letterSpacing,
+                authorGateway = authorGateway,
                 paragraphSpacing = paragraphSpacing,
                 messageContainerVisible = messageContainerVisible,
                 visualGeneration = visualGeneration,
@@ -112,6 +115,7 @@ fun ChatMessageContent(
             fontSize = fontSize,
             lineHeight = lineHeight,
             letterSpacing = letterSpacing,
+            authorGateway = authorGateway,
             paragraphSpacing = paragraphSpacing,
             messageContainerVisible = messageContainerVisible,
             visualGeneration = visualGeneration,
@@ -165,6 +169,7 @@ fun ChatMessageContent(
                 fontSize = fontSize,
                 lineHeight = lineHeight,
                 letterSpacing = letterSpacing,
+                authorGateway = authorGateway,
                 visualGeneration = visualGeneration,
                 onContentReady = {
                     richReady = true
@@ -186,6 +191,7 @@ fun ChatMessageContent(
         fontSize = fontSize,
         lineHeight = lineHeight,
         letterSpacing = letterSpacing,
+        authorGateway = authorGateway,
         visualGeneration = visualGeneration,
         onContentReady = onContentReady,
         onVisualComplete = onVisualComplete,

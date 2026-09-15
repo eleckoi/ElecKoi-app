@@ -4,7 +4,6 @@ import com.eleckoi.android.feature.chat.api.ChatService
 import com.eleckoi.android.engine.agent.api.AgentPermissionMode
 import com.eleckoi.android.engine.generation.model.ModelConfig
 import com.eleckoi.android.feature.modelconfig.model.ChatModelSelection
-import com.eleckoi.android.feature.modelconfig.model.ModelParameters
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -32,7 +31,7 @@ internal class ChatSettingsController(
         }
     }
 
-    fun selectModel(configId: String, model: String, parameters: ModelParameters) {
+    fun selectModel(configId: String, model: String) {
         val current = state().draft ?: return
         scope.launch {
             runCatching {
@@ -43,7 +42,6 @@ internal class ChatSettingsController(
                             capability = "chat",
                             configId = configId,
                             model = model,
-                            parameters = parameters,
                         ),
                     )
                 }

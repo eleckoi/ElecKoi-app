@@ -96,7 +96,7 @@ internal enum class AuthorBridgeRequestRejection(val code: String, val message: 
 }
 
 internal class AuthorBridgeRequestGate(
-    private val maxRequestBytes: Int = 256 * 1024,
+    private val maxRequestBytes: Int = 32 * 1024 * 1024,
     private val maxInFlight: Int = 8,
     private val maxRequestsPerWindow: Int = 120,
     private val windowMillis: Long = 10_000L,

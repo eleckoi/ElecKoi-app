@@ -7,11 +7,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import com.eleckoi.android.feature.characters.ui.CharactersIntent
 import com.eleckoi.android.feature.characters.ui.CharactersViewModel
-import com.eleckoi.android.feature.characters.modes.story.presets.ui.StoryPresetImportSourceDialog
-import com.eleckoi.android.feature.characters.modes.story.presets.ui.StoryPresetExportDialog
-import com.eleckoi.android.feature.characters.modes.story.presets.ui.StoryPresetBatchExportDialog
-import com.eleckoi.android.feature.characters.modes.story.presets.ui.StoryPresetViewModel
+import com.eleckoi.android.feature.characters.presets.ui.AgentPresetImportSourceDialog
+import com.eleckoi.android.feature.characters.presets.ui.AgentPresetExportFormatDialog
+import com.eleckoi.android.feature.characters.presets.ui.AgentPresetExportDialog
+import com.eleckoi.android.feature.characters.presets.ui.AgentPresetBatchExportDialog
+import com.eleckoi.android.feature.characters.presets.ui.AgentPresetViewModel
 import com.eleckoi.android.feature.characters.transfer.ui.CharacterExportDialog
+import com.eleckoi.android.feature.characters.transfer.ui.CharacterExportFormatDialog
 import com.eleckoi.android.feature.characters.transfer.ui.CharacterBatchExportDialog
 import com.eleckoi.android.feature.characters.transfer.ui.CharacterImportDialog
 import com.eleckoi.android.feature.characters.transfer.ui.CharacterImportSourceDialog
@@ -21,10 +23,11 @@ import com.eleckoi.android.app.navigation.MobileRoute
 internal fun androidx.compose.foundation.layout.BoxScope.MobileShellOverlays(
     characterImportSourceOpen: Boolean,
     onCloseCharacterImportSource: () -> Unit,
-    storyPresetImportSourceOpen: Boolean,
-    onCloseStoryPresetImportSource: () -> Unit,
+    agentPresetImportSourceOpen: Boolean,
+    onCloseAgentPresetImportSource: () -> Unit,
     charactersState: com.eleckoi.android.feature.characters.ui.CharactersUiState,
-    storyPresetState: com.eleckoi.android.feature.characters.modes.story.presets.ui.StoryPresetUiState,
+    useCoverArtwork: Boolean,
+    agentPresetState: com.eleckoi.android.feature.characters.presets.ui.AgentPresetUiState,
     appearance: com.eleckoi.android.foundation.design.AppearanceTheme,
     moreOpen: Boolean,
     user: com.eleckoi.android.feature.characters.model.UserProfile,
@@ -32,9 +35,9 @@ internal fun androidx.compose.foundation.layout.BoxScope.MobileShellOverlays(
     navigationBarColor: Color,
     shellViewModel: ShellViewModel,
     charactersViewModel: CharactersViewModel,
-    storyPresetViewModel: StoryPresetViewModel,
+    agentPresetViewModel: AgentPresetViewModel,
     characterCardActions: CharacterCardDocumentActions,
-    storyPresetDocumentActions: StoryPresetDocumentActions,
+    agentPresetDocumentActions: AgentPresetDocumentActions,
     navigateTo: (MobileRoute) -> Unit,
 ) {
     if (characterImportSourceOpen) {
@@ -51,17 +54,17 @@ internal fun androidx.compose.foundation.layout.BoxScope.MobileShellOverlays(
             },
         )
     }
-    if (storyPresetImportSourceOpen) {
-        StoryPresetImportSourceDialog(
+    if (agentPresetImportSourceOpen) {
+        AgentPresetImportSourceDialog(
             appearance = appearance,
-            onDismiss = { onCloseStoryPresetImportSource() },
+            onDismiss = { onCloseAgentPresetImportSource() },
             onImportElecKoi = {
-                onCloseStoryPresetImportSource()
-                storyPresetDocumentActions.importElecKoiPresets()
+                onCloseAgentPresetImportSource()
+                agentPresetDocumentActions.importElecKoiPresets()
             },
             onImportSillyTavern = {
-                onCloseStoryPresetImportSource()
-                storyPresetDocumentActions.importSillyTavernPresets()
+                onCloseAgentPresetImportSource()
+                agentPresetDocumentActions.importSillyTavernPresets()
             },
         )
     }
@@ -75,6 +78,17 @@ internal fun androidx.compose.foundation.layout.BoxScope.MobileShellOverlays(
             },
             onConfirm = {
                 charactersViewModel.onIntent(CharactersIntent.ConfirmCharacterImport)
+            },
+        )
+    }
+    if (charactersState.pendingExportCharacterIds.isNotEmpty()) {
+        CharacterExportFormatDialog(
+            appearance = appearance,
+            onDismiss = {
+                charactersViewModel.onIntent(CharactersIntent.DismissCharacterExportFormat)
+            },
+            onSelect = { format ->
+                charactersViewModel.onIntent(CharactersIntent.ConfirmCharacterCardExport(format))
             },
         )
     }
@@ -112,33 +126,40 @@ internal fun androidx.compose.foundation.layout.BoxScope.MobileShellOverlays(
             },
         )
     }
-    storyPresetState.exportedCards.singleOrNull()?.let { card ->
-        StoryPresetExportDialog(
+    if (agentPresetState.pendingExportPresetIds.isNotEmpty()) {
+        AgentPresetExportFormatDialog(
+            appearance = appearance,
+            onDismiss = agentPresetViewModel::dismissPresetExportFormat,
+            onSelect = agentPresetViewModel::confirmPresetExport,
+        )
+    }
+    agentPresetState.exportedFiles.singleOrNull()?.let { card ->
+        AgentPresetExportDialog(
             card = card,
             appearance = appearance,
-            onDismiss = storyPresetViewModel::dismissPresetExport,
+            onDismiss = agentPresetViewModel::dismissPresetExport,
             onShareOriginal = {
-                storyPresetDocumentActions.shareOriginal(card)
-                storyPresetViewModel.dismissPresetExport()
+                agentPresetDocumentActions.shareOriginal(card)
+                agentPresetViewModel.dismissPresetExport()
             },
             onSave = {
-                storyPresetDocumentActions.saveCard(card)
-                storyPresetViewModel.dismissPresetExport()
+                agentPresetDocumentActions.saveCard(card)
+                agentPresetViewModel.dismissPresetExport()
             },
         )
     }
-    if (storyPresetState.exportedCards.size > 1) {
-        StoryPresetBatchExportDialog(
-            cards = storyPresetState.exportedCards,
+    if (agentPresetState.exportedFiles.size > 1) {
+        AgentPresetBatchExportDialog(
+            cards = agentPresetState.exportedFiles,
             appearance = appearance,
-            onDismiss = storyPresetViewModel::dismissPresetExport,
+            onDismiss = agentPresetViewModel::dismissPresetExport,
             onShareOriginal = {
-                storyPresetDocumentActions.shareOriginals(storyPresetState.exportedCards)
-                storyPresetViewModel.dismissPresetExport()
+                agentPresetDocumentActions.shareOriginals(agentPresetState.exportedFiles)
+                agentPresetViewModel.dismissPresetExport()
             },
             onSave = {
-                storyPresetDocumentActions.saveCards(storyPresetState.exportedCards)
-                storyPresetViewModel.dismissPresetExport()
+                agentPresetDocumentActions.saveCards(agentPresetState.exportedFiles)
+                agentPresetViewModel.dismissPresetExport()
             },
         )
     }
@@ -146,12 +167,27 @@ internal fun androidx.compose.foundation.layout.BoxScope.MobileShellOverlays(
     MobileMorePanel(
         visible = moreOpen,
         user = user,
+        characters = charactersState.characters,
+        useCoverArtwork = useCoverArtwork,
         appearance = appearance,
         appUpdateAvailable = appUpdateAvailable,
         onClose = { shellViewModel.onIntent(ShellIntent.SetMoreOpen(false)) },
         onOpenProfile = {
             shellViewModel.onIntent(ShellIntent.SetMoreOpen(false))
             navigateTo(MobileRoute.Profile)
+        },
+        onToggleAllCharactersExpanded = {
+            charactersViewModel.onIntent(CharactersIntent.ToggleAllCharactersExpanded)
+        },
+        onToggleCharacterGroupExpanded = { group ->
+            charactersViewModel.onIntent(CharactersIntent.ToggleCharacterGroupExpanded(group))
+        },
+        onOpenCharacter = { characterId ->
+            shellViewModel.onIntent(ShellIntent.SetMoreOpen(false))
+            charactersViewModel.onIntent(CharactersIntent.SelectCharacter(characterId))
+        },
+        onSaveCharacters = { payload ->
+            charactersViewModel.onIntent(CharactersIntent.SaveCharacterCollection(payload))
         },
         onOpenSettings = {
             shellViewModel.onIntent(ShellIntent.SetMoreOpen(false))

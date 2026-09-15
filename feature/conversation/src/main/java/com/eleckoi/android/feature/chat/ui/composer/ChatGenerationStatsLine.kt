@@ -23,35 +23,7 @@ internal fun ChatGenerationStatsLine(
     modifier: Modifier = Modifier,
 ) {
     if (!enabled) return
-    val groups = buildList {
-        if (metrics.steps > 0) {
-            add("${metrics.turns} 轮 · ${metrics.steps} 步")
-            buildList {
-                if (metrics.llmDurationMillis > 0L) add("LLM ${formatStatsDuration(metrics.llmDurationMillis)}")
-                if (metrics.toolDurationMillis > 0L) add("工具 ${formatStatsDuration(metrics.toolDurationMillis)}")
-            }.takeIf(List<String>::isNotEmpty)?.let(::add)
-            buildList {
-                if (metrics.firstTokenSamples > 0) {
-                    add(
-                        "首 token 平均 " + formatStatsDuration(
-                            metrics.firstTokenDelayMillis / metrics.firstTokenSamples,
-                        ),
-                    )
-                }
-                if (metrics.decodeDurationMillis > 0L && metrics.decodeOutputTokens > 0L) {
-                    val tokensPerSecond = metrics.decodeOutputTokens * 1_000.0 / metrics.decodeDurationMillis
-                    add("${formatStatsNumber(tokensPerSecond)} tok/s")
-                }
-            }.takeIf(List<String>::isNotEmpty)?.let(::add)
-        }
-        metrics.cacheHitPercent?.let { add("缓存命中 ${it}%") }
-        if (metrics.billedInputTokens > 0L || metrics.outputTokens > 0L) {
-            add(
-                "输入 ${formatStatsTokens(metrics.billedInputTokens)} tok · " +
-                    "输出 ${formatStatsTokens(metrics.outputTokens)} tok",
-            )
-        }
-    }
+    val groups = generationStatsGroups(metrics)
     if (groups.isEmpty()) return
     Text(
         text = groups.joinToString("  |  "),
@@ -66,6 +38,40 @@ internal fun ChatGenerationStatsLine(
         softWrap = false,
         overflow = TextOverflow.Clip,
     )
+}
+
+internal fun generationStatsGroups(metrics: ChatGenerationMetrics): List<String> = buildList {
+    if (metrics.steps > 0) {
+        add("${metrics.turns} 轮 · ${metrics.steps} 步")
+        val durations = buildList {
+            if (metrics.llmDurationMillis > 0L) add("LLM ${formatStatsDuration(metrics.llmDurationMillis)}")
+            if (metrics.toolDurationMillis > 0L) {
+                add("工具调用 ${formatStatsDuration(metrics.toolDurationMillis)}")
+            }
+        }
+        if (durations.isNotEmpty()) add(durations.joinToString(" · "))
+        val speeds = buildList {
+            if (metrics.firstTokenSamples > 0) {
+                add(
+                    "首 token 平均 " + formatStatsDuration(
+                        metrics.firstTokenDelayMillis / metrics.firstTokenSamples,
+                    ),
+                )
+            }
+            if (metrics.decodeDurationMillis > 0L && metrics.decodeOutputTokens > 0L) {
+                val tokensPerSecond = metrics.decodeOutputTokens * 1_000.0 / metrics.decodeDurationMillis
+                add("${formatStatsNumber(tokensPerSecond)} tok/s")
+            }
+        }
+        if (speeds.isNotEmpty()) add(speeds.joinToString(" · "))
+    }
+    metrics.cacheHitPercent?.let { add("缓存命中 ${it}%") }
+    if (metrics.billedInputTokens > 0L || metrics.outputTokens > 0L) {
+        add(
+            "输入 ${formatStatsTokens(metrics.billedInputTokens)} tok · " +
+                "输出 ${formatStatsTokens(metrics.outputTokens)} tok",
+        )
+    }
 }
 
 private fun formatStatsDuration(millis: Long): String {

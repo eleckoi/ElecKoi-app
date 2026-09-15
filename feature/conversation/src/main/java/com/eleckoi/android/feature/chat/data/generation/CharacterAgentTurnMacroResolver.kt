@@ -46,7 +46,4 @@ internal fun SettingLibraryAgentTurnContext.resolveCharacterCardMacros(
             selectionHint = entry.selectionHint.resolveCharacterCardMacros(values),
         )
     },
-    fixedRoleplayPlanItems = fixedRoleplayPlanItems.map { item ->
-        item.resolveCharacterCardMacros(values)
-    },
 )

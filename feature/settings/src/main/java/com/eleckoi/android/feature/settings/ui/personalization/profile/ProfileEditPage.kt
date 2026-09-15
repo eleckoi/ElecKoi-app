@@ -7,7 +7,6 @@ import com.eleckoi.android.feature.characters.ui.components.AvatarSlotsPage
 
 import android.graphics.Bitmap
 import android.net.Uri
-import com.eleckoi.android.foundation.design.R
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -15,6 +14,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,6 +28,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -94,6 +95,7 @@ fun ProfileEditPage(
     onSaveName: (String) -> Unit,
     onSaveAvatars: (Map<AvatarSlot, File>) -> Unit,
     onSaveCover: (Uri) -> Unit,
+    onClearCover: () -> Unit,
 ) {
     val context = LocalContext.current
     val editState = rememberProfileEditState(user)
@@ -117,11 +119,6 @@ fun ProfileEditPage(
             displayName = name,
             cachePrefix = "user",
             appearance = appearance,
-            defaultResources = mapOf(
-                AvatarSlot.Circle to R.raw.default_user_avatar_circle,
-                AvatarSlot.Square to R.raw.default_user_avatar_square,
-            ),
-            blankWhenMissing = setOf(AvatarSlot.Portrait),
             onBack = { avatarPageOpen = false },
             onSave = onSaveAvatars,
         )
@@ -195,7 +192,6 @@ fun ProfileEditPage(
                     fontSize = 30,
                     appearance = appearance,
                     avatarPath = user.userAvatar,
-                    fallbackImage = R.raw.default_user_avatar_circle,
                 )
                 Box(
                     modifier = Modifier
@@ -249,31 +245,40 @@ fun ProfileEditPage(
                     shape = RoundedCornerShape(14.dp),
                     colors = CardDefaults.cardColors(containerColor = appearance.mobilePinnedBg),
                 ) {
+                    val hasCustomCover = user.userCover.isNotBlank()
                     val coverFile = remember(user.userCover) {
                         user.userCover.takeIf(String::isNotBlank)
                             ?.let(::File)
                             ?.takeIf(File::isFile)
                     }
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        AsyncImage(
-                            model = coverFile ?: R.raw.default_user_profile_cover,
-                            contentDescription = "资料背景预览",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop,
-                        )
-                        Box(
+                        if (coverFile != null) {
+                            AsyncImage(
+                                model = coverFile,
+                                contentDescription = "资料背景预览",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop,
+                            )
+                        }
+                        Row(
                             modifier = Modifier
                                 .align(Alignment.BottomEnd)
-                                .padding(10.dp)
-                                .clip(RoundedCornerShape(999.dp))
-                                .background(appearance.mobileSurface.copy(alpha = 0.88f))
-                                .padding(horizontal = 12.dp, vertical = 7.dp),
+                                .padding(10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            Text(
-                                "更换背景",
-                                color = appearance.mobileText,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium,
+                            if (hasCustomCover) {
+                                ProfileCoverAction(
+                                    label = "恢复默认",
+                                    icon = AppIconPaths.Refresh,
+                                    appearance = appearance,
+                                    onClick = onClearCover,
+                                )
+                            }
+                            ProfileCoverAction(
+                                label = if (coverFile == null) "选择背景" else "更换背景",
+                                icon = AppIconPaths.PictureFrame,
+                                appearance = appearance,
+                                onClick = { coverLauncher.launch("image/*") },
                             )
                         }
                     }
@@ -281,5 +286,34 @@ fun ProfileEditPage(
             }
         }
     }
+    }
+}
+
+@Composable
+private fun ProfileCoverAction(
+    label: String,
+    icon: List<String>,
+    appearance: AppearanceTheme,
+    onClick: () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.height(44.dp),
+        shape = RoundedCornerShape(999.dp),
+        color = appearance.mobileSurface.copy(alpha = 0.90f),
+        contentColor = appearance.mobileText,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            StrokeSvgIcon(icon, appearance.mobileText, iconSize = 16.dp)
+            Text(
+                text = label,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+            )
+        }
     }
 }

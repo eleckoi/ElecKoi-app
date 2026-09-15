@@ -133,7 +133,6 @@ internal class ChatBackgroundController(
                 isDraftLoading = false,
                 chatCharacterId = merged.session.characterId,
                 chatCharacterName = merged.session.characterName,
-                chatCharacterMode = merged.session.characterMode,
             )
         }
     }

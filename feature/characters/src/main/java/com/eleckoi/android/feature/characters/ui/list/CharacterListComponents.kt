@@ -2,7 +2,7 @@ package com.eleckoi.android.feature.characters.ui.list
 
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -22,9 +22,10 @@ import androidx.compose.ui.unit.sp
 import com.eleckoi.android.feature.characters.model.CharacterSlot
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.foundation.design.components.AppIconPaths
-import com.eleckoi.android.foundation.design.components.AvatarCircle
+import com.eleckoi.android.foundation.design.components.ListCharacterArtwork
+import com.eleckoi.android.foundation.design.components.MobileArtworkRowText
 import com.eleckoi.android.foundation.design.components.StrokeSvgIcon
-import com.eleckoi.android.foundation.design.components.mobileRootBackdropSample
+import com.eleckoi.android.foundation.design.components.mobileListHairline
 import com.eleckoi.android.foundation.design.components.themedListRowClickable
 
 @Composable
@@ -42,7 +43,7 @@ internal fun CharacterGroupHeader(
         modifier = modifier
             .fillMaxWidth()
             .height(46.dp)
-            .mobileRootBackdropSample(appearance)
+            .background(appearance.mobileSurface)
             .characterHeaderTap(enabled = clickEnabled, onClick = onClick)
             .padding(start = 17.dp, end = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -109,39 +110,43 @@ private fun Modifier.characterHeaderTap(
 internal fun CharacterListRow(
     character: CharacterSlot,
     appearance: AppearanceTheme,
+    useCoverArtwork: Boolean = false,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(62.dp)
+            .height(if (useCoverArtwork) 86.dp else 72.dp)
             .themedListRowClickable(appearance = appearance, onClick = onClick)
+            .mobileListHairline(
+                appearance = appearance,
+                startInset = 16.dp + (if (useCoverArtwork) 54.dp else 56.dp) + 8.dp,
+            )
             .padding(horizontal = 16.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AvatarCircle(characterName(character), 45, 16, appearance, characterAvatar(character))
-        Column(
+        ListCharacterArtwork(
+            name = characterName(character),
+            avatarPath = characterAvatar(character),
+            coverPath = characterCover(character),
+            useCover = useCoverArtwork,
+            appearance = appearance,
+            avatarSize = 56,
+            coverWidth = 54,
+            coverHeight = 72,
+            coverCornerRadius = 9,
+            fontSize = if (useCoverArtwork) 16 else 18,
+        )
+        MobileArtworkRowText(
+            title = characterName(character),
+            subtitle = characterSummary(character),
+            useCoverArtwork = useCoverArtwork,
+            appearance = appearance,
             modifier = Modifier
                 .weight(1f)
                 .padding(start = 8.dp),
-        ) {
-            Text(
-                characterName(character),
-                color = appearance.mobileText,
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                characterSummary(character),
-                color = appearance.mobileMuted.copy(alpha = 0.72f),
-                fontSize = 13.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
+        )
         StrokeSvgIcon(AppIconPaths.ChevronRight, appearance.mobileMuted, iconSize = 18.dp)
     }
 }

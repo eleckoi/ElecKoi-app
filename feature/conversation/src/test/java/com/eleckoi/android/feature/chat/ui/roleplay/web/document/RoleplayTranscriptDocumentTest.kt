@@ -7,6 +7,15 @@ import java.util.Base64
 
 class RoleplayTranscriptDocumentTest {
     @Test
+    fun lightRoleplayTextDoesNotInheritTheDarkWallpaperShadow() {
+        val document = buildRoleplayTranscriptDocument("")
+
+        assertTrue(document.contains("text-shadow: var(--roleplay-text-shadow);"))
+        assertTrue(document.contains("style.dark ? '0 0 1px rgba(0,0,0,.3)' : 'none'"))
+        assertFalse(document.contains("text-shadow: 0 0 2px rgba(0,0,0,.5);"))
+    }
+
+    @Test
     fun authorSdkIsEncodedInsteadOfInterpolatedIntoTheRendererScript() {
         val sdk = "const request = `author-${'$'}{Date.now()}`; // 中文"
 
@@ -292,6 +301,7 @@ class RoleplayTranscriptDocumentTest {
         assertTrue(document.contains("deliverEmbeddedAuthorResponse = response =>"))
         assertTrue(document.contains("pending.target === target"))
         assertTrue(document.contains("(0, eval)(sdkSource)"))
+        assertFalse(document.contains("const setOpeningFromTavernMessage"))
         assertFalse(document.contains("triggerSlash"))
         assertFalse(document.contains("window.parent.setChatMessages"))
     }

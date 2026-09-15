@@ -17,9 +17,7 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.S
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryTriggerMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isOpeningEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isPinnedEntry
-import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isRoleplayPlanEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.settingLibraryOpeningEntry
-import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.settingLibraryRoleplayPlanEntry
 import com.eleckoi.android.feature.studio.authoring.CreatorAuthoringContext
 import com.eleckoi.android.feature.studio.authoring.CreatorAuthoringException
 import com.eleckoi.android.feature.studio.authoring.creatorArray

@@ -31,21 +31,18 @@ import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryAgentReadStrategy
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryDynamicMode
-import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.DefaultRoleplayPlanContent
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryGroup
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPromptPosition
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryTriggerMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isFixedEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isHistoryCompactionEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isOpeningEntry
-import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isRoleplayPlanEntry
 import com.eleckoi.android.foundation.design.components.ConfirmDialog
 import com.eleckoi.android.foundation.design.components.PinnedStatusScaffold
 
 private class EntryEditorState {
     var orderPreviewExpanded by mutableStateOf(false)
     var confirmDelete by mutableStateOf(false)
-    var confirmRoleplayPlanReset by mutableStateOf(false)
     var keywordRulesExpanded by mutableStateOf(false)
     var subpage by mutableStateOf(EntryEditorSubpage.Editor)
 
@@ -63,14 +60,6 @@ private class EntryEditorState {
 
     fun closeDelete() {
         confirmDelete = false
-    }
-
-    fun requestRoleplayPlanReset() {
-        confirmRoleplayPlanReset = true
-    }
-
-    fun closeRoleplayPlanReset() {
-        confirmRoleplayPlanReset = false
     }
 
     fun openPositionPicker() {
@@ -127,7 +116,6 @@ internal fun EntryEditorPage(
     var conflictingOrder by remember(entry.id) { mutableStateOf<Int?>(null) }
     with(editorState) {
     val fixedOpening = entry.isOpeningEntry()
-    val fixedRoleplayPlan = entry.isRoleplayPlanEntry()
     val fixedHistoryCompaction = entry.isHistoryCompactionEntry()
     val fixedEntry = entry.isFixedEntry()
 
@@ -181,7 +169,6 @@ internal fun EntryEditorPage(
         EntryEditorTopBar(
             title = when {
                 fixedOpening -> "AI角色开场白"
-                fixedRoleplayPlan -> "角色扮演任务计划"
                 fixedHistoryCompaction -> "自动压缩摘要模板"
                 else -> genericPageTitle
             },
@@ -191,8 +178,8 @@ internal fun EntryEditorPage(
             menuExpanded = actionMenuExpanded,
             onMenuExpandedChange = { actionMenuExpanded = it },
             onDelete = ::requestDelete,
-            trailingActionLabel = if (fixedRoleplayPlan) "重置" else null,
-            onTrailingAction = ::requestRoleplayPlanReset,
+            trailingActionLabel = null,
+            onTrailingAction = {},
         )
         Column(
             modifier = Modifier
@@ -223,13 +210,7 @@ internal fun EntryEditorPage(
             }
             if (fixedEntry) {
                 Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp)) {
-                    if (fixedRoleplayPlan) {
-                        RoleplayPlanItemsEditor(
-                            content = entry.content,
-                            appearance = appearance,
-                            onChange = { value -> onEntryChange { it.copy(content = value) } },
-                        )
-                    } else if (fixedHistoryCompaction) {
+                    if (fixedHistoryCompaction) {
                         HistoryCompactionPromptEditor(
                             value = entry.content,
                             appearance = appearance,
@@ -458,19 +439,6 @@ internal fun EntryEditorPage(
             onConfirm = {
                 closeDelete()
                 onDeleteConfirmed()
-            },
-        )
-    }
-    if (confirmRoleplayPlanReset) {
-        ConfirmDialog(
-            title = "重置固定任务项？",
-            message = "当前任务项将替换为默认的两项内容。",
-            appearance = appearance,
-            confirmText = "重置",
-            onDismiss = ::closeRoleplayPlanReset,
-            onConfirm = {
-                closeRoleplayPlanReset()
-                onEntryChange { current -> current.copy(content = DefaultRoleplayPlanContent) }
             },
         )
     }

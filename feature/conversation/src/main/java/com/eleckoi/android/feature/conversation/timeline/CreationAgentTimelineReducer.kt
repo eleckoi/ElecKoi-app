@@ -36,14 +36,18 @@ object CreationAgentTimelineReducer {
                 step = event.step,
                 completedAtMillis = event.completedAtMillis,
             )
-            is AgentSessionEvent.AssistantDelta -> CreationTimelineMessageReducer.appendAssistantDelta(
-                timeline = timeline,
-                turnId = event.turnId,
-                itemId = event.itemId,
-                delta = event.delta,
-                messagePhase = event.phase,
-                phaseHeader = event.phaseHeader,
-            )
+            is AgentSessionEvent.AssistantDelta -> if (event.visible) {
+                CreationTimelineMessageReducer.appendAssistantDelta(
+                    timeline = timeline,
+                    turnId = event.turnId,
+                    itemId = event.itemId,
+                    delta = event.delta,
+                    messagePhase = event.phase,
+                    phaseHeader = event.phaseHeader,
+                )
+            } else {
+                timeline
+            }
             is AgentSessionEvent.ReasoningSummaryDelta -> CreationTimelineMessageReducer.updateReasoning(
                 timeline = timeline,
                 turnId = event.turnId,

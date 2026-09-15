@@ -37,6 +37,21 @@ internal class ChatTurnMetricsCollector {
             if (
                 boundary != null &&
                 boundary.firstTokenAtMillis == null &&
+                event.tokenObserved &&
+                event.observedAtMillis > 0L
+            ) {
+                boundary.firstTokenAtMillis = event.observedAtMillis
+                true
+            } else {
+                false
+            }
+        }
+
+        is AgentSessionEvent.ReasoningTextDelta -> {
+            val boundary = event.step?.let(steps::get)
+            if (
+                boundary != null &&
+                boundary.firstTokenAtMillis == null &&
                 event.delta.isNotBlank() &&
                 event.observedAtMillis > 0L
             ) {
@@ -63,7 +78,7 @@ internal class ChatTurnMetricsCollector {
         }
 
         is AgentSessionEvent.WorkItemStarted -> {
-            if (event.type == AgentWorkItemType.AssistantMessage || event.startedAtMillis <= 0L) {
+            if (event.type != AgentWorkItemType.Tool || event.startedAtMillis <= 0L) {
                 false
             } else {
                 toolStartedAt[event.itemId] = event.startedAtMillis
@@ -72,7 +87,18 @@ internal class ChatTurnMetricsCollector {
         }
 
         is AgentSessionEvent.TokenUsageUpdated -> {
-            usageByStep[event.step] = event.last
+            val previous = usageByStep.put(event.step, event.last)
+            metrics = metrics.copy(
+                inputTokens = metrics.inputTokens - (previous?.inputTokens ?: 0L) +
+                    event.last.inputTokens,
+                cacheReadTokens = metrics.cacheReadTokens - (previous?.cacheReadTokens ?: 0L) +
+                    event.last.cacheReadTokens,
+                cacheWriteTokens = metrics.cacheWriteTokens - (previous?.cacheWriteTokens ?: 0L) +
+                    event.last.cacheWriteTokens,
+                cacheUsageReported = metrics.cacheUsageReported || event.last.cacheUsageReported,
+                outputTokens = metrics.outputTokens - (previous?.outputTokens ?: 0L) +
+                    event.last.outputTokens,
+            )
             val promptPressure = event.last.inputTokens +
                 event.last.cacheReadTokens +
                 event.last.cacheWriteTokens
@@ -143,11 +169,6 @@ internal class ChatTurnMetricsCollector {
             } else {
                 0L
             },
-            inputTokens = metrics.inputTokens + (usage?.inputTokens ?: 0L),
-            cacheReadTokens = metrics.cacheReadTokens + (usage?.cacheReadTokens ?: 0L),
-            cacheWriteTokens = metrics.cacheWriteTokens + (usage?.cacheWriteTokens ?: 0L),
-            cacheUsageReported = metrics.cacheUsageReported || (usage?.cacheUsageReported == true),
-            outputTokens = metrics.outputTokens + (usage?.outputTokens ?: 0L),
         )
         return true
     }

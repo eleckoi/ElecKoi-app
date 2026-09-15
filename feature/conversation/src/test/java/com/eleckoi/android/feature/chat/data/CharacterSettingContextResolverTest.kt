@@ -80,7 +80,9 @@ class CharacterSettingContextResolverTest {
                 AgentContextAnchor.BeforeToolContext,
                 AgentContextAnchor.BeforeHistory,
                 AgentContextAnchor.AfterHistory,
-                AgentContextAnchor.AfterHistory,
+                AgentContextAnchor.BeforeLatestUserInput,
+                AgentContextAnchor.AfterLatestUserInput,
+                AgentContextAnchor.BeforeToolFlow,
                 AgentContextAnchor.AfterToolFlow,
             ),
             resolved.map { it.anchor },
@@ -93,6 +95,8 @@ class CharacterSettingContextResolverTest {
                 AgentContextRole.User,
                 AgentContextRole.User,
                 AgentContextRole.Assistant,
+                AgentContextRole.User,
+                AgentContextRole.User,
             ),
             resolved.map { it.role },
         )
@@ -189,7 +193,6 @@ class CharacterSettingContextResolverTest {
                 ),
             ),
             groups = emptyList(),
-            fixedRoleplayPlanItems = emptyList(),
             keywordStrategyEntries = listOf(keywordEntry),
         )
 
@@ -258,7 +261,10 @@ class CharacterSettingContextResolverTest {
 
         assertEquals(listOf("after-history", "before-tool-flow"), resolved.map { it.id })
         assertEquals(listOf(1, 2), resolved.map { it.order })
-        assertTrue(resolved.all { it.anchor == AgentContextAnchor.AfterHistory })
+        assertEquals(
+            listOf(AgentContextAnchor.AfterHistory, AgentContextAnchor.BeforeToolFlow),
+            resolved.map { it.anchor },
+        )
     }
 
     @Test

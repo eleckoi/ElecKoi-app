@@ -44,13 +44,12 @@ interface ChatDao {
         """
         SELECT * FROM chat_sessions
         WHERE characterId = :characterId
-            AND characterMode = :characterMode
             AND historyUserMessageCount > 0
         ORDER BY updatedAt DESC
         LIMIT 1
         """,
     )
-    fun latestSession(characterId: String, characterMode: String): ChatSessionRecord?
+    fun latestSession(characterId: String): ChatSessionRecord?
 
     @Transaction
     @Query("SELECT * FROM chat_sessions WHERE id = :sessionId LIMIT 1")
@@ -70,9 +69,6 @@ interface ChatDao {
     fun upsertCharacterSnapshot(snapshot: ChatSessionCharacterSnapshotEntity)
 
     @Upsert
-    fun upsertModelSettings(settings: ChatSessionModelSettingsEntity)
-
-    @Upsert
     fun upsertVariableStates(states: List<ChatSessionVariableStateEntity>)
 
     @Query("UPDATE chat_sessions SET updatedAt = :updatedAt WHERE id = :sessionId AND updatedAt != :updatedAt")
@@ -84,11 +80,11 @@ interface ChatDao {
     @Query(
         """
         DELETE FROM chat_sessions
-        WHERE characterId = :characterId AND characterMode = :characterMode
+        WHERE characterId = :characterId
             AND historyUserMessageCount = 0
         """,
     )
-    fun deleteUnstartedSessions(characterId: String, characterMode: String)
+    fun deleteUnstartedSessions(characterId: String)
 
     @Query("DELETE FROM chat_sessions WHERE characterId IN (:characterIds)")
     fun deleteSessionsForCharacters(characterIds: List<String>)

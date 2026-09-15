@@ -4,12 +4,12 @@ import com.eleckoi.android.engine.agent.api.AgentPermissionMode
 import com.eleckoi.android.foundation.serialization.ElecKoiJson
 import com.eleckoi.android.foundation.serialization.ElecKoiPrettyJson
 import com.eleckoi.android.feature.characters.model.CharacterCard
-import com.eleckoi.android.feature.characters.model.CharacterMode
 import com.eleckoi.android.feature.chat.model.ChatImageAttachment
 import com.eleckoi.android.feature.chat.model.ChatSession
+import com.eleckoi.android.feature.chat.model.ChatSessionGenerationStats
+import com.eleckoi.android.feature.chat.model.MessageRole
 import com.eleckoi.android.feature.chat.model.ChatToolCallRecord
 import com.eleckoi.android.feature.chat.model.ChatUserImageAttachment
-import com.eleckoi.android.feature.modelconfig.model.ChatModelSelection
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
@@ -49,19 +49,6 @@ internal fun characterPersonaFromJsonString(
         ElecKoiJson.decodeFromString<CharacterPersonaJson>(value.ifBlank { "{}" })
     }.getOrDefault(CharacterPersonaJson())
     return persona.toDomain(characterName, characterAvatar)
-}
-
-internal fun modelSettingsJsonString(settings: Map<String, ChatModelSelection>): String {
-    return ElecKoiJson.encodeToString(
-        settings.mapValues { (_, selection) -> ChatModelSelectionJson.fromDomain(selection) },
-    )
-}
-
-internal fun modelSettingsFromJsonString(value: String): Map<String, ChatModelSelection> {
-    return runCatching {
-        ElecKoiJson.decodeFromString<Map<String, ChatModelSelectionJson>>(value.ifBlank { "{}" })
-            .mapValues { (key, selection) -> selection.toDomain(key) }
-    }.getOrDefault(emptyMap())
 }
 
 internal fun toolCallsJsonString(calls: List<ChatToolCallRecord>): String {
@@ -121,8 +108,6 @@ private data class ChatSessionJson(
     val characterName: String = "",
     @SerialName("character_avatar")
     val characterAvatar: String = "",
-    @SerialName("character_mode")
-    val characterMode: String = CharacterMode.Agent.storageValue,
     @SerialName("permission_mode")
     val permissionMode: String = AgentPermissionMode.AskForApproval.name,
     @SerialName("character_persona")
@@ -131,15 +116,16 @@ private data class ChatSessionJson(
     val createdAt: String = "",
     @SerialName("updated_at")
     val updatedAt: String = "",
-    @SerialName("model_settings")
-    val modelSettings: Map<String, ChatModelSelectionJson> = emptyMap(),
     @SerialName("initial_variable_state_json")
     val initialVariableStateJson: String = "",
     @SerialName("variable_state_json")
     val variableStateJson: String = "",
+    @SerialName("generation_stats")
+    val generationStats: ChatSessionGenerationStatsJson? = null,
     val messages: List<ChatMessageJson> = emptyList(),
 ) {
     fun toDomain(): ChatSession {
+        val domainMessages = messages.map { it.toDomain() }
         return ChatSession(
             id = id,
             workspaceId = workspaceId,
@@ -148,16 +134,16 @@ private data class ChatSessionJson(
             characterName = characterName,
             characterAvatar = characterAvatar,
             characterPersona = characterPersona.toDomain(characterName, characterAvatar),
-            characterMode = CharacterMode.fromStorage(characterMode).storageValue,
             permissionMode = AgentPermissionMode.entries.firstOrNull {
                 it.name.equals(permissionMode, ignoreCase = true)
             } ?: AgentPermissionMode.AskForApproval,
-            messages = messages.map { it.toDomain() },
+            messages = domainMessages,
             createdAt = createdAt,
             updatedAt = updatedAt,
-            modelSettings = modelSettings.mapValues { (key, selection) -> selection.toDomain(key) },
             initialVariableStateJson = initialVariableStateJson,
             variableStateJson = variableStateJson,
+            generationStats = generationStats?.takeIf { it.version == 1 }?.toDomain()
+                ?: inferLegacyGenerationStats(domainMessages),
         )
     }
 
@@ -170,20 +156,38 @@ private data class ChatSessionJson(
                 characterId = session.characterId,
                 characterName = session.characterName,
                 characterAvatar = session.characterAvatar,
-                characterMode = CharacterMode.fromStorage(session.characterMode).storageValue,
                 permissionMode = session.permissionMode.name,
                 characterPersona = CharacterPersonaJson.fromDomain(session.characterPersona),
                 createdAt = session.createdAt,
                 updatedAt = session.updatedAt,
-                modelSettings = session.modelSettings.mapValues { (_, selection) ->
-                    ChatModelSelectionJson.fromDomain(selection)
-                },
                 initialVariableStateJson = session.initialVariableStateJson,
                 variableStateJson = session.variableStateJson,
+                generationStats = ChatSessionGenerationStatsJson.fromDomain(session.generationStats),
                 messages = session.messages.map(ChatMessageJson::fromDomain),
             )
         }
     }
+}
+
+private fun inferLegacyGenerationStats(
+    messages: List<com.eleckoi.android.feature.chat.model.ChatMessage>,
+): ChatSessionGenerationStats {
+    val runtimeThreadId = messages.asReversed()
+        .firstOrNull { it.role == MessageRole.Assistant && it.runtimeThreadId.isNotBlank() }
+        ?.runtimeThreadId
+        .orEmpty()
+    if (runtimeThreadId.isBlank()) return ChatSessionGenerationStats()
+    val matching = messages.filter {
+        it.role == MessageRole.Assistant && it.runtimeThreadId == runtimeThreadId
+    }
+    return ChatSessionGenerationStats(
+        runtimeThreadId = runtimeThreadId,
+        metrics = matching.fold(com.eleckoi.android.feature.chat.model.ChatGenerationMetrics()) { total, message ->
+            total + message.generationMetrics
+        },
+        contextWindowUsage = matching.asReversed()
+            .firstNotNullOfOrNull { it.contextWindowUsage },
+    )
 }
 
 @Serializable
@@ -194,8 +198,6 @@ private data class CharacterPersonaJson(
     val assistantAvatar: String = "",
     @SerialName("assistant_cover")
     val assistantCover: String = "",
-    @SerialName("assistant_prompt")
-    val assistantPrompt: String = "",
     @SerialName("image_prompt")
     val imagePrompt: String = "",
     val opening: String = "",
@@ -218,7 +220,6 @@ private data class CharacterPersonaJson(
             assistantName = assistantName.ifBlank { characterName },
             assistantAvatar = assistantAvatar.ifBlank { characterAvatar },
             assistantCover = assistantCover,
-            assistantPrompt = assistantPrompt,
             imagePrompt = imagePrompt,
             opening = opening,
             showOpening = showOpening,
@@ -235,7 +236,6 @@ private data class CharacterPersonaJson(
                 assistantName = persona.assistantName,
                 assistantAvatar = persona.assistantAvatar,
                 assistantCover = persona.assistantCover,
-                assistantPrompt = persona.assistantPrompt,
                 imagePrompt = persona.imagePrompt,
                 opening = persona.opening,
                 showOpening = persona.showOpening,

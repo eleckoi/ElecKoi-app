@@ -3,6 +3,8 @@ package com.eleckoi.android.app.service
 import android.graphics.Bitmap
 import com.eleckoi.android.feature.preferences.UiPreferences
 import com.eleckoi.android.feature.preferences.UiPreferencesRepository
+import com.eleckoi.android.feature.preferences.AppearanceMode
+import com.eleckoi.android.feature.preferences.NewCharacterBackground
 import com.eleckoi.android.feature.settings.api.AppearanceService
 import com.eleckoi.android.feature.settings.data.appearance.AppearanceRepository
 import com.eleckoi.android.foundation.design.AppearanceTheme
@@ -10,7 +12,7 @@ import kotlinx.coroutines.flow.Flow
 
 internal class AppearanceServiceImpl(
     private val appearance: AppearanceRepository,
-    uiPreferences: UiPreferencesRepository,
+    private val uiPreferences: UiPreferencesRepository,
 ) : AppearanceService {
     override val uiPreferencesFlow: Flow<UiPreferences> = uiPreferences.preferencesFlow
 
@@ -32,6 +34,13 @@ internal class AppearanceServiceImpl(
     ): AppearanceTheme = appearance.saveRootBackgroundTuning(opacity, blur, scrim)
 
     override suspend fun clearRootBackground(): AppearanceTheme = appearance.clearRootBackground()
+
+    override suspend fun saveAppearanceMode(mode: AppearanceMode): UiPreferences =
+        uiPreferences.setAppearanceMode(mode)
+
+    override suspend fun saveNewCharacterBackground(
+        background: NewCharacterBackground,
+    ): UiPreferences = uiPreferences.setNewCharacterBackground(background)
 
     override suspend fun saveAppearanceTheme(theme: AppearanceTheme): AppearanceTheme = appearance.save(theme)
 

@@ -21,7 +21,6 @@ data class ChatSessionEntity(
     val characterId: String,
     val characterName: String,
     val characterAvatar: String,
-    val characterMode: String,
     val permissionMode: String = "AskForApproval",
     /** Counts and preview text derived from the normalized Room ledger. */
     val historySummary: String,
@@ -47,21 +46,6 @@ data class ChatSessionCharacterSnapshotEntity(
 )
 
 @Entity(
-    tableName = "chat_session_model_settings",
-    primaryKeys = ["sessionId"],
-    foreignKeys = [ForeignKey(
-        entity = ChatSessionEntity::class,
-        parentColumns = ["id"],
-        childColumns = ["sessionId"],
-        onDelete = ForeignKey.CASCADE,
-    )],
-)
-data class ChatSessionModelSettingsEntity(
-    val sessionId: String,
-    val settingsJson: String,
-)
-
-@Entity(
     tableName = "chat_session_variable_states",
     primaryKeys = ["sessionId", "kind"],
     foreignKeys = [ForeignKey(
@@ -83,8 +67,6 @@ data class ChatSessionRecord(
     @Embedded val session: ChatSessionEntity,
     @Relation(parentColumn = "id", entityColumn = "sessionId")
     val characterSnapshot: ChatSessionCharacterSnapshotEntity?,
-    @Relation(parentColumn = "id", entityColumn = "sessionId")
-    val modelSettings: ChatSessionModelSettingsEntity?,
     @Relation(parentColumn = "id", entityColumn = "sessionId")
     val variableStates: List<ChatSessionVariableStateEntity>,
 )

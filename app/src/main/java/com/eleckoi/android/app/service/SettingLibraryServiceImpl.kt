@@ -11,7 +11,6 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.S
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryVersion
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isFixedEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isOpeningEntry
-import com.eleckoi.android.feature.characters.model.CharacterMode
 import com.eleckoi.android.feature.chat.data.ChatSessionStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -65,7 +64,6 @@ internal class SettingLibraryServiceImpl(
         return sessions.chatList()
             .asSequence()
             .filter { session -> session.characterId == characterId }
-            .filter { session -> session.characterMode == CharacterMode.Story.storageValue }
             .mapNotNull { session ->
                 libraries[session.id]?.let { library ->
                     SettingLibraryConversation(
@@ -229,7 +227,6 @@ internal class SettingLibraryServiceImpl(
             .orEmpty()
         sessions.replaceUnstartedOpening(
             characterId = library.characterId,
-            characterMode = CharacterMode.Story.storageValue,
             content = opening,
         )
     }

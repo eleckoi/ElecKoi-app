@@ -65,9 +65,6 @@ internal fun missingMediaResponse(): WebResourceResponse = WebResourceResponse(
 )
 
 internal const val NativeObjectName = "ElecKoiTranscript"
-internal const val MaxBridgeMessageBytes = 512 * 1024
-internal const val MaxNativeCommandBytes = 256 * 1024
+internal const val MaxBridgeMessageBytes = 32 * 1024 * 1024
+internal const val MaxNativeCommandBytes = 32 * 1024 * 1024
 internal const val IngressChunkCharacters = 48 * 1024
-internal val ExternalSchemes = setOf("https", "http", "mailto", "tel")
-internal val FrontendNetworkResourceSchemes = setOf("https", "http")
-internal val InlineResourceSchemes = setOf("data", "blob", "about")

@@ -1,7 +1,7 @@
 package com.eleckoi.android.feature.chat.model
 
 import com.eleckoi.android.feature.characters.model.CharacterCard
-import com.eleckoi.android.feature.characters.model.CharacterMode
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibrary
 import com.eleckoi.android.feature.chat.model.content.ToolCallState
 import com.eleckoi.android.engine.agent.api.AgentCommandAction
 import com.eleckoi.android.engine.agent.api.AgentFileChange
@@ -9,8 +9,8 @@ import com.eleckoi.android.engine.agent.api.AgentMessagePhase
 import com.eleckoi.android.engine.agent.api.AgentPermissionMode
 import com.eleckoi.android.engine.agent.api.AgentWorkItemType
 import com.eleckoi.android.engine.generation.model.ModelConfig
-import com.eleckoi.android.feature.modelconfig.model.ChatModelSelection
-import com.eleckoi.android.feature.modelconfig.model.ModelParameters
+import java.math.BigDecimal
+import java.math.RoundingMode
 
 const val OpeningMessageId: String = "opening"
 const val DefaultGeneratedImageWidth: Int = 832
@@ -58,6 +58,13 @@ data class ChatUserImageAttachment(
     val bytes: Long = 0L,
     val imageWidth: Int = 0,
     val imageHeight: Int = 0,
+)
+
+/** Base64 image submitted by an authored chat frontend before admission into app-private storage. */
+data class ChatEncodedImageInput(
+    val mediaType: String,
+    val data: String,
+    val displayName: String = "",
 )
 
 data class ChatMessage(
@@ -116,9 +123,24 @@ data class ChatGenerationMetrics(
     val billedInputTokens: Long
         get() = inputTokens + cacheReadTokens + cacheWriteTokens
 
-    val cacheHitPercent: Int?
-        get() = billedInputTokens.takeIf { cacheUsageReported && it > 0L }
-            ?.let { total -> ((cacheReadTokens * 100L + total / 2L) / total).toInt() }
+    val cacheHitPercent: String?
+        get() {
+            val total = billedInputTokens.takeIf { it > 0L } ?: return null
+            val missed = inputTokens + cacheWriteTokens
+            if (missed == 0L) return "100"
+            val percentage = BigDecimal.valueOf(cacheReadTokens)
+                .multiply(BigDecimal.valueOf(100L))
+                .divide(BigDecimal.valueOf(total), 24, RoundingMode.HALF_UP)
+            val integer = percentage.setScale(0, RoundingMode.HALF_UP)
+            if (integer < BigDecimal.valueOf(100L)) return integer.toPlainString()
+            for (scale in 1..24) {
+                val rounded = percentage.setScale(scale, RoundingMode.HALF_UP)
+                if (rounded < BigDecimal.valueOf(100L)) {
+                    return rounded.stripTrailingZeros().toPlainString()
+                }
+            }
+            return percentage.stripTrailingZeros().toPlainString()
+        }
 
     operator fun plus(other: ChatGenerationMetrics) = ChatGenerationMetrics(
         turns = turns + other.turns,
@@ -148,6 +170,13 @@ data class ChatContextWindowUsage(
     val latestTokens: Long,
     val totalTokens: Long,
     val modelContextWindow: Long? = null,
+)
+
+/** DSH session-level execution projection, independent from the paged message window. */
+data class ChatSessionGenerationStats(
+    val runtimeThreadId: String = "",
+    val metrics: ChatGenerationMetrics = ChatGenerationMetrics(),
+    val contextWindowUsage: ChatContextWindowUsage? = null,
 )
 
 fun Iterable<ChatMessage>.generationMetrics(): ChatGenerationMetrics =
@@ -214,21 +243,20 @@ data class ChatSession(
     val characterName: String,
     val characterAvatar: String,
     val characterPersona: CharacterCard,
-    val characterMode: String = CharacterMode.Agent.storageValue,
     val permissionMode: AgentPermissionMode = AgentPermissionMode.AskForApproval,
     val messages: List<ChatMessage>,
     val createdAt: String = "",
     val updatedAt: String,
-    val modelSettings: Map<String, ChatModelSelection> = emptyMap(),
     val initialVariableStateJson: String = "",
     val variableStateJson: String = "",
+    val generationStats: ChatSessionGenerationStats = ChatSessionGenerationStats(),
 )
 
 data class ChatDraft(
     val session: ChatSession,
     val selectedModelConfig: ModelConfig,
     val selectedModel: String,
-    val modelParameters: ModelParameters = ModelParameters(),
+    val settingLibrary: SettingLibrary? = null,
     val openingOptions: List<ChatOpeningOption> = emptyList(),
     val selectedOpeningOptionId: String = "",
     val openingSelectionEnabled: Boolean = false,
@@ -237,16 +265,20 @@ data class ChatDraft(
 data class ChatOpeningOption(
     val id: String,
     val title: String,
+    val content: String = "",
+    val initialVariableStateJson: String = "{}",
 )
 
 data class ChatListItem(
     val id: String,
     val title: String,
     val characterId: String,
-    val characterMode: String = CharacterMode.Agent.storageValue,
     val characterName: String,
     val characterAvatar: String,
     val summary: String,
     val updatedAt: String,
     val messageCount: Int,
+    /** PC-compatible cover artwork; callers fall back to [characterAvatar] when it is absent. */
+    val characterCover: String = "",
+    val createdAt: String = "",
 )

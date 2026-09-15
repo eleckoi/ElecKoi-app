@@ -32,6 +32,7 @@ sealed interface ProfileIntent {
     data class SaveName(val name: String) : ProfileIntent
     data class SaveAvatars(val files: Map<AvatarSlot, File>) : ProfileIntent
     data class SaveCover(val coverUri: Uri) : ProfileIntent
+    data object ClearCover : ProfileIntent
 }
 
 sealed interface ProfileEffect {
@@ -59,6 +60,7 @@ class ProfileViewModel(
                 profileService.saveUserAvatars(intent.files)
             }
             is ProfileIntent.SaveCover -> save { profileService.saveUserCover(intent.coverUri) }
+            ProfileIntent.ClearCover -> save { profileService.clearUserCover() }
         }
     }
 

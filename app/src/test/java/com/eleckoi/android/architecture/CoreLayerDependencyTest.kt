@@ -74,7 +74,7 @@ class CoreLayerDependencyTest {
     }
 
     private fun sourceRoot(): File {
-        val workingDirectory = File(checkNotNull(System.getProperty("user.dir")))
+        val workingDirectory = File(".").canonicalFile
         return listOf(
             File(workingDirectory, "src/main/java/com/eleckoi/android"),
             File(workingDirectory, "app/src/main/java/com/eleckoi/android"),

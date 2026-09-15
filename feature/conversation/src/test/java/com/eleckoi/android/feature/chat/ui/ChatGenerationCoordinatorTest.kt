@@ -75,14 +75,21 @@ class ChatGenerationCoordinatorTest {
             }
         } as ChatService
         val state = AtomicReference(ChatUiState(draft = originalDraft))
+        val changed = AtomicReference<List<Triple<String, String, List<String>>>>(emptyList())
+        val publishedAssistantIds = AtomicReference<List<String>>(emptyList())
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val coordinator = ChatGenerationCoordinator(
             scope = scope,
             chatService = service,
             state = state::get,
             updateState = { transform -> state.updateAndGet(transform) },
-            showModeConflictIfNeeded = { _, _ -> false },
             onStopRequested = {},
+            onMessagesChanged = { conversationId, reason, ids ->
+                changed.updateAndGet { it + Triple(conversationId, reason, ids) }
+                state.get().generationPresentation?.assistantMessageId?.let { messageId ->
+                    publishedAssistantIds.updateAndGet { it + messageId }
+                }
+            },
         )
 
         try {
@@ -90,12 +97,125 @@ class ChatGenerationCoordinatorTest {
 
             assertTrue("模型回合没有启动", modelTurnStarted.await(2, TimeUnit.SECONDS))
             assertEquals(
+                listOf(Triple("session-1", "regenerated", listOf("user-1", "assistant-1"))),
+                changed.get(),
+            )
+            assertEquals(listOf("assistant-1"), publishedAssistantIds.get())
+            assertEquals(
                 "模型开始前应只保留用户消息，不能保留旧回复或创建空 AI 行",
                 listOf(user),
                 state.get().draft?.session?.messages,
             )
         } finally {
             releaseModelTurn.countDown()
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `sent is published once after the user turn is persisted not after the model finishes`() {
+        val session = ChatSession(
+            id = "session-1", title = "", characterId = "", characterName = "",
+            characterAvatar = "", characterPersona = CharacterCard(),
+            messages = emptyList(), updatedAt = "",
+        )
+        val draft = ChatDraft(session = session, selectedModelConfig = ModelConfig(), selectedModel = "model")
+        val user = ChatMessage("user-1", MessageRole.User, "你好")
+        val persisted = draft.copy(session = session.copy(messages = listOf(user)))
+        val releaseModel = CountDownLatch(1)
+        val service = Proxy.newProxyInstance(
+            ChatService::class.java.classLoader, arrayOf(ChatService::class.java),
+        ) { _, method, args ->
+            when (method.name) {
+                "sendMessage" -> {
+                    @Suppress("UNCHECKED_CAST")
+                    val persistedCallback = args!![4] as (ChatDraft, String) -> Unit
+                    persistedCallback(persisted, user.id)
+                    releaseModel.await(2, TimeUnit.SECONDS)
+                    ChatSendResult(persisted)
+                }
+                "isStreamCancelled" -> false
+                else -> error("Unexpected ChatService call: ${method.name}")
+            }
+        } as ChatService
+        val state = AtomicReference(ChatUiState(draft = draft))
+        val event = AtomicReference<List<Triple<String, String, List<String>>>>(emptyList())
+        val emitted = CountDownLatch(1)
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val coordinator = ChatGenerationCoordinator(
+            scope = scope, chatService = service, state = state::get,
+            updateState = { transform -> state.updateAndGet(transform) },
+            onStopRequested = {},
+            onMessagesChanged = { id, reason, ids ->
+                event.updateAndGet { it + Triple(id, reason, ids) }
+                emitted.countDown()
+            },
+        )
+        try {
+            coordinator.send("你好")
+            assertTrue(emitted.await(2, TimeUnit.SECONDS))
+            assertEquals(listOf(Triple("session-1", "sent", listOf("user-1"))), event.get())
+            assertEquals(listOf(user), state.get().draft?.session?.messages)
+            releaseModel.countDown()
+        } finally {
+            releaseModel.countDown()
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `editing the user text reports edited rather than regenerated`() {
+        val user = ChatMessage("user-1", MessageRole.User, "原文")
+        val oldReply = ChatMessage("reply-1", MessageRole.Assistant, "旧回复")
+        val session = ChatSession(
+            id = "session-1", title = "", characterId = "", characterName = "",
+            characterAvatar = "", characterPersona = CharacterCard(),
+            messages = listOf(user, oldReply), updatedAt = "",
+        )
+        val draft = ChatDraft(session = session, selectedModelConfig = ModelConfig(), selectedModel = "model")
+        val editedUser = user.copy(content = "新原文")
+        val truncated = draft.copy(session = session.copy(messages = listOf(editedUser)))
+        val prepared = PreparedChatRegeneration(
+            truncatedDraft = truncated, session = truncated.session,
+            prompt = editedUser.content, config = ModelConfig(), pendingMessageId = "new-reply-1",
+        )
+        val modelStarted = CountDownLatch(1)
+        val releaseModel = CountDownLatch(1)
+        val service = Proxy.newProxyInstance(
+            ChatService::class.java.classLoader, arrayOf(ChatService::class.java),
+        ) { _, method, _ ->
+            when (method.name) {
+                "prepareRegeneration" -> prepared
+                "runPreparedRegeneration" -> {
+                    modelStarted.countDown()
+                    releaseModel.await(2, TimeUnit.SECONDS)
+                    ChatSendResult(truncated)
+                }
+                "isStreamCancelled" -> false
+                else -> error("Unexpected ChatService call: ${method.name}")
+            }
+        } as ChatService
+        val state = AtomicReference(ChatUiState(draft = draft, editingMessage = user, editInput = "新原文"))
+        val events = AtomicReference<List<Triple<String, String, List<String>>>>(emptyList())
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val coordinator = ChatGenerationCoordinator(
+            scope = scope, chatService = service, state = state::get,
+            updateState = { transform -> state.updateAndGet(transform) },
+            onStopRequested = {},
+            onMessagesChanged = { id, reason, ids ->
+                events.updateAndGet { it + Triple(id, reason, ids) }
+            },
+        )
+        try {
+            coordinator.submitEditedMessage()
+            assertTrue(modelStarted.await(2, TimeUnit.SECONDS))
+            assertEquals(
+                listOf(Triple("session-1", "edited", listOf("user-1", "new-reply-1"))),
+                events.get(),
+            )
+            assertEquals("新原文", state.get().draft?.session?.messages?.lastOrNull()?.content)
+        } finally {
+            releaseModel.countDown()
             scope.cancel()
         }
     }
@@ -165,7 +285,6 @@ class ChatGenerationCoordinatorTest {
                     }
                 }
             },
-            showModeConflictIfNeeded = { _, _ -> false },
             onStopRequested = {},
         )
 
@@ -220,7 +339,6 @@ class ChatGenerationCoordinatorTest {
                     if (!next.isSending && next.errorMessage == "模型失败") settled.countDown()
                 }
             },
-            showModeConflictIfNeeded = { _, _ -> false },
             onStopRequested = {},
         )
 
@@ -289,7 +407,6 @@ class ChatGenerationCoordinatorTest {
                     if (!next.isSending && next.draft == finalDraft) settled.countDown()
                 }
             },
-            showModeConflictIfNeeded = { _, _ -> false },
             onStopRequested = {},
         )
 

@@ -5,8 +5,6 @@ import com.eleckoi.android.engine.story.variables.runtime.VariableRuntimeService
 import com.eleckoi.android.engine.agent.api.AgentPermissionMode
 import com.eleckoi.android.engine.workspace.storage.CreatorWorkspaceRepository
 import com.eleckoi.android.feature.characters.data.CharacterRepository
-import com.eleckoi.android.feature.characters.model.CharacterCard
-import com.eleckoi.android.feature.characters.model.CharacterMode
 import com.eleckoi.android.feature.characters.model.CharacterSlot
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.data.SettingLibraryRepository
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isOpeningEntry
@@ -30,51 +28,21 @@ internal class ChatSessionCoordinator(
     private val variableConfig: VariableConfigRepository,
     private val variableRuntime: VariableRuntimeService,
     private val creatorWorkspaces: CreatorWorkspaceRepository,
-    private val modelSelections: ChatModelSelectionResolver,
     private val settleOrphanedPendingResponses: suspend (String) -> Unit,
 ) {
-    fun requireCurrentCharacterMode(session: ChatSession) {
-        requireCurrentCharacterMode(session.characterId, session.characterMode)
-    }
-
-    fun requireCurrentCharacterMode(characterId: String, requestedMode: String) {
-        val currentMode = characters.characterById(characterId)
-            ?.characterMode
-            ?.let(::normalizeCharacterMode)
-            ?: throw ElecKoiDataException("角色不存在")
-        val normalizedRequestedMode = normalizeCharacterMode(requestedMode)
-        if (currentMode != normalizedRequestedMode) {
-            val oldLabel = CharacterMode.fromStorage(normalizedRequestedMode).label
-            val currentLabel = CharacterMode.fromStorage(currentMode).label
-            throw ElecKoiDataException(
-                "这条聊天属于“${oldLabel}模式”，角色当前为“${currentLabel}模式”，不能跨模式继续对话",
-            )
-        }
-    }
-
     suspend fun createChat(
         characterId: String,
-        characterMode: String,
         permissionMode: AgentPermissionMode? = null,
     ): ChatSession {
         val character = characters.characterById(characterId)
             ?: throw ElecKoiDataException("角色不存在")
-        val mode = normalizeCharacterMode(characterMode)
         val now = nowIso()
-        val persona = sessions.personaSnapshot(character, mode)
+        val persona = sessions.personaSnapshot(character)
         val variables = variableConfig.load(character.id)
-        val openingMessage = if (CharacterMode.fromStorage(mode) == CharacterMode.Story) {
-            settingLibrary.load(character.id).entries
-                .firstOrNull { it.isOpeningEntry() && it.enabled }
-                ?.defaultOpeningMessage()
-        } else {
-            null
-        }
-        val opening = if (CharacterMode.fromStorage(mode) == CharacterMode.Story) {
-            openingMessage?.content?.trim().orEmpty()
-        } else {
-            openingSnapshot(persona)
-        }
+        val openingMessage = settingLibrary.load(character.id).entries
+            .firstOrNull { it.isOpeningEntry() && it.enabled }
+            ?.defaultOpeningMessage()
+        val opening = openingMessage?.content?.trim().orEmpty()
         val selectedInitialState = openingMessage?.initialVariableStateJson
             ?.takeIf(String::isNotBlank)
             ?: variables.initialStateJson.ifBlank { "{}" }
@@ -87,10 +55,9 @@ internal class ChatSessionCoordinator(
         } else {
             selectedInitialState
         }
-        val workspace = creatorWorkspaces.ensureCharacterModeWorkspace(
+        val workspace = creatorWorkspaces.ensureCharacterWorkspace(
             characterId = character.id,
-            characterMode = mode,
-            name = "${character.name.ifBlank { "角色" }} · ${CharacterMode.fromStorage(mode).label}",
+            name = "${character.name.ifBlank { "角色" }} · 剧情小说",
         )
         val initialMessages = opening.takeIf { it.isNotBlank() }?.let { content ->
             listOf(
@@ -111,13 +78,8 @@ internal class ChatSessionCoordinator(
             characterName = character.name,
             characterAvatar = character.avatar,
             characterPersona = persona,
-            characterMode = mode,
             permissionMode = permissionMode ?: workspace.permissionMode,
             messages = initialMessages,
-            modelSettings = modelSelections.default().let { selection ->
-                if (selection.configId.isBlank() || selection.model.isBlank()) emptyMap()
-                else mapOf("chat" to selection)
-            },
             createdAt = now,
             updatedAt = now,
             initialVariableStateJson = initialVariableState,
@@ -128,10 +90,8 @@ internal class ChatSessionCoordinator(
         return session
     }
 
-    suspend fun latestSession(
-        character: CharacterSlot,
-        characterMode: String,
-    ): ChatSession? = sessions.latest(character, characterMode)?.let { ensureWorkspaceBinding(it) }
+    suspend fun latestSession(character: CharacterSlot): ChatSession? =
+        sessions.latest(character)?.let { ensureWorkspaceBinding(it) }
 
     suspend fun lastActiveChatSession(): ChatSession? {
         val sessionId = uiPreferences.lastActiveChatSessionId()
@@ -139,15 +99,11 @@ internal class ChatSessionCoordinator(
         return loadRememberedSessionOrNull(sessionId)
     }
 
-    suspend fun rememberedChatSession(characterId: String, characterMode: String): ChatSession? {
-        val mode = normalizeCharacterMode(characterMode)
-        val sessionId = uiPreferences.activeChatSessionId(characterId, mode)
+    suspend fun rememberedChatSession(characterId: String): ChatSession? {
+        val sessionId = uiPreferences.activeChatSessionId(characterId)
         if (sessionId.isBlank()) return null
         return loadRememberedSessionOrNull(sessionId)
-            ?.takeIf { session ->
-                session.characterId == characterId &&
-                    normalizeCharacterMode(session.characterMode) == mode
-            }
+            ?.takeIf { session -> session.characterId == characterId }
     }
 
     private suspend fun loadRememberedSessionOrNull(sessionId: String): ChatSession? {
@@ -164,7 +120,6 @@ internal class ChatSessionCoordinator(
     suspend fun rememberChatSession(session: ChatSession): ChatSession {
         uiPreferences.setActiveChatSessionId(
             characterId = session.characterId,
-            characterMode = CharacterMode.fromStorage(session.characterMode).storageValue,
             sessionId = session.id,
         )
         return session
@@ -176,29 +131,19 @@ internal class ChatSessionCoordinator(
     }
 
     suspend fun ensureWorkspaceBinding(session: ChatSession): ChatSession {
-        val mode = CharacterMode.fromStorage(session.characterMode)
         val existing = session.workspaceId.takeIf(String::isNotBlank)
             ?.let { creatorWorkspaces.get(it) }
             ?.takeIf { workspace ->
                 workspace.linkedCharacterId == session.characterId &&
-                    workspace.linkedCharacterMode == mode.storageValue
+                    workspace.characterOwned
             }
         if (existing != null) return session
 
-        val workspace = creatorWorkspaces.ensureCharacterModeWorkspace(
+        val workspace = creatorWorkspaces.ensureCharacterWorkspace(
             characterId = session.characterId,
-            characterMode = mode.storageValue,
-            name = "${session.characterName.ifBlank { session.title }} · ${mode.label}",
+            name = "${session.characterName.ifBlank { session.title }} · 剧情小说",
         )
         return session.copy(workspaceId = workspace.id, updatedAt = nowIso()).also(sessions::write)
-    }
-
-    private fun openingSnapshot(persona: CharacterCard): String {
-        return persona.opening.trim().takeIf { persona.showOpening }.orEmpty()
-    }
-
-    fun normalizeCharacterMode(value: String): String {
-        return CharacterMode.fromStorage(value).storageValue
     }
 
 }

@@ -15,7 +15,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,73 +25,47 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.vector.ImageVector
-import coil3.compose.AsyncImage
-import com.eleckoi.android.foundation.design.R as DesignR
 import com.eleckoi.android.foundation.design.AppearanceTheme
+import com.eleckoi.android.feature.characters.model.CharactersPayload
 import com.eleckoi.android.feature.characters.model.UserProfile
+import com.eleckoi.android.feature.characters.ui.list.CharacterDrawerList
 import com.eleckoi.android.foundation.design.overlayScrim
-import java.io.File
-
-/**
- * A drawer row that leads somewhere off this screen. A blank [url] can still be supplied with a
- * local click action; with neither one, the row remains visibly unavailable.
- */
-internal data class MoreLinkRow(
-    val label: String,
-    val icon: List<String>,
-    val url: String = "",
-)
-
-private val MoreCommunityRow = MoreLinkRow("社区", AppIconPaths.UsersGroup)
-
-private val MoreDiscoverRows = listOf(
-    MoreLinkRow("设计资源平台", AppIconPaths.CardStack),
-)
 
 @Composable
 internal fun MobileMorePanel(
     visible: Boolean,
     user: UserProfile,
+    characters: CharactersPayload?,
+    useCoverArtwork: Boolean,
     appearance: AppearanceTheme,
     appUpdateAvailable: Boolean,
     onClose: () -> Unit,
     onOpenProfile: () -> Unit,
+    onToggleAllCharactersExpanded: () -> Unit,
+    onToggleCharacterGroupExpanded: (String) -> Unit,
+    onOpenCharacter: (String) -> Unit,
+    onSaveCharacters: (CharactersPayload) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenUpdate: () -> Unit,
 ) {
-    var showCommunityDialog by rememberSaveable { mutableStateOf(false) }
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val panelWidth = minOf(maxWidth * 0.84f, 360.dp)
         AnimatedVisibility(
@@ -113,123 +89,23 @@ internal fun MobileMorePanel(
                 modifier = Modifier
                     .width(panelWidth)
                     .fillMaxHeight()
-                    // Only the edge facing the dimmed page is rounded. The other three sit on
-                    // screen edges, where a radius would just leak a sliver of wallpaper.
-                    .clip(RoundedCornerShape(topEnd = 22.dp, bottomEnd = 22.dp))
                     .background(appearance.mobileSurface),
             ) {
-                val coverFile = remember(user.userCover) {
-                    user.userCover.takeIf { it.isNotBlank() }
-                        ?.let(::File)
-                        ?.takeIf(File::exists)
-                }
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(panelWidth / ProfileCoverAspectRatio)
-                        .background(appearance.mobileSurface),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .fillMaxHeight()
-                            .background(appearance.mobilePinnedBg),
-                    ) {
-                        AsyncImage(
-                            model = coverFile ?: DesignR.raw.default_user_profile_cover,
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop,
-                        )
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(
-                                            Color.Black.copy(alpha = 0.24f),
-                                            Color.Transparent,
-                                            appearance.mobileSurface.copy(alpha = 0.20f),
-                                            appearance.mobileSurface.copy(alpha = 0.72f),
-                                            appearance.mobileSurface,
-                                        ),
-                                        startY = 0f,
-                                    ),
-                                ),
-                        )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .statusBarsPadding()
-                            .padding(top = 4.dp, end = 6.dp),
-                    ) {
-                        IconButton(onClick = onClose) {
-                            Icon(
-                                Icons.Rounded.Close,
-                                contentDescription = "关闭",
-                                tint = Color.White,
-                            )
-                        }
-                    }
-                    Row(
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .fillMaxWidth()
-                            .padding(start = 20.dp, end = 52.dp, bottom = 18.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        // A white ring seats the avatar into the cover instead of leaving it
-                        // floating on top of whatever the photo happens to be behind it.
-                        Box(
-                            modifier = Modifier
-                                .size(64.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.92f))
-                                .noRippleClickable(onClick = onOpenProfile),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            AvatarCircle(
-                                name = user.userName.ifBlank { "用户" },
-                                size = 58,
-                                fontSize = 22,
-                                appearance = appearance,
-                                avatarPath = user.userAvatar,
-                                fallbackImage = DesignR.raw.default_user_avatar_circle,
-                            )
-                        }
-                        Column(modifier = Modifier.padding(start = 13.dp)) {
-                            Text(
-                                text = user.userName.ifBlank { "用户" },
-                                color = appearance.mobileText,
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                lineHeight = 23.sp,
-                            )
-                            Text(
-                                "在线 - WiFi",
-                                color = appearance.mobileMuted,
-                                fontSize = 14.sp,
-                                modifier = Modifier.padding(top = 4.dp),
-                            )
-                        }
-                    }
-                }
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .verticalScroll(rememberScrollState()),
-                ) {
-                    MoreLinkRow(
-                        row = MoreCommunityRow,
-                        appearance = appearance,
-                        onClose = onClose,
-                        onClick = { showCommunityDialog = true },
-                    )
-                    MoreDiscoverRows.forEach { row ->
-                        MoreLinkRow(row = row, appearance = appearance, onClose = onClose)
-                    }
-                }
+                SidebarProfileHeader(
+                    user = user,
+                    appearance = appearance,
+                    onOpenProfile = onOpenProfile,
+                )
+                CharacterDrawerList(
+                    characters = characters,
+                    appearance = appearance,
+                    useCoverArtwork = useCoverArtwork,
+                    onToggleAllCharactersExpanded = onToggleAllCharactersExpanded,
+                    onToggleCharacterGroupExpanded = onToggleCharacterGroupExpanded,
+                    onOpenCharacter = onOpenCharacter,
+                    onSaveCharacters = onSaveCharacters,
+                    modifier = Modifier.weight(1f),
+                )
                 // Laid out across rather than stacked: these are utilities, not destinations, and a
                 // horizontal strip claims a third of the height a list of full-width rows does.
                 Row(
@@ -262,11 +138,56 @@ internal fun MobileMorePanel(
             }
         }
     }
-    if (showCommunityDialog) {
-        MobileCommunityDialog(
-            appearance = appearance,
-            onDismiss = { showCommunityDialog = false },
-        )
+}
+
+@Composable
+private fun SidebarProfileHeader(
+    user: UserProfile,
+    appearance: AppearanceTheme,
+    onOpenProfile: () -> Unit,
+) {
+    val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(statusBarHeight + 92.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .height(62.dp)
+                .noRippleClickable(onClick = onOpenProfile)
+                .padding(horizontal = 20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(appearance.mobileSurface.copy(alpha = 0.90f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                AvatarCircle(
+                    name = user.userName.ifBlank { "用户" },
+                    size = 40,
+                    fontSize = 15,
+                    appearance = appearance,
+                    avatarPath = user.userAvatar,
+                )
+            }
+            Text(
+                text = user.userName.ifBlank { "用户" },
+                color = appearance.mobileText,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 11.dp),
+                maxLines = 1,
+            )
+            StrokeSvgIcon(AppIconPaths.ChevronRight, appearance.mobileMuted, iconSize = 18.dp)
+        }
     }
 }
 
@@ -296,62 +217,6 @@ private fun MoreFooterImageAction(
             fontSize = 12.sp,
             modifier = Modifier.padding(top = 5.dp),
         )
-    }
-}
-
-@Composable
-private fun MoreLinkRow(
-    row: MoreLinkRow,
-    appearance: AppearanceTheme,
-    onClose: () -> Unit,
-    onClick: (() -> Unit)? = null,
-) {
-    val uriHandler = LocalUriHandler.current
-    val action = onClick ?: row.url.takeIf(String::isNotBlank)?.let { url ->
-        {
-            onClose()
-            uriHandler.openUri(url)
-        }
-    }
-    val ready = action != null
-    val tint = if (ready) appearance.mobileText else appearance.mobileSoft
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(48.dp)
-            .then(
-                if (ready) {
-                    Modifier.noRippleClickable(onClick = action)
-                } else {
-                    Modifier
-                },
-            )
-            .padding(horizontal = 20.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        StrokeSvgIcon(row.icon, tint, iconSize = 21.dp)
-        Text(
-            text = row.label,
-            color = tint,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier
-                .padding(start = 13.dp)
-                .weight(1f),
-        )
-        if (ready) {
-            StrokeSvgIcon(AppIconPaths.ExternalLink, appearance.mobileSoft, iconSize = 16.dp)
-        } else {
-            Text(
-                text = "敬请期待",
-                color = appearance.mobileSoft,
-                fontSize = 11.sp,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(appearance.mobileSearchBg)
-                    .padding(horizontal = 7.dp, vertical = 2.dp),
-            )
-        }
     }
 }
 

@@ -49,6 +49,7 @@ import com.eleckoi.android.feature.chat.ui.layout.resolveChatBodyFontSizeSp
 import com.eleckoi.android.feature.chat.ui.layout.resolveChatBodyLineHeightSp
 import com.eleckoi.android.feature.chat.ui.layout.SocialBubbleTailWidth
 import com.eleckoi.android.feature.chat.ui.layout.SocialChatBubbleShape
+import com.eleckoi.android.sdk.author.AuthorChatGateway
 
 @Composable
 internal fun ChatMessageRow(
@@ -69,6 +70,7 @@ internal fun ChatMessageRow(
     lineHeightMultiplier: Float,
     letterSpacing: Float,
     paragraphSpacing: Float,
+    authorGateway: AuthorChatGateway,
     roleplayToolbarController: RoleplayToolbarController,
     onRegenerate: (ChatMessage) -> Unit,
     onRegenerateImage: (String, String) -> Unit,
@@ -109,7 +111,6 @@ internal fun ChatMessageRow(
     val openingPagerVisible = presentation.openingPagerVisible
     val name = presentation.name
     val avatarPath = presentation.avatarPath
-    val defaultAvatarImage = presentation.defaultAvatarImage
     val displayMessage = presentation.displayMessage
     val context = LocalContext.current
     val clipboardManager = remember(context) {
@@ -199,8 +200,6 @@ internal fun ChatMessageRow(
                     appearance = readingAppearance,
                     size = avatarSize,
                     shape = avatarShape,
-                    fallbackImage = defaultAvatarImage,
-                    showInitialWhenEmpty = !(isUser && avatarShape == ChatAvatarShape.Portrait),
                     onClick = if (isUser) onUserAvatarClick else onAssistantAvatarClick,
                 )
             }
@@ -282,6 +281,7 @@ internal fun ChatMessageRow(
                             fontSize = fontSize,
                             lineHeight = lineHeight,
                             letterSpacing = textLetterSpacing,
+                            authorGateway = authorGateway,
                             paragraphSpacing = paragraphSpacing,
                             messageContainerVisible = bubbleVisible,
                             visualGeneration = visualGeneration,

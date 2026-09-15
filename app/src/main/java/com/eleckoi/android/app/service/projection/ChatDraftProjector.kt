@@ -4,7 +4,6 @@ import com.eleckoi.android.engine.agent.eleckoi.conversation.LedgerMessage
 import com.eleckoi.android.engine.generation.config.ModelConfigRepository
 import com.eleckoi.android.engine.generation.model.ModelConfig
 import com.eleckoi.android.engine.display.MessageDisplayCompatibility
-import com.eleckoi.android.feature.characters.model.CharacterMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.data.SettingLibraryRepository
 import com.eleckoi.android.feature.characters.modes.story.regex.data.RegexRuleRepository
 import com.eleckoi.android.feature.characters.modes.story.regex.data.RegexRuleProcessor
@@ -13,6 +12,7 @@ import com.eleckoi.android.feature.characters.modes.story.regex.model.RegexRuleC
 import com.eleckoi.android.feature.characters.modes.story.regex.model.RegexRuleTarget
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isOpeningEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryOpeningMessage
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibrary
 import com.eleckoi.android.feature.chat.data.ChatSessionStore
 import com.eleckoi.android.feature.chat.data.rich.decorateRichDisplayReplacement
 import com.eleckoi.android.feature.chat.model.ChatDraft
@@ -73,11 +73,7 @@ internal class ChatDraftProjector(
         hasUserMessages: Boolean,
     ): ChatDraftProjectionContext {
         val collection = settings.loadModelConfigCollection()
-        val globalSelection = modelSelections.defaultCached(collection)
-        val selection = ChatModelSelectionPolicy.withSessionParameters(
-            global = globalSelection,
-            session = session.modelSettings["chat"],
-        )
+        val selection = modelSelections.defaultCached(collection)
         val selectedConfig = config
             ?.takeIf { it.id == selection.configId }
             ?: collection.chatConfigs.firstOrNull { it.id == selection.configId }
@@ -87,20 +83,18 @@ internal class ChatDraftProjector(
         val selectedModel = selection.model.ifBlank { selectedConfig.model }
         val regexConfig = regexRules.load(session.characterId)
         val regexRevision = regexRules.revision.value
-        val openingMessages = if (CharacterMode.fromStorage(session.characterMode) == CharacterMode.Story) {
-            settingLibrary.load(session.characterId).entries
-                .firstOrNull { it.isOpeningEntry() && it.enabled }
-                ?.openingMessages
-                .orEmpty()
-        } else {
-            emptyList()
-        }
+        val effectiveSettingLibrary = settingLibrary.loadEffective(session.characterId, session.id)
+        val openingMessages = effectiveSettingLibrary.entries
+            .firstOrNull { it.isOpeningEntry() && it.enabled }
+            ?.openingMessages
+            .orEmpty()
         return ChatDraftProjectionContext(
             selectedConfig = selectedConfig,
             selectedModel = selectedModel,
             selection = selection,
             regexConfig = regexConfig,
             regexRevision = regexRevision,
+            settingLibrary = effectiveSettingLibrary,
             openingMessages = openingMessages,
             hasUserMessages = hasUserMessages,
         )
@@ -137,9 +131,14 @@ internal class ChatDraftProjector(
             session = displaySession,
             selectedModelConfig = context.selectedConfig,
             selectedModel = context.selectedModel,
-            modelParameters = context.selection.parameters,
+            settingLibrary = context.settingLibrary,
             openingOptions = openingMessages.map { message ->
-                ChatOpeningOption(id = message.id, title = message.title)
+                ChatOpeningOption(
+                    id = message.id,
+                    title = message.title,
+                    content = message.content,
+                    initialVariableStateJson = message.initialVariableStateJson,
+                )
             },
             selectedOpeningOptionId = selectedOpeningId,
             openingSelectionEnabled = openingMessages.size > 1 &&
@@ -272,6 +271,7 @@ private data class ChatDraftProjectionContext(
     val selection: ChatModelSelection,
     val regexConfig: RegexRuleCollection,
     val regexRevision: Long,
+    val settingLibrary: SettingLibrary,
     val openingMessages: List<SettingLibraryOpeningMessage>,
     val hasUserMessages: Boolean,
 )

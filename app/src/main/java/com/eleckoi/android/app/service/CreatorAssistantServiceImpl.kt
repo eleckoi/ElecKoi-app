@@ -27,7 +27,6 @@ import com.eleckoi.android.engine.workspace.storage.CreatorWorkspaceRepository
 import com.eleckoi.android.feature.characters.data.CharacterRepository
 import com.eleckoi.android.feature.characters.model.AvatarSlot
 import com.eleckoi.android.feature.characters.model.CharacterCard
-import com.eleckoi.android.feature.characters.model.CharacterMode
 import com.eleckoi.android.feature.characters.model.CharacterSlot
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.data.SettingLibraryRepository
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibrary
@@ -60,9 +59,7 @@ internal class CreatorAssistantServiceImpl(
     private val variableRuntime: VariableRuntimeService,
     private val regexRules: RegexRuleRepository,
     private val mediaCacheDirectory: File,
-    private val isCreatorCapabilityEnabled: () -> Boolean,
-    private val imageModelConfigId: () -> String,
-    private val initializeCharacterTools: (characterId: String) -> Unit,
+    private val imageModelConfigId: suspend () -> String,
     private val rollbackCharacter: suspend (String) -> Unit,
 ) : CreatorAssistantService {
     private val ledger = RoomConversationLedger(database)
@@ -119,9 +116,9 @@ internal class CreatorAssistantServiceImpl(
 
     override suspend fun listCreatorWorkspaces(): List<CreatorWorkspace> =
         creatorWorkspaces.list()
-            // Character Agent workspaces share the same physical repository, but they are not
+            // Character chat workspaces share the same physical repository, but they are not
             // AI creator projects and must never appear in the creator assistant sidebar.
-            .filter { workspace -> workspace.linkedCharacterMode == null }
+            .filterNot { workspace -> workspace.characterOwned }
             .map { creatorLedger.withTimelines(it) }
 
     override suspend fun createCreatorWorkspace(
@@ -185,10 +182,8 @@ internal class CreatorAssistantServiceImpl(
                     assistantName = normalizedName,
                 ),
             )
-            characters.saveCharacterMode(named.id, CharacterMode.Story.storageValue)
             creatorWorkspaces.ensureCharacterContainer(named.id)
             settingLibrary.save(named.id, settingLibrary.load(named.id))
-            initializeCharacterTools(named.id)
             val workspace = creatorWorkspaces.attachCharacterRoot(
                 workspaceId = workspaceId,
                 characterId = named.id,
@@ -223,9 +218,6 @@ internal class CreatorAssistantServiceImpl(
         negativePrompt: String,
         displayName: String,
     ): CreatorMediaAsset {
-        check(isCreatorCapabilityEnabled()) {
-            "创作能力尚未启用，请在 AI 创作助手的工具页开启「创作能力」"
-        }
         return creatorMedia.generateCreatorMediaAsset(
             workspaceId,
             prompt,
@@ -519,7 +511,6 @@ internal class CreatorAssistantServiceImpl(
     override suspend fun creatorImageGenerationProvider() = withContext(Dispatchers.IO) {
         modelConfigs.loadModelConfigCollection().configs
             .firstOrNull { it.id == imageModelConfigId() }
-            ?.takeIf { isCreatorCapabilityEnabled() }
             ?.imageGenerationProvider()
     }
 

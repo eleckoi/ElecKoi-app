@@ -1,6 +1,5 @@
 package com.eleckoi.android.app.service
 
-import com.eleckoi.android.app.initializeMissingCharacterToolDefaults
 import com.eleckoi.android.engine.immersive.project.FrontendProjectRepository
 import com.eleckoi.android.engine.story.variables.config.VariableConfigRepository
 import com.eleckoi.android.engine.workspace.storage.CreatorWorkspaceRepository
@@ -29,10 +28,8 @@ internal class CharacterServiceImpl(
     private val variableConfig: VariableConfigRepository,
     private val frontendProjects: FrontendProjectRepository,
     private val creatorWorkspaces: CreatorWorkspaceRepository,
-    private val initializeCharacterTools: (characterId: String) -> Unit,
     private val regexRules: RegexRuleRepository,
     private val deleteWorkspace: suspend (String) -> Unit,
-    private val deleteCharacterTools: (Collection<String>) -> Unit,
     private val beforeDeleteCharacters: suspend (Collection<String>) -> Unit,
     private val cleanupRunner: PersistentCleanupRunner,
 ) : CharacterService {
@@ -57,15 +54,32 @@ internal class CharacterServiceImpl(
         creatorWorkspaces.deleteCharacterContainersExcept(retained)
         ensureCharacterContainers(retainedIds)
         val saved = characters.saveCharacters(prepared)
-        initializeMissingCharacterToolDefaults(existingIds, retainedIds, initializeCharacterTools)
         saved
     }
 
+    override suspend fun createCharacterDraft(group: String): CharacterSlot {
+        return characters.createCharacterDraft(group)
+    }
+
     override suspend fun createCharacter(group: String): CharacterSlot {
-        val character = characters.createCharacter(group)
-        creatorWorkspaces.ensureCharacterContainer(character.id)
-        initializeCharacterTools(character.id)
-        return character
+        return createCharacter(characters.createCharacterDraft(group))
+    }
+
+    override suspend fun createCharacter(
+        draft: CharacterSlot,
+        avatarFiles: Map<AvatarSlot, File>,
+    ): CharacterSlot = collectionChanges.withLock {
+        var created: CharacterSlot? = null
+        try {
+            created = characters.createCharacter(draft)
+            creatorWorkspaces.ensureCharacterContainer(created.id)
+            if (avatarFiles.isEmpty()) created else characters.saveCharacterAvatars(created.id, avatarFiles)
+        } catch (error: Throwable) {
+            created?.id?.let { characterId ->
+                runCatching { deleteCharacterNow(characterId) }.exceptionOrNull()?.let(error::addSuppressed)
+            }
+            throw error
+        }
     }
 
     override suspend fun createCharacterGroup(name: String): CharactersPayload {
@@ -105,7 +119,6 @@ internal class CharacterServiceImpl(
         variableConfig.deleteForCharacters(ids)
         frontendProjects.deleteForCharacters(ids)
         regexRules.deleteForCharacters(ids)
-        deleteCharacterTools(ids)
         deleteCharacterWorkspaces(setOf(characterId), deleteMatching = true)
         creatorWorkspaces.deleteCharacterContainer(characterId)
         characters.deleteCharacters(ids)
@@ -136,10 +149,6 @@ internal class CharacterServiceImpl(
         return characters.saveCharacterPersona(characterId, persona)
     }
 
-    override fun saveCharacterMode(characterId: String, characterMode: String): CharactersPayload {
-        return characters.saveCharacterMode(characterId, characterMode)
-    }
-
     private suspend fun ensureCharacterContainers(characterIds: Collection<String>) {
         characterIds.distinct().forEach { characterId ->
             creatorWorkspaces.ensureCharacterContainer(characterId)
@@ -154,7 +163,7 @@ internal class CharacterServiceImpl(
         creatorWorkspaces.list()
             .filter { workspace ->
                 val characterId = workspace.linkedCharacterId ?: return@filter false
-                workspace.linkedCharacterMode != null &&
+                workspace.characterOwned &&
                     ((characterId in characterIds) == deleteMatching)
             }
             .forEach { workspace -> deleteWorkspace(workspace.id) }

@@ -2,7 +2,6 @@ package com.eleckoi.android.engine.agent.adapter
 
 import com.eleckoi.android.engine.agent.adapter.request.AgentTurnRequestContext
 import com.eleckoi.android.engine.agent.api.AgentDynamicTool
-import com.eleckoi.android.engine.agent.tools.AgentToolScopes
 import com.eleckoi.android.engine.generation.model.ModelConfig
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -66,7 +65,7 @@ internal class ResponsesAdapterRouteRegistry(
         routeSubagentModelConfig: ModelConfig?,
         routeSystemInstructions: String,
         routeHistoryCompactionInstructions: String?,
-        routeToolScopeId: String,
+        routeEnabledToolGroupIds: Set<String>,
         routeDynamicTools: List<AgentDynamicTool>,
         routeRequestCaptureWorkspaceId: String,
         routeRequestCaptureConversationId: String,
@@ -91,7 +90,7 @@ internal class ResponsesAdapterRouteRegistry(
             subagentModelConfig = routeSubagentModelConfig,
             systemInstructions = routeSystemInstructions.trim(),
             historyCompactionInstructions = routeHistoryCompactionInstructions?.trim()?.takeIf(String::isNotBlank),
-            toolScopeId = AgentToolScopes.normalize(routeToolScopeId),
+            enabledToolGroupIds = routeEnabledToolGroupIds,
             dynamicTools = routeDynamicTools,
             requestCaptureWorkspaceId = routeRequestCaptureWorkspaceId,
             requestCaptureConversationId = routeRequestCaptureConversationId,

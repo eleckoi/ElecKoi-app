@@ -7,7 +7,6 @@ import com.eleckoi.android.feature.modelconfig.ui.settings.modelPickerItems
 import com.eleckoi.android.feature.modelconfig.ui.settings.removeManualModel
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Test
 
 class ManualModelManagementTest {
@@ -24,18 +23,16 @@ class ManualModelManagementTest {
     }
 
     @Test
-    fun `deleting selected manual model selects a remaining model and clears tool test result`() {
+    fun `deleting selected manual model selects a remaining model`() {
         val original = ModelConfig(
             model = manualModel.id,
             modelOptions = listOf(manualModel, providerModel),
-            supportsTools = true,
         )
 
         val removed = original.removeManualModel(manualModel.id)
 
         assertEquals(providerModel.id, removed.model)
         assertEquals(listOf(providerModel), modelPickerItems(removed))
-        assertNull(removed.supportsTools)
     }
 
     @Test
@@ -43,13 +40,11 @@ class ManualModelManagementTest {
         val original = ModelConfig(
             model = providerModel.id,
             modelOptions = listOf(manualModel, providerModel),
-            supportsTools = true,
         )
         val removed = original.removeManualModel(manualModel.id)
 
         assertEquals(providerModel.id, removed.model)
         assertEquals(listOf(providerModel), removed.modelOptions)
-        assertEquals(true, removed.supportsTools)
     }
 
     @Test

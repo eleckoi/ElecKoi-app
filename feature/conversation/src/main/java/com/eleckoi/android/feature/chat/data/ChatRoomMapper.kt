@@ -6,7 +6,6 @@ import com.eleckoi.android.feature.chat.model.ChatSession
 import com.eleckoi.android.feature.chat.model.MessageRole
 import com.eleckoi.android.foundation.storage.room.ChatSessionEntity
 import com.eleckoi.android.foundation.storage.room.ChatSessionCharacterSnapshotEntity
-import com.eleckoi.android.foundation.storage.room.ChatSessionModelSettingsEntity
 import com.eleckoi.android.foundation.storage.room.ChatSessionRecord
 import com.eleckoi.android.foundation.storage.room.ChatSessionVariableStateEntity
 
@@ -18,7 +17,6 @@ internal fun ChatSession.toRoomRecord(): ChatSessionRecord = ChatSessionRecord(
         characterId = characterId,
         characterName = characterName,
         characterAvatar = characterAvatar,
-        characterMode = characterMode,
         permissionMode = permissionMode.name,
         historySummary = messages.asReversed().firstOrNull { it.content.isNotBlank() }
             ?.content.orEmpty().take(42),
@@ -30,10 +28,6 @@ internal fun ChatSession.toRoomRecord(): ChatSessionRecord = ChatSessionRecord(
     characterSnapshot = ChatSessionCharacterSnapshotEntity(
         sessionId = id,
         personaJson = characterPersonaJsonString(characterPersona),
-    ),
-    modelSettings = ChatSessionModelSettingsEntity(
-        sessionId = id,
-        settingsJson = modelSettingsJsonString(modelSettings),
     ),
     variableStates = listOf(
         ChatSessionVariableStateEntity(id, ChatVariableStateInitial, initialVariableStateJson),
@@ -58,14 +52,12 @@ internal fun chatSessionFromRoom(
         characterName = session.characterName,
         characterAvatar = session.characterAvatar,
     ),
-    characterMode = session.characterMode,
     permissionMode = AgentPermissionMode.entries.firstOrNull {
         it.name.equals(session.permissionMode, ignoreCase = true)
     } ?: AgentPermissionMode.AskForApproval,
     messages = messages,
     createdAt = session.createdAt,
     updatedAt = session.updatedAt,
-    modelSettings = modelSettingsFromJsonString(record.modelSettings?.settingsJson.orEmpty()),
     initialVariableStateJson = record.variableStates
         .firstOrNull { it.kind == ChatVariableStateInitial }?.stateJson.orEmpty(),
     variableStateJson = record.variableStates

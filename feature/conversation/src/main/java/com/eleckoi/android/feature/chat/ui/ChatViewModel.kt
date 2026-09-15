@@ -4,14 +4,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.eleckoi.android.sdk.author.AuthorChatGateway
-import com.eleckoi.android.sdk.author.AuthorModelParameters
+import com.eleckoi.android.sdk.author.AuthorSendImageAttachment
 import com.eleckoi.android.feature.chat.api.ChatService
 import com.eleckoi.android.engine.immersive.api.FrontendProjectService
 import com.eleckoi.android.engine.immersive.model.FrontendWorkspace
 import com.eleckoi.android.foundation.design.AppearanceTheme
-import com.eleckoi.android.feature.characters.model.CharacterMode
 import com.eleckoi.android.feature.chat.model.ChatDraft
 import com.eleckoi.android.feature.chat.model.ChatMessage
+import com.eleckoi.android.feature.chat.model.ChatEncodedImageInput
 import com.eleckoi.android.feature.chat.model.MessageRole
 import com.eleckoi.android.feature.chat.prewarm.RecentChatPrewarmer
 import com.eleckoi.android.engine.generation.model.ModelConfig
@@ -138,8 +138,8 @@ class ChatViewModel(
         chatService = chatService,
         state = { _uiState.value },
         updateState = { transform -> _uiState.update(transform) },
-        showModeConflictIfNeeded = ::showModeConflictIfNeeded,
         onStopRequested = authorEventPublisher::markStopRequested,
+        onMessagesChanged = authorEventPublisher::publishMessagesChanged,
         onGenerationCompleted = ::inspectRequiredTools,
     )
     private val authorGateway = ChatAuthorGatewayAdapter(
@@ -175,6 +175,13 @@ class ChatViewModel(
                     }
                 }
             },
+            deleteMessagesFrom = { sessionId, messageId ->
+                runCatching {
+                    withContext(Dispatchers.IO) {
+                        chatService.deleteMessagesFrom(sessionId, messageId)
+                    }
+                }
+            },
         ),
         publisher = authorEventPublisher,
     )
@@ -188,7 +195,6 @@ class ChatViewModel(
                         assistantBubbleEnabled = preferences.assistantBubbleEnabled,
                         chatLayoutMode = preferences.chatLayoutMode,
                         chatRoleplayCardPanel = preferences.chatRoleplayCardPanel,
-                        chatRoleplayScrim = preferences.chatRoleplayScrim,
                         chatBubbleWideLayout = preferences.chatBubbleWideLayout,
                         chatBubbleCornerRadius = preferences.chatBubbleCornerRadius,
                         chatAvatarSize = preferences.chatAvatarSize,
@@ -205,7 +211,6 @@ class ChatViewModel(
                         chatWaitingAnimation = preferences.chatWaitingAnimation,
                         chatGenerationStatsEnabled = preferences.chatGenerationStatsEnabled,
                         historySaveMode = preferences.historySaveMode,
-                        appearance = preferences.appearanceTheme,
                     )
                 }
                 initialPreferencesReady.complete(Unit)
@@ -221,7 +226,7 @@ class ChatViewModel(
             ChatIntent.LoadInitialDraft -> loadInitialDraft()
             is ChatIntent.LoadDraft -> loadDraft(intent.sessionId)
             ChatIntent.LoadOlderMessages -> loadOlderMessages()
-            is ChatIntent.OpenCharacterChat -> openCharacterChat(intent.characterId, intent.characterMode)
+            is ChatIntent.OpenCharacterChat -> openCharacterChat(intent.characterId)
             is ChatIntent.ApplyAppearanceTheme -> applyAppearanceTheme(intent.theme)
             is ChatIntent.InputChanged -> setInput(intent.value)
             is ChatIntent.AddInputImages -> inputImageController.add(intent.uriValues)
@@ -236,7 +241,7 @@ class ChatViewModel(
                 }
             }
             ChatIntent.CreateChat -> createChat()
-            is ChatIntent.CreateChatForCharacter -> createChat(intent.characterId, intent.characterMode)
+            is ChatIntent.CreateChatForCharacter -> createChat(intent.characterId)
             is ChatIntent.OpenEditMessage -> openEditMessage(intent.message)
             ChatIntent.CloseEditMessage -> closeEditMessage()
             is ChatIntent.EditInputChanged -> _uiState.update { it.copy(editInput = intent.value) }
@@ -245,8 +250,7 @@ class ChatViewModel(
             is ChatIntent.RegenerateImage -> draftMutationController.regenerateImage(intent.messageId, intent.attachmentId)
             is ChatIntent.SelectOpeningOption -> draftMutationController.selectOpeningOption(intent.openingOptionId)
             is ChatIntent.ChangePermissionMode -> settingsController.updatePermissionMode(intent.mode)
-            is ChatIntent.SelectModel ->
-                settingsController.selectModel(intent.configId, intent.model, intent.parameters)
+            is ChatIntent.SelectModel -> settingsController.selectModel(intent.configId, intent.model)
             is ChatIntent.ChangeHistorySaveMode -> settingsController.changeHistorySaveMode(intent.mode)
             is ChatIntent.SaveChatBackground -> backgroundController.save(
                 intent.backgroundFile,
@@ -276,8 +280,6 @@ class ChatViewModel(
             ChatIntent.EnableRequiredSettingLibraryTool -> enableRequiredSettingLibraryTool()
             ChatIntent.DismissChatBackgroundError ->
                 _uiState.update { it.copy(chatBackgroundErrorMessage = "") }
-            ChatIntent.DismissModeConflict -> _uiState.update { it.copy(modeConflict = null) }
-            ChatIntent.OpenCurrentModeChat -> openCurrentModeChat()
             is ChatIntent.ReportError -> _uiState.update { it.copy(errorMessage = intent.message) }
             ChatIntent.ToggleMoreTools -> _uiState.update { it.copy(moreToolsOpen = !it.moreToolsOpen) }
             ChatIntent.DismissMoreTools -> _uiState.update { it.copy(moreToolsOpen = false) }
@@ -288,7 +290,10 @@ class ChatViewModel(
 
     override fun setInput(value: String) = authorGateway.setInput(value)
 
-    override fun send(text: String) = authorGateway.send(text)
+    override suspend fun send(
+        text: String,
+        attachments: List<AuthorSendImageAttachment>,
+    ) = authorGateway.send(text, attachments)
 
     override fun stopGeneration() = authorGateway.stopGeneration()
 
@@ -297,18 +302,19 @@ class ChatViewModel(
     override fun editAndRegenerate(messageId: String, text: String) =
         authorGateway.editAndRegenerate(messageId, text)
 
-    override fun createNewChat(characterId: String, characterMode: String?) =
-        authorGateway.createNewChat(characterId, characterMode)
+    override fun createNewChat(characterId: String) = authorGateway.createNewChat(characterId)
 
     override fun openChat(sessionId: String) = authorGateway.openChat(sessionId)
 
     override fun deleteChat(sessionId: String) = authorGateway.deleteChat(sessionId)
 
+    override suspend fun deleteMessagesFrom(messageId: String) =
+        authorGateway.deleteMessagesFrom(messageId)
+
     override fun selectModel(
         configId: String,
         model: String,
-        parameters: AuthorModelParameters,
-    ) = authorGateway.selectModel(configId, model, parameters)
+    ) = authorGateway.selectModel(configId, model)
 
     override suspend fun selectOpening(openingOptionId: String) =
         authorGateway.selectOpening(openingOptionId)
@@ -331,19 +337,6 @@ class ChatViewModel(
     fun sendMessage() {
         val state = _uiState.value
         generationCoordinator.send(state.input, state.inputImages)
-    }
-
-    private fun showModeConflictIfNeeded(state: ChatUiState, draft: ChatDraft): Boolean {
-        val session = draft.session
-        val conflict = chatModeConflict(
-            characterId = session.characterId,
-            sessionMode = session.characterMode,
-            currentMode = state.characterModesById[session.characterId],
-        ) ?: return false
-        _uiState.update {
-            it.copy(modeConflict = conflict)
-        }
-        return true
     }
 
     private fun inspectRequiredTools(draft: ChatDraft, assistantMessageId: String?) {
@@ -396,14 +389,28 @@ class ChatViewModel(
         }
     }
 
-    private fun openCurrentModeChat() {
-        val conflict = _uiState.value.modeConflict ?: return
-        _uiState.update { it.copy(modeConflict = null) }
-        openCharacterChat(conflict.characterId, conflict.currentMode)
-    }
-
-    private fun startSending(rawContent: String) {
-        generationCoordinator.send(rawContent)
+    private suspend fun startSending(
+        rawContent: String,
+        attachments: List<AuthorSendImageAttachment>,
+    ): Result<Unit> = runCatching {
+        val inputImages = if (attachments.isEmpty()) {
+            emptyList()
+        } else {
+            withContext(Dispatchers.IO) {
+                chatService.prepareEncodedInputImages(
+                    attachments.map { attachment ->
+                        ChatEncodedImageInput(
+                            mediaType = attachment.mediaType,
+                            data = attachment.data,
+                            displayName = attachment.name,
+                        )
+                    },
+                )
+            }
+        }
+        withContext(Dispatchers.Main.immediate) {
+            generationCoordinator.send(rawContent, inputImages)
+        }
     }
 
     fun stopSending() {
@@ -448,39 +455,22 @@ class ChatViewModel(
 
     fun createChat() {
         val state = _uiState.value
-        state.draft?.let { draft ->
-            if (showModeConflictIfNeeded(state, draft)) return
-        }
         val characterId = state.draft?.session?.characterId ?: state.chatCharacterId
-        val characterMode = state.characterModesById[characterId]
-            ?: state.draft?.session?.characterMode
-            ?: state.chatCharacterMode
         if (characterId.isBlank()) {
             _uiState.update { it.copy(errorMessage = "请先选择角色") }
             return
         }
-        createChat(characterId, characterMode)
+        createChat(characterId)
     }
 
-    fun createChat(characterId: String, characterMode: String = CharacterMode.Agent.storageValue) {
+    fun createChat(characterId: String) {
         if (characterId.isBlank()) return
-        val state = _uiState.value
-        val conflict = chatModeConflict(
-            characterId = characterId,
-            sessionMode = characterMode,
-            currentMode = state.characterModesById[characterId],
-        )
-        if (conflict != null) {
-            _uiState.update { it.copy(modeConflict = conflict) }
-            return
-        }
-        val normalizedMode = CharacterMode.fromStorage(characterMode).storageValue
-        draftController.createChat(characterId, normalizedMode)
+        draftController.createChat(characterId)
     }
 
-    fun openCharacterChat(characterId: String, characterMode: String? = null) {
+    fun openCharacterChat(characterId: String) {
         if (characterId.isBlank()) return
-        draftController.openCharacterChat(characterId, characterMode)
+        draftController.openCharacterChat(characterId)
     }
 
     fun refreshCurrentDraft() = draftController.refreshCurrentDraft()

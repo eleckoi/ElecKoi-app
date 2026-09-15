@@ -4,6 +4,7 @@ import com.eleckoi.android.engine.agent.api.AgentSessionEvent
 import com.eleckoi.android.engine.agent.api.AgentTokenUsage
 import com.eleckoi.android.engine.agent.api.AgentWorkItemType
 import com.eleckoi.android.engine.agent.api.AgentWorkStatus
+import com.eleckoi.android.feature.chat.model.ChatGenerationMetrics
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -44,6 +45,8 @@ class ChatTurnMetricsCollectorTest {
                 modelContextWindow = 128_000L,
             ),
         )
+        assertEquals(100L, collector.snapshot().billedInputTokens)
+        assertEquals(20L, collector.snapshot().outputTokens)
         collector.accept(
             AgentSessionEvent.WorkItemStarted(
                 threadId = "thread",
@@ -74,7 +77,7 @@ class ChatTurnMetricsCollectorTest {
         assertEquals(50L, metrics.firstTokenDelayMillis)
         assertEquals(200L, metrics.decodeDurationMillis)
         assertEquals(20L, metrics.decodeOutputTokens)
-        assertEquals(90, metrics.cacheHitPercent)
+        assertEquals("90", metrics.cacheHitPercent)
         assertEquals(100L, collector.contextWindowUsage()?.latestTokens)
         assertEquals(120L, collector.contextWindowUsage()?.totalTokens)
         assertEquals(128_000L, collector.contextWindowUsage()?.modelContextWindow)
@@ -110,7 +113,7 @@ class ChatTurnMetricsCollectorTest {
     }
 
     @Test
-    fun `does not invent a cache percentage when the provider omitted cache usage`() {
+    fun `matches DSH zero cache percentage when cache buckets are absent`() {
         val collector = ChatTurnMetricsCollector()
         collector.accept(AgentSessionEvent.StepStarted("thread", "turn", step = 1, startedAtMillis = 100))
         collector.accept(
@@ -125,8 +128,122 @@ class ChatTurnMetricsCollectorTest {
         )
         collector.accept(AgentSessionEvent.StepCompleted("thread", "turn", step = 1, completedAtMillis = 200))
 
-        assertEquals(null, collector.snapshot().cacheHitPercent)
+        assertEquals("0", collector.snapshot().cacheHitPercent)
         assertTrue(collector.snapshot().billedInputTokens > 0L)
+    }
+
+    @Test
+    fun `reasoning delta starts DSH first token timing`() {
+        val collector = ChatTurnMetricsCollector()
+        collector.accept(AgentSessionEvent.StepStarted("thread", "turn", step = 1, startedAtMillis = 100))
+        collector.accept(
+            AgentSessionEvent.ReasoningTextDelta(
+                threadId = "thread",
+                turnId = "turn",
+                itemId = "reasoning-turn-1",
+                contentIndex = 0,
+                delta = "先检查",
+                step = 1,
+                observedAtMillis = 140,
+            ),
+        )
+        collector.accept(
+            AgentSessionEvent.WorkItemCompleted(
+                threadId = "thread",
+                turnId = "turn",
+                itemId = "assistant-turn-1",
+                type = AgentWorkItemType.AssistantMessage,
+                status = AgentWorkStatus.Completed,
+                completedAtMillis = 300,
+                step = 1,
+            ),
+        )
+        collector.accept(
+            AgentSessionEvent.TokenUsageUpdated(
+                threadId = "thread",
+                turnId = "turn",
+                step = 1,
+                total = usage(input = 100, cacheRead = 0, output = 25, cacheReported = false),
+                last = usage(input = 100, cacheRead = 0, output = 25, cacheReported = false),
+                modelContextWindow = null,
+            ),
+        )
+        collector.accept(AgentSessionEvent.StepCompleted("thread", "turn", step = 1, completedAtMillis = 310))
+
+        assertEquals(40L, collector.snapshot().firstTokenDelayMillis)
+        assertEquals(160L, collector.snapshot().decodeDurationMillis)
+        assertEquals(25L, collector.snapshot().decodeOutputTokens)
+    }
+
+    @Test
+    fun `DSH compaction duration is not reported as tool duration`() {
+        val collector = ChatTurnMetricsCollector()
+        collector.accept(
+            AgentSessionEvent.WorkItemStarted(
+                threadId = "thread",
+                turnId = "turn",
+                itemId = "compaction",
+                type = AgentWorkItemType.ContextCompaction,
+                label = "正在自动压缩",
+                startedAtMillis = 100,
+            ),
+        )
+        collector.accept(
+            AgentSessionEvent.WorkItemCompleted(
+                threadId = "thread",
+                turnId = "turn",
+                itemId = "compaction",
+                type = AgentWorkItemType.ContextCompaction,
+                status = AgentWorkStatus.Completed,
+                completedAtMillis = 500,
+            ),
+        )
+
+        assertEquals(0L, collector.snapshot().toolDurationMillis)
+    }
+
+    @Test
+    fun `replaces repeated usage samples for the same DSH step`() {
+        val collector = ChatTurnMetricsCollector()
+        collector.accept(AgentSessionEvent.StepStarted("thread", "turn", step = 1, startedAtMillis = 100))
+        collector.accept(
+            AgentSessionEvent.TokenUsageUpdated(
+                "thread",
+                "turn",
+                step = 1,
+                total = usage(input = 100, cacheRead = 900, output = 10, cacheReported = true),
+                last = usage(input = 100, cacheRead = 900, output = 10, cacheReported = true),
+                modelContextWindow = 1_000_000,
+            ),
+        )
+        collector.accept(
+            AgentSessionEvent.TokenUsageUpdated(
+                "thread",
+                "turn",
+                step = 1,
+                total = usage(input = 120, cacheRead = 980, output = 20, cacheReported = true),
+                last = usage(input = 120, cacheRead = 980, output = 20, cacheReported = true),
+                modelContextWindow = 1_000_000,
+            ),
+        )
+
+        assertEquals(1_100L, collector.snapshot().billedInputTokens)
+        assertEquals(20L, collector.snapshot().outputTokens)
+    }
+
+    @Test
+    fun `near complete cache hits do not round to a false one hundred percent`() {
+        val metrics = ChatGenerationMetrics(
+            inputTokens = 5,
+            cacheReadTokens = 9_995,
+            cacheUsageReported = true,
+        )
+
+        assertEquals("99.95", metrics.cacheHitPercent)
+        assertEquals(
+            "100",
+            metrics.copy(inputTokens = 0, cacheReadTokens = 10_000).cacheHitPercent,
+        )
     }
 
     private fun usage(

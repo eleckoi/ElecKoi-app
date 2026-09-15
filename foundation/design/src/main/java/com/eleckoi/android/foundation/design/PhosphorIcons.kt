@@ -44,4 +44,9 @@ object PhosphorRegular {
 
     const val Bell =
         "M221.8,175.94C216.2,166.27,208,148.65,208,120a80,80,0,0,0-160,0c0,28.65-8.2,46.27-13.8,55.94A16,16,0,0,0,48,200H88a40,40,0,0,0,80,0h40a16,16,0,0,0,13.8-24.06ZM128,224a24,24,0,0,1-24-24h48A24,24,0,0,1,128,224ZM48,184c7-12.12,16-32.45,16-64a64,64,0,0,1,128,0c0,31.55,9,51.88,16,64Z"
+
+    // Phosphor Star Four, Fill weight. This is the single four-point creation mark used by the
+    // mobile centre slot; keep the official 256 x 256 path instead of approximating it in Canvas.
+    const val StarFourFill =
+        "M240,128a15.79,15.79,0,0,1-10.5,15l-63.44,23.07L143,229.5a16,16,0,0,1-30,0L89.94,166.06,26.5,143a16,16,0,0,1,0-30L89.94,89.94,113,26.5a16,16,0,0,1,30,0l23.07,63.44L229.5,113A15.79,15.79,0,0,1,240,128Z"
 }

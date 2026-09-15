@@ -33,6 +33,7 @@ internal fun CharacterGroupedList(
     listAllExpanded: Boolean,
     expandedGroupNames: Set<String>,
     appearance: AppearanceTheme,
+    useCoverArtwork: Boolean,
     onToggleGroup: (String, Set<String>?) -> Unit,
     onOpenCharacter: (String) -> Unit,
     onSaveCharacters: (CharactersPayload) -> Unit,
@@ -241,7 +242,7 @@ internal fun CharacterGroupedList(
                 when {
                     sourceKey.startsWith(CharacterGroupHeaderTargetPrefix) -> 46.dp.toPx()
                     sourceKey.startsWith(CharacterGroupEmptyTargetPrefix) -> 28.dp.toPx()
-                    else -> 62.dp.toPx()
+                    else -> if (useCoverArtwork) 86.dp.toPx() else 62.dp.toPx()
                 }
             }
     }
@@ -437,6 +438,7 @@ internal fun CharacterGroupedList(
             draggingCharacter = draggingCharacter,
             draggingGroup = draggingGroup,
             appearance = appearance,
+            useCoverArtwork = useCoverArtwork,
             onToggleGroup = ::toggleGroupFromHeader,
             onOpenCharacter = onOpenCharacter,
         )

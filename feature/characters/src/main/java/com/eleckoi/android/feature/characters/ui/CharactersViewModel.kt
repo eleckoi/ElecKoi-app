@@ -8,9 +8,11 @@ import com.eleckoi.android.feature.characters.api.CharacterService
 import com.eleckoi.android.feature.characters.transfer.api.CharacterTransferService
 import com.eleckoi.android.feature.characters.model.AvatarSlot
 import com.eleckoi.android.feature.characters.model.CharacterCard
+import com.eleckoi.android.feature.characters.model.CharacterSlot
 import com.eleckoi.android.feature.characters.model.CharactersPayload
 import com.eleckoi.android.feature.characters.transfer.model.CharacterImportPreview
 import com.eleckoi.android.feature.characters.transfer.model.CharacterImportSource
+import com.eleckoi.android.feature.characters.transfer.model.CharacterExportFormat
 import com.eleckoi.android.feature.characters.transfer.model.ExportedCharacterCard
 import java.io.File
 import kotlinx.coroutines.Dispatchers
@@ -34,6 +36,8 @@ data class CharactersUiState(
     val errorMessage: String = "",
     val transferBusy: Boolean = false,
     val importPreview: CharacterImportPreview? = null,
+    val characterDraft: CharacterSlot? = null,
+    val pendingExportCharacterIds: List<String> = emptyList(),
     val exportedCard: ExportedCharacterCard? = null,
     val exportedCards: List<ExportedCharacterCard> = emptyList(),
 )
@@ -56,6 +60,8 @@ sealed interface CharactersIntent {
     data object DismissCharacterImport : CharactersIntent
     data class PrepareCharacterExport(val characterId: String) : CharactersIntent
     data class ExportCharacterCards(val characterIds: List<String>) : CharactersIntent
+    data class ConfirmCharacterCardExport(val format: CharacterExportFormat) : CharactersIntent
+    data object DismissCharacterExportFormat : CharactersIntent
     data object DismissCharacterExport : CharactersIntent
     data object DismissCharacterCardsExport : CharactersIntent
     data class SaveCharacterPersona(val characterId: String, val persona: CharacterCard) : CharactersIntent
@@ -68,12 +74,13 @@ sealed interface CharactersIntent {
         val slot: AvatarSlot,
     ) : CharactersIntent
     data class SaveCharacterCover(val characterId: String, val coverFile: File) : CharactersIntent
-    data class SaveCharacterMode(val characterId: String, val mode: String) : CharactersIntent
 }
 
 sealed interface CharactersEffect {
     data class OpenCharacterSettings(val characterId: String) : CharactersEffect
+    data class OpenCharacterDraft(val characterId: String) : CharactersEffect
     data class CharactersDeleted(val characterIds: List<String>) : CharactersEffect
+    data object CharacterCreated : CharactersEffect
     data object CharactersChanged : CharactersEffect
     data class ExportReady(val json: String) : CharactersEffect
     data class CharactersImported(val characterIds: List<String>) : CharactersEffect
@@ -107,8 +114,12 @@ class CharactersViewModel(
             is CharactersIntent.PrepareCharacterImport -> prepareCharacterImport(intent.files, intent.source)
             CharactersIntent.ConfirmCharacterImport -> confirmCharacterImport()
             CharactersIntent.DismissCharacterImport -> dismissCharacterImport()
-            is CharactersIntent.PrepareCharacterExport -> prepareCharacterExport(intent.characterId)
-            is CharactersIntent.ExportCharacterCards -> exportCharacterCards(intent.characterIds)
+            is CharactersIntent.PrepareCharacterExport -> requestCharacterExport(listOf(intent.characterId))
+            is CharactersIntent.ExportCharacterCards -> requestCharacterExport(intent.characterIds)
+            is CharactersIntent.ConfirmCharacterCardExport -> exportCharacterCards(intent.format)
+            CharactersIntent.DismissCharacterExportFormat -> {
+                _uiState.update { it.copy(pendingExportCharacterIds = emptyList()) }
+            }
             CharactersIntent.DismissCharacterExport -> _uiState.update { it.copy(exportedCard = null) }
             CharactersIntent.DismissCharacterCardsExport -> _uiState.update { it.copy(exportedCards = emptyList()) }
             is CharactersIntent.SaveCharacterPersona -> saveCharacterPersona(intent.characterId, intent.persona)
@@ -121,7 +132,6 @@ class CharactersViewModel(
                 intent.slot,
             )
             is CharactersIntent.SaveCharacterCover -> saveCharacterCover(intent.characterId, intent.coverFile)
-            is CharactersIntent.SaveCharacterMode -> saveCharacterMode(intent.characterId, intent.mode)
         }
     }
 
@@ -138,10 +148,10 @@ class CharactersViewModel(
     fun createCharacter(group: String) {
         viewModelScope.launch {
             runCatching {
-                withContext(Dispatchers.IO) { characterService.createCharacter(group) }
-            }.onSuccess { created ->
-                _uiState.update { it.copy(errorMessage = "") }
-                _effects.emit(CharactersEffect.OpenCharacterSettings(created.id))
+                withContext(Dispatchers.IO) { characterService.createCharacterDraft(group) }
+            }.onSuccess { draft ->
+                _uiState.update { it.copy(characterDraft = draft, errorMessage = "") }
+                _effects.emit(CharactersEffect.OpenCharacterDraft(draft.id))
             }.onFailure { error ->
                 Log.e(LogTag, "Failed to create character", error)
                 _uiState.update { it.copy(errorMessage = error.message ?: "新建角色失败") }
@@ -325,40 +335,87 @@ class CharactersViewModel(
         }
     }
 
-    private fun prepareCharacterExport(characterId: String) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(transferBusy = true, exportedCard = null) }
-            runCatching {
-                withContext(Dispatchers.IO) {
-                    characterTransferService.exportCharacterCard(characterId)
-                }
-            }.onSuccess { card ->
-                _uiState.update {
-                    it.copy(transferBusy = false, exportedCard = card, errorMessage = "")
-                }
-            }.onFailure { error ->
-                Log.e(LogTag, "Failed to export character card", error)
-                _uiState.update {
-                    it.copy(
-                        transferBusy = false,
-                        errorMessage = error.message ?: "导出角色失败",
-                    )
-                }
-            }
+    private fun requestCharacterExport(characterIds: List<String>) {
+        val ids = characterIds.filter(String::isNotBlank).distinct()
+        if (ids.isEmpty()) return
+        _uiState.update {
+            it.copy(
+                pendingExportCharacterIds = ids,
+                exportedCard = null,
+                exportedCards = emptyList(),
+                errorMessage = "",
+            )
         }
     }
 
-    private fun exportCharacterCards(characterIds: List<String>) {
+    fun commitCharacterDraft(
+        persona: CharacterCard,
+        avatarFiles: Map<AvatarSlot, File>,
+        onResult: (Result<CharacterSlot>) -> Unit = {},
+    ) {
+        val draft = _uiState.value.characterDraft ?: run {
+            onResult(Result.failure(IllegalStateException("角色草稿不存在")))
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(saving = true, errorMessage = "") }
+            val result = runCatching {
+                withContext(Dispatchers.IO) {
+                    characterService.createCharacter(draft.copy(persona = persona), avatarFiles)
+                }
+            }
+            result.onSuccess {
+                withContext(Dispatchers.IO) {
+                    avatarFiles.values.forEach { file -> file.delete() }
+                }
+                _uiState.update { state ->
+                    state.copy(characterDraft = null, saving = false, errorMessage = "")
+                }
+                _effects.emit(CharactersEffect.CharacterCreated)
+            }.onFailure { error ->
+                Log.e(LogTag, "Failed to commit character draft", error)
+                _uiState.update {
+                    it.copy(
+                        saving = false,
+                        errorMessage = error.message ?: "创建角色失败",
+                    )
+                }
+            }
+            onResult(result)
+        }
+    }
+
+    fun discardCharacterDraft(characterId: String) {
+        _uiState.update { state ->
+            if (state.characterDraft?.id == characterId) state.copy(characterDraft = null) else state
+        }
+    }
+
+    private fun exportCharacterCards(format: CharacterExportFormat) {
+        val characterIds = _uiState.value.pendingExportCharacterIds
         if (characterIds.isEmpty()) return
         viewModelScope.launch {
-            _uiState.update { it.copy(transferBusy = true, exportedCards = emptyList(), errorMessage = "") }
+            _uiState.update {
+                it.copy(
+                    transferBusy = true,
+                    pendingExportCharacterIds = emptyList(),
+                    exportedCard = null,
+                    exportedCards = emptyList(),
+                    errorMessage = "",
+                )
+            }
             runCatching {
                 withContext(Dispatchers.IO) {
-                    characterTransferService.exportCharacterCards(characterIds)
+                    characterTransferService.exportCharacterCards(characterIds, format)
                 }
             }.onSuccess { cards ->
                 _uiState.update {
-                    it.copy(transferBusy = false, exportedCards = cards, errorMessage = "")
+                    it.copy(
+                        transferBusy = false,
+                        exportedCard = cards.singleOrNull(),
+                        exportedCards = cards.takeIf { it.size > 1 }.orEmpty(),
+                        errorMessage = "",
+                    )
                 }
             }.onFailure { error ->
                 Log.e(LogTag, "Failed to export character cards", error)
@@ -375,15 +432,15 @@ class CharactersViewModel(
     fun saveCharacterPersona(
         characterId: String,
         persona: CharacterCard,
-        onSaved: () -> Unit = {},
+        onResult: (Result<CharacterSlot>) -> Unit = {},
     ) {
         viewModelScope.launch {
             _uiState.update { it.copy(saving = true) }
-            runCatching {
+            val result = runCatching {
                 withContext(Dispatchers.IO) { characterService.saveCharacterPersona(characterId, persona) }
-            }.onSuccess {
+            }
+            result.onSuccess {
                 _uiState.update { it.copy(saving = false, errorMessage = "") }
-                onSaved()
             }.onFailure { error ->
                 _uiState.update {
                     it.copy(
@@ -392,6 +449,7 @@ class CharactersViewModel(
                     )
                 }
             }
+            onResult(result)
         }
     }
 
@@ -460,23 +518,6 @@ class CharactersViewModel(
                         errorMessage = error.message ?: "保存角色封面失败",
                     )
                 }
-            }
-        }
-    }
-
-    fun saveCharacterMode(
-        characterId: String,
-        mode: String,
-        onSaved: (() -> Unit)? = null,
-    ) {
-        viewModelScope.launch {
-            runCatching {
-                withContext(Dispatchers.IO) { characterService.saveCharacterMode(characterId, mode) }
-            }.onSuccess {
-                _uiState.update { it.copy(errorMessage = "") }
-                onSaved?.invoke()
-            }.onFailure { error ->
-                _uiState.update { it.copy(errorMessage = error.message ?: "保存角色模式失败") }
             }
         }
     }

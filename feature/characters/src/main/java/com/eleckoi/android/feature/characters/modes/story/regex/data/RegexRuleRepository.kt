@@ -34,7 +34,7 @@ class RegexRuleRepository(
     private val characters: CharacterRepository,
 ) {
     private val dao = database.regexRuleDao()
-    private val storyPresetDao = database.storyPresetDao()
+    private val agentPresetDao = database.agentPresetDao()
     private val mutableRevision = MutableStateFlow(0L)
 
     /** Changes only after commit so active chat projections reload one complete persisted revision. */
@@ -48,7 +48,7 @@ class RegexRuleRepository(
             val state = dao.state()
             val collection = RegexRuleCollection(
                 globalRules = dao.globalRules().map { it.rule.toRule(it.id) },
-                promptPresetRules = RegexRuleJsonCodec.decodeRules(storyPresetDao.activePresetRegexRulesJson()),
+                promptPresetRules = RegexRuleJsonCodec.decodeRules(agentPresetDao.activePresetRegexRulesJson()),
                 characterRules = dao.characterRules(characterId).map { it.rule.toRule(it.id) },
                 versions = dao.versions().map { it.toVersion() },
                 activeVersionId = state?.activeVersionId.orEmpty(),
@@ -84,7 +84,7 @@ class RegexRuleRepository(
             val current = RegexRuleCollection(
                 globalRules = dao.globalRules().map { it.rule.toRule(it.id) },
                 promptPresetRules = RegexRuleJsonCodec.decodeRules(
-                    storyPresetDao.activePresetRegexRulesJson(),
+                    agentPresetDao.activePresetRegexRulesJson(),
                 ),
                 characterRules = dao.characterRules(characterId).map { it.rule.toRule(it.id) },
                 versions = dao.versions().map { it.toVersion() },
@@ -98,8 +98,8 @@ class RegexRuleRepository(
             }
             saveShared(normalized)
             if (current.promptPresetRules != normalized.promptPresetRules) {
-                storyPresetDao.updateActivePresetRegexRules(promptPresetRulesJson)
-                storyPresetDao.updateActivePresetVersionRegexRules(promptPresetRulesJson)
+                agentPresetDao.updateActivePresetRegexRules(promptPresetRulesJson)
+                agentPresetDao.updateActivePresetVersionRegexRules(promptPresetRulesJson)
             }
             dao.saveCharacter(characterId, normalized.characterRules.map {
                 CharacterRegexRuleEntity(characterId, it.id, it.toRoomFields())
@@ -147,26 +147,27 @@ class RegexRuleRepository(
         if (documents.isEmpty()) throw ElecKoiDataException("没有选择正则文件")
         val current = load(characterId)
         val decoded = decodeRegexImportDocuments(documents, scope)
-        if (decoded.importedByFile.isEmpty()) {
-            if (decoded.skippedDepthRuleCount > 0) {
-                throw ElecKoiDataException("深度正则不受支持，未导入任何规则")
-            }
-            throw ElecKoiDataException("所选文件中没有可导入的正则规则")
-        }
-        val importedRules = decoded.importedByFile.flatten()
+        if (decoded.rules.isEmpty()) throw ElecKoiDataException("所选文件中没有可导入的正则规则")
+        val importedRules = decoded.rules
         val grouped = importedRules.groupBy(ScopedRegexRule::scope)
-        val merged = RegexRuleScope.entries.fold(current) { collection, targetScope ->
-            val existing = collection.rulesForScope(targetScope)
-            val imported = grouped[targetScope].orEmpty().mapIndexed { index, item ->
-                item.rule.copy(id = "regex-${newId(10)}", order = existing.size + index)
+        val importedWithFinalIds = RegexRuleScope.entries.flatMap { targetScope ->
+            val existing = current.rulesForScope(targetScope)
+            grouped[targetScope].orEmpty().mapIndexed { index, item ->
+                item.copy(rule = item.rule.copy(id = "regex-${newId(10)}", order = existing.size + index))
             }
-            collection.withScopeRules(targetScope, existing + imported)
         }
+        val finalizedByScope = importedWithFinalIds.groupBy(ScopedRegexRule::scope)
+        val merged = RegexRuleScope.entries.fold(current) { collection, targetScope ->
+            collection.withScopeRules(
+                targetScope,
+                collection.rulesForScope(targetScope) + finalizedByScope[targetScope].orEmpty().map(ScopedRegexRule::rule),
+            )
+        }
+        val versioned = merged.includeImportedRulesInActiveVersion(importedWithFinalIds)
         return RegexRuleImportResult(
-            collection = save(characterId, merged),
-            importedFileCount = decoded.importedByFile.size,
+            collection = save(characterId, versioned),
+            importedFileCount = decoded.importedFileCount,
             importedRuleCount = importedRules.size,
-            skippedDepthRuleCount = decoded.skippedDepthRuleCount,
             failedFileNames = decoded.failedFileNames,
         )
     }
@@ -176,14 +177,10 @@ class RegexRuleRepository(
         val selected = RegexRuleScope.entries.flatMap { scope ->
             collection.rulesForScope(scope)
                 .filter { it.id in ruleIds }
-                .map { rule -> RegexRuleJsonCodec.ruleToJson(rule).put("scope", scope.name) }
+                .map { rule -> ScopedRegexRule(scope, rule) }
         }
         if (selected.isEmpty()) throw ElecKoiDataException("请先选择要导出的规则")
-        return JSONObject()
-            .put("format", ExportFormat)
-            .put("version", 2)
-            .put("rules", JSONArray(selected))
-            .toString(2)
+        return encodeRegexExport(selected)
     }
 
     /** Lossless snapshot for the app-level backup; unlike card export it includes every scope. */
@@ -354,39 +351,12 @@ class RegexRuleRepository(
         if (dao.bumpRevision() == 0) dao.upsertState(RegexStateEntity(revision = 1L, activeVersionId = null))
     }
 
-    private companion object {
-        const val ExportFormat = "eleckoi.regex-rules-export"
-    }
 }
-
-internal data class DecodedRegexImportDocuments(
-    val importedByFile: List<List<ScopedRegexRule>>,
-    val failedFileNames: List<String>,
-    val skippedDepthRuleCount: Int,
-)
 
 private data class RegexSaveResult(
     val value: VersionedRegexRuleCollection,
     val changed: Boolean,
 )
-
-internal fun decodeRegexImportDocuments(
-    documents: List<RegexRuleImportDocument>,
-    fallbackScope: RegexRuleScope,
-): DecodedRegexImportDocuments {
-    val failedFileNames = mutableListOf<String>()
-    val importedByFile = mutableListOf<List<ScopedRegexRule>>()
-    var skippedDepthRuleCount = 0
-    documents.forEach { document ->
-        runCatching { RegexRuleImportCodec.decodeScopedWithReport(document.json, fallbackScope) }
-            .onSuccess { decoded ->
-                skippedDepthRuleCount += decoded.skippedDepthRuleCount
-                if (decoded.rules.isNotEmpty()) importedByFile += decoded.rules
-            }
-            .onFailure { failedFileNames += document.displayName }
-    }
-    return DecodedRegexImportDocuments(importedByFile, failedFileNames, skippedDepthRuleCount)
-}
 
 internal fun List<RegexRule>.normalizedRegexRules(): List<RegexRule> = mapIndexed { index, rule ->
     rule.copy(
@@ -407,89 +377,4 @@ internal fun RegexRule.appliesTo(
     RegexRuleSurface.Display -> displayOnly || (!displayOnly && !promptOnly)
     RegexRuleSurface.Prompt -> promptOnly ||
         (target == RegexRuleTarget.SettingContent && !displayOnly && !promptOnly)
-}
-
-object RegexRuleImportCodec {
-    fun decode(json: String): List<RegexRule> {
-        return decodeScoped(json, RegexRuleScope.Global).map(ScopedRegexRule::rule)
-    }
-
-    fun decodeScoped(json: String, fallbackScope: RegexRuleScope): List<ScopedRegexRule> {
-        val decoded = decodeScopedWithReport(json, fallbackScope)
-        if (decoded.rules.isEmpty() && decoded.skippedDepthRuleCount > 0) {
-            throw ElecKoiDataException("深度正则不受支持")
-        }
-        return decoded.rules.ifEmpty { throw ElecKoiDataException("文件里没有有效规则") }
-    }
-
-    internal fun decodeScopedWithReport(
-        json: String,
-        fallbackScope: RegexRuleScope,
-    ): DecodedScopedRegexRules {
-        val trimmed = json.trim()
-        val root = runCatching { JSONObject(trimmed) }.getOrNull()
-        val values = when {
-            root != null -> root.optJSONArray("rules")
-                ?: root.optJSONArray("regex_scripts")
-                ?: root.optJSONArray("regex")
-                ?: root.takeIf { it.has("pattern") || it.has("findRegex") }?.let { JSONArray().put(it) }
-            trimmed.startsWith("[") -> runCatching { JSONArray(trimmed) }.getOrNull()
-            else -> null
-        } ?: throw ElecKoiDataException("文件里没有正则规则")
-        var skippedDepthRuleCount = 0
-        val rules = (0 until values.length()).mapNotNull { index ->
-            values.optJSONObject(index)?.let { item ->
-                if (item.hasUnsupportedRegexDepth()) {
-                    skippedDepthRuleCount += 1
-                    null
-                } else {
-                    ScopedRegexRule(
-                        scope = runCatching {
-                            RegexRuleScope.valueOf(item.stringOrEmpty("scope"))
-                        }.getOrDefault(fallbackScope),
-                        rule = RegexRule(
-                            name = item.stringOrEmpty("name").ifBlank { item.stringOrEmpty("scriptName") },
-                            pattern = item.stringOrEmpty("pattern").ifBlank { item.stringOrEmpty("findRegex") },
-                            replacement = item.stringOrEmpty("replacement")
-                                .ifBlank { item.stringOrEmpty("replaceString") },
-                            targets = importedTargets(item),
-                            enabled = !item.optBoolean("disabled", false) && item.optBoolean("enabled", true),
-                            displayOnly = item.optBoolean("display_only", item.optBoolean("markdownOnly", false)),
-                            promptOnly = item.optBoolean("prompt_only", item.optBoolean("promptOnly", false)),
-                            runOnEdit = item.optBoolean("run_on_edit", item.optBoolean("runOnEdit", false)),
-                            order = index,
-                        ),
-                    )
-                }
-            }
-        }.filter { it.rule.pattern.isNotBlank() }
-        return DecodedScopedRegexRules(rules, skippedDepthRuleCount)
-    }
-}
-
-internal data class DecodedScopedRegexRules(
-    val rules: List<ScopedRegexRule>,
-    val skippedDepthRuleCount: Int,
-)
-
-data class ScopedRegexRule(val scope: RegexRuleScope, val rule: RegexRule)
-
-private fun importedTargets(item: JSONObject): Set<RegexRuleTarget> {
-    val named = item.optJSONArray("targets")?.let { values ->
-        (0 until values.length()).mapNotNull { index ->
-            runCatching { RegexRuleTarget.valueOf(values.optString(index)) }.getOrNull()
-        }.toSet()
-    }.orEmpty()
-    return named.ifEmpty { placementTargets(item.optJSONArray("placement")) }
-}
-
-private fun placementTargets(placement: JSONArray?): Set<RegexRuleTarget> {
-    val values = placement?.let { array -> (0 until array.length()).map { array.optInt(it, -1) }.toSet() }.orEmpty()
-    return buildSet {
-        if (1 in values) add(RegexRuleTarget.UserInput)
-        if (2 in values || values.isEmpty()) add(RegexRuleTarget.AiOutput)
-        if (3 in values) add(RegexRuleTarget.SlashCommand)
-        if (5 in values) add(RegexRuleTarget.SettingContent)
-        if (6 in values) add(RegexRuleTarget.Reasoning)
-    }
 }

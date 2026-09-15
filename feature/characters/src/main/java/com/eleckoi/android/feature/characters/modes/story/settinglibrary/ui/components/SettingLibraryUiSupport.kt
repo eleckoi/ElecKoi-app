@@ -73,8 +73,10 @@ private fun SettingLibraryPosition.displayBucketIndex(): Int {
         SettingLibraryPosition.AfterInstructions -> 1
         SettingLibraryPosition.BeforeHistory -> 2
         SettingLibraryPosition.AfterHistory -> 3
-        SettingLibraryPosition.BeforeToolFlow -> 4
-        SettingLibraryPosition.AfterToolFlow -> 5
+        SettingLibraryPosition.BeforeLatestUserInput -> 4
+        SettingLibraryPosition.AfterLatestUserInput -> 5
+        SettingLibraryPosition.BeforeToolFlow -> 6
+        SettingLibraryPosition.AfterToolFlow -> 7
     }
 }
 

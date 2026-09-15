@@ -21,6 +21,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -30,11 +35,65 @@ import com.eleckoi.android.foundation.design.components.AppIconPaths
 import com.eleckoi.android.foundation.design.components.StrokeSvgIcon
 import com.eleckoi.android.foundation.design.components.common.TunerSlider
 import com.eleckoi.android.foundation.design.components.noRippleClickable
+import com.eleckoi.android.feature.preferences.AppearanceMode
 import kotlin.math.roundToInt
 
 internal enum class ThemeEditorTab(val label: String) {
     Palette("主题色"),
     RootBackground("主页背景"),
+}
+
+@Composable
+internal fun AppearanceModePicker(
+    selected: AppearanceMode,
+    appearance: AppearanceTheme,
+    modifier: Modifier = Modifier,
+    onSelect: (AppearanceMode) -> Unit,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth(),
+    ) {
+        ThemeSectionLabel("外观模式", appearance)
+        Spacer(modifier = Modifier.height(10.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(appearance.mobileMuted.copy(alpha = 0.10f))
+                .padding(3.dp),
+        ) {
+            listOf(
+                AppearanceMode.Light to "浅色",
+                AppearanceMode.Dark to "深色",
+                AppearanceMode.System to "跟随系统",
+            ).forEach { (mode, label) ->
+                val active = selected == mode
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(9.dp))
+                        .background(if (active) appearance.mobileSurface else Color.Transparent)
+                        .noRippleClickable { onSelect(mode) }
+                        .semantics {
+                            role = Role.RadioButton
+                            this.selected = active
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = label,
+                        color = if (active) appearance.mobileText else appearance.mobileMuted,
+                        fontSize = 12.sp,
+                        fontWeight = if (active) FontWeight.Medium else FontWeight.Normal,
+                        maxLines = 1,
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -46,19 +105,26 @@ internal fun ThemeEditorHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(52.dp)
+            .height(56.dp)
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
-                .size(34.dp)
-                .clip(CircleShape)
-                .background(appearance.mobileMuted.copy(alpha = 0.12f))
-                .noRippleClickable(onClick = onBack),
-            contentAlignment = Alignment.Center,
+                .width(78.dp)
+                .height(48.dp),
+            contentAlignment = Alignment.CenterStart,
         ) {
-            StrokeSvgIcon(AppIconPaths.X, appearance.mobileText, iconSize = 18.dp)
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(appearance.mobileMuted.copy(alpha = 0.12f))
+                    .noRippleClickable(onClick = onBack),
+                contentAlignment = Alignment.Center,
+            ) {
+                StrokeSvgIcon(AppIconPaths.X, appearance.mobileText, iconSize = 18.dp)
+            }
         }
         Text(
             text = "主题风格",
@@ -68,14 +134,19 @@ internal fun ThemeEditorHeader(
             fontWeight = FontWeight.Medium,
             textAlign = TextAlign.Center,
         )
-        Text(
-            text = "恢复默认",
-            color = appearance.mobileMuted,
-            fontSize = 13.sp,
+        Box(
             modifier = Modifier
-                .noRippleClickable(onClick = onReset)
-                .padding(horizontal = 2.dp, vertical = 8.dp),
-        )
+                .width(78.dp)
+                .height(48.dp)
+                .noRippleClickable(onClick = onReset),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = "恢复默认",
+                color = appearance.mobileMuted,
+                fontSize = 13.sp,
+            )
+        }
     }
 }
 
@@ -89,7 +160,7 @@ internal fun ThemeEditorTabs(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(38.dp)
+            .height(48.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(appearance.mobileMuted.copy(alpha = 0.10f))
             .padding(3.dp),
@@ -102,18 +173,37 @@ internal fun ThemeEditorTabs(
                     .fillMaxSize()
                     .clip(RoundedCornerShape(9.dp))
                     .background(if (selected) appearance.mobileSurface else Color.Transparent)
-                    .noRippleClickable { onChange(tab) },
+                    .noRippleClickable { onChange(tab) }
+                    .semantics {
+                        role = Role.Tab
+                        this.selected = selected
+                    },
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = tab.label,
                     color = if (selected) appearance.mobileText else appearance.mobileMuted,
-                    fontSize = 13.sp,
-                    fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
+                    fontSize = 14.sp,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
                 )
             }
         }
     }
+}
+
+@Composable
+internal fun ThemeSectionLabel(
+    text: String,
+    appearance: AppearanceTheme,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        text = text,
+        modifier = modifier.semantics { heading() },
+        color = appearance.mobileText,
+        fontSize = 14.sp,
+        fontWeight = FontWeight.SemiBold,
+    )
 }
 
 @Composable

@@ -16,11 +16,6 @@ internal fun Preferences.toUiPreferences(): UiPreferences {
         searchHistory = preferences[SearchHistoryJson]
             ?.let(::decodeStringList)
             ?: emptyList(),
-        presetPagePinned = preferences[PresetPagePinned] ?: false,
-        pluginPagePinned = preferences[PluginPagePinned] ?: false,
-        commonPageOrder = preferences[CommonPageOrderJson]
-            ?.let(::decodeStringList)
-            ?: emptyList(),
         lastActiveChatSessionId = preferences[LastActiveChatSessionId].orEmpty(),
         activeChatSessionIds = preferences[ActiveChatSessionIdsJson]
             ?.let(::decodeStringMap)
@@ -34,6 +29,13 @@ internal fun Preferences.toUiPreferences(): UiPreferences {
         lastCreatorWorkspaceId = preferences[LastCreatorWorkspaceId].orEmpty(),
         historySaveMode = normalizeHistoryMode(
             preferences[HistorySaveMode].orEmpty(),
+        ),
+        appearanceMode = AppearanceMode.fromStorageKey(preferences[AppearanceModeKey]),
+        newCharacterBackground = NewCharacterBackground.fromStorageKey(
+            preferences[NewCharacterBackgroundKey],
+        ),
+        listCharacterArtwork = ListCharacterArtwork.fromStorageKey(
+            preferences[SidebarCharacterArtwork],
         ),
         defaultChatConfigId = preferences[DefaultChatConfigId].orEmpty(),
         defaultChatModel = preferences[DefaultChatModel].orEmpty(),
@@ -73,8 +75,6 @@ internal fun Preferences.toUiPreferences(): UiPreferences {
         ]?.let(ChatAvatarShape::fromStorageKey) ?: defaults.avatarShape,
         chatRoleplayCardPanel = preferences[ChatRoleplayCardPanel]
             ?: RoleplayLayoutDefaults.CardPanel,
-        chatRoleplayScrim = (preferences[ChatRoleplayScrim]
-            ?: RoleplayLayoutDefaults.Scrim).coerceIn(0f, 1f),
         chatBubbleCornerRadius = (preferences[
                 profileKey(
                     ChatBubbleCornerRadiusAgent,

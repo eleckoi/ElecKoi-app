@@ -6,7 +6,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -55,7 +54,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.eleckoi.android.engine.generation.model.ModelConfig
-import com.eleckoi.android.feature.characters.model.CharacterMode
 import com.eleckoi.android.feature.characters.model.CharacterSlot
 import com.eleckoi.android.feature.characters.model.CharactersPayload
 import com.eleckoi.android.feature.chat.model.ChatListItem
@@ -84,6 +82,7 @@ internal fun HomeSearchOverlay(
     modelConfigs: List<ModelConfig>,
     history: List<String>,
     appearance: AppearanceTheme,
+    useCoverArtwork: Boolean,
     onDismiss: () -> Unit,
     onCommitTerm: (String) -> Unit,
     onForgetTerm: (String) -> Unit,
@@ -180,6 +179,7 @@ internal fun HomeSearchOverlay(
                     modelHits = modelHits,
                     modelConfigs = modelConfigs,
                     appearance = appearance,
+                    useCoverArtwork = useCoverArtwork,
                     onOpenChat = { chatId ->
                         onCommitTerm(key)
                         keyboardController?.hide()
@@ -245,21 +245,20 @@ private fun HomeSearchField(
     onSubmit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(12.dp)
+    val shape = RoundedCornerShape(19.dp)
     Row(
         modifier = modifier
-            .height(48.dp)
+            .height(38.dp)
             .clip(shape)
             .background(appearance.mobileSearchBg)
-            .border(1.dp, appearance.mobileLine, shape)
-            .padding(start = 13.dp),
+            .padding(start = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        DshSearchGlyph(tint = appearance.mobileMuted, iconSize = 18.dp)
+        DshSearchGlyph(tint = appearance.mobileMuted, iconSize = 16.dp)
         Box(
             modifier = Modifier
                 .weight(1f)
-                .padding(start = 9.dp),
+                .padding(start = 7.dp),
             contentAlignment = Alignment.CenterStart,
         ) {
             if (value.isBlank()) {
@@ -307,7 +306,7 @@ private fun HomeSearchField(
                 )
             }
         } else {
-            Spacer(modifier = Modifier.width(13.dp))
+            Spacer(modifier = Modifier.width(12.dp))
         }
     }
 }
@@ -319,6 +318,7 @@ private fun SearchResults(
     modelHits: List<ModelProviderMeta>,
     modelConfigs: List<ModelConfig>,
     appearance: AppearanceTheme,
+    useCoverArtwork: Boolean,
     onOpenChat: (String) -> Unit,
     onOpenCharacter: (String) -> Unit,
     onOpenModel: (String, String) -> Unit,
@@ -339,6 +339,8 @@ private fun SearchResults(
                     subtitle = chat.summary.ifBlank { "还没有消息" },
                     avatarName = messageRootEntryTitle(chat),
                     avatarPath = chat.characterAvatar,
+                    coverPath = chat.characterCover,
+                    useCoverArtwork = useCoverArtwork,
                     sideText = formatShortDate(chat.updatedAt),
                     appearance = appearance,
                     onClick = { onOpenChat(chat.id) },
@@ -355,12 +357,13 @@ private fun SearchResults(
                     title = character.persona.assistantName
                         .ifBlank { character.name }
                         .ifBlank { "未命名角色" },
-                    subtitle = listOf(
-                        CharacterMode.fromStorage(character.characterMode).label,
-                        character.group.trim().ifBlank { "未分组" },
-                    ).joinToString(" · "),
+                    subtitle = character.group.trim().ifBlank { "未分组" },
                     avatarName = character.name,
                     avatarPath = character.persona.assistantAvatar.ifBlank { character.avatar },
+                    coverPath = character.persona.assistantCover
+                        .ifBlank { character.coverImage }
+                        .ifBlank { character.persona.assistantAvatar.ifBlank { character.avatar } },
+                    useCoverArtwork = useCoverArtwork,
                     sideText = "",
                     appearance = appearance,
                     onClick = { onOpenCharacter(character.id) },
@@ -585,7 +588,6 @@ internal fun filterHomeCharacters(
             character.name,
             character.persona.assistantName,
             character.group,
-            CharacterMode.fromStorage(character.characterMode).label,
         ).any { it.contains(key, ignoreCase = true) }
     }
 }

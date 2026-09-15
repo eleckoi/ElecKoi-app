@@ -18,7 +18,6 @@ data class CharacterEntity(
     val orderIndex: Int,
     val groupViewOrder: Int,
     val folder: String,
-    val characterMode: String,
     val frontendBeautyEnabled: Boolean,
     val assistantName: String,
     val assistantAvatar: String,
@@ -36,7 +35,7 @@ data class CharacterEntity(
 
 /**
  * Potentially large author text is kept out of the frequently reordered/renamed character row.
- * One field per row also prevents editing an opening from rewriting an unrelated system prompt.
+ * One field per row lets each piece of authoring content be updated independently.
  */
 @Entity(
     tableName = "character_text_contents",

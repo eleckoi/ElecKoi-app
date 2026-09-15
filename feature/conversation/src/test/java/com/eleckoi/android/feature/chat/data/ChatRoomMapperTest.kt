@@ -4,7 +4,6 @@ import com.eleckoi.android.engine.agent.api.AgentPermissionMode
 import com.eleckoi.android.engine.agent.api.AgentWorkItemType
 import com.eleckoi.android.foundation.storage.room.ChatSessionEntity
 import com.eleckoi.android.foundation.storage.room.ChatSessionCharacterSnapshotEntity
-import com.eleckoi.android.foundation.storage.room.ChatSessionModelSettingsEntity
 import com.eleckoi.android.foundation.storage.room.ChatSessionRecord
 import com.eleckoi.android.foundation.storage.room.ChatSessionVariableStateEntity
 import com.eleckoi.android.feature.chat.model.ChatImageAttachment
@@ -154,7 +153,6 @@ class ChatRoomMapperTest {
             characterId = "character-1",
             characterName = "character",
             characterAvatar = "",
-            characterMode = "agent",
             historySummary = "next text",
             historyMessageCount = 2,
             historyUserMessageCount = 0,
@@ -162,7 +160,6 @@ class ChatRoomMapperTest {
             updatedAt = "2026-07-15T00:00:00Z",
         ),
         characterSnapshot = ChatSessionCharacterSnapshotEntity("session-1", "{}"),
-        modelSettings = ChatSessionModelSettingsEntity("session-1", "{}"),
         variableStates = listOf(
             ChatSessionVariableStateEntity("session-1", ChatVariableStateInitial, "{}"),
             ChatSessionVariableStateEntity("session-1", ChatVariableStateCurrent, "{}"),

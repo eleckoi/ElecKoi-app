@@ -2,7 +2,6 @@ package com.eleckoi.android.app.service
 
 import com.eleckoi.android.engine.story.variables.config.VariableConfigRepository
 import com.eleckoi.android.engine.story.variables.runtime.VariableRuntimeService
-import com.eleckoi.android.feature.characters.model.CharacterMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.data.SettingLibraryRepository
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isOpeningEntry
 import com.eleckoi.android.feature.chat.data.ChatSessionStore
@@ -60,10 +59,6 @@ internal class ChatStoryStateCoordinator(
 
     suspend fun selectOpening(sessionId: String, openingOptionId: String): ChatDraft {
         val session = sessions.load(sessionId, touch = false)
-        sessionCoordinator.requireCurrentCharacterMode(session)
-        if (CharacterMode.fromStorage(session.characterMode) != CharacterMode.Story) {
-            throw ElecKoiDataException("当前角色模式没有备用开场白")
-        }
         val openingEntry = settingLibrary.load(session.characterId).entries
             .firstOrNull { it.isOpeningEntry() && it.enabled }
             ?: throw ElecKoiDataException("当前角色没有启用开场白")

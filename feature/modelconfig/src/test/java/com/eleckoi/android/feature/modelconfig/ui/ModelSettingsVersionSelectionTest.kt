@@ -91,11 +91,16 @@ class ModelSettingsVersionSelectionTest {
     @Test
     fun `opening a new provider does not mark the untouched draft dirty`() {
         val target = ModelConfig(id = "config-draft", provider = "zhipu").toDraftModelTarget()
-        val state = ModelSettingsEditorState(resolveInitialConfig(emptyList(), target), initialDirty = false)
+        val state = ModelSettingsEditorState(
+            initialForm = resolveInitialConfig(emptyList(), target),
+            initialDirty = false,
+            initialNewDraft = true,
+        )
 
         state.syncFrom(emptyList(), target)
 
         assertFalse(state.dirty)
+        assertTrue(state.hasUnsavedChanges)
     }
 
     @Test
@@ -110,6 +115,46 @@ class ModelSettingsVersionSelectionTest {
         assertTrue(state.modelPickerOpen)
         assertEquals("", state.testMessage)
         assertEquals(fetched.modelOptions, state.form.modelOptions)
+        assertTrue(state.dirty)
+        assertEquals("idle", state.saveState)
+    }
+
+    @Test
+    fun `unsaved edit blocks replacement until the user chooses an action`() {
+        val state = ModelSettingsEditorState(config(id = "config", name = "DeepSeek"), initialDirty = false)
+        var replaced = false
+
+        state.update(state.form.copy(name = "edited"))
+        state.requestDraftReplacement { replaced = true }
+
+        assertTrue(state.unsavedDialogOpen)
+        assertFalse(replaced)
+
+        state.discardDraftAndContinue()
+
+        assertFalse(state.unsavedDialogOpen)
+        assertTrue(replaced)
+        assertFalse(state.hasUnsavedChanges)
+    }
+
+    @Test
+    fun `saving a new draft turns it into a persisted selection before continuing`() {
+        val draft = config(id = "draft", name = "new")
+        val saved = draft.copy(name = "saved")
+        val state = ModelSettingsEditorState(
+            initialForm = draft,
+            initialDirty = false,
+            initialNewDraft = true,
+        )
+        var continued = false
+
+        state.requestDraftReplacement { continued = true }
+        state.savedDraftAndContinue(saved)
+
+        assertEquals(saved, state.form)
+        assertFalse(state.hasUnsavedChanges)
+        assertEquals("saved", state.saveState)
+        assertTrue(continued)
     }
 
     @Test
@@ -176,6 +221,50 @@ class ModelSettingsVersionSelectionTest {
         assertEquals(ModelApiFormat.Responses, state.form.apiFormat)
         assertTrue(state.testState?.formatFallbackSuggested == true)
         assertEquals("当前接口格式测试失败，请尝试其他接口格式。", state.testMessage)
+    }
+
+    @Test
+    fun `connection test uses fetched capabilities without changing the editor draft`() {
+        val original = ModelConfig(
+            id = "config",
+            name = "unsaved name",
+            model = "old-model",
+            modelOptions = listOf(ModelOption("old-model")),
+        )
+        val state = ModelSettingsEditorState(original, initialDirty = true)
+        val fetched = original.copy(
+            model = "new-model",
+            modelOptions = listOf(ModelOption("new-model")),
+        )
+
+        assertTrue(state.startTestConnection())
+        state.finishConnectionStage(Result.success(fetched))
+        state.finishToolStage(Result.success(Unit))
+
+        assertEquals(original, state.form)
+        assertTrue(state.dirty)
+        assertEquals("idle", state.saveState)
+        assertEquals("1 个", state.testState?.steps?.get(1)?.detail)
+        assertTrue(state.testState?.toolsSupported == true)
+    }
+
+    @Test
+    fun `connection test does not turn a saved config into an unsaved edit`() {
+        val original = ModelConfig(
+            id = "config",
+            model = "old-model",
+            modelOptions = listOf(ModelOption("old-model")),
+        )
+        val state = ModelSettingsEditorState(original, initialDirty = false)
+
+        assertTrue(state.startTestConnection())
+        state.finishConnectionStage(
+            Result.success(original.copy(modelOptions = listOf(ModelOption("remote-model")))),
+        )
+        state.finishToolStage(Result.failure(IllegalStateException("tools unsupported")))
+
+        assertEquals(original, state.form)
+        assertFalse(state.hasUnsavedChanges)
     }
 
     private fun config(

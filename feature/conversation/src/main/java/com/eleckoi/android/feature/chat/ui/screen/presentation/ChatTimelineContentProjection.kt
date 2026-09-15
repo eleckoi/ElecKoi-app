@@ -114,7 +114,8 @@ internal fun rememberChatTimelineContentProjection(
         signature = presentationSignature,
         allowCachedReveal = !roleplayWebActive,
     )
-    val contextWindowUsage = messageScan.latestContextWindowUsage?.let { usage ->
+    val sessionGenerationStats = state.draft?.session?.generationStats
+    val contextWindowUsage = sessionGenerationStats?.contextWindowUsage?.let { usage ->
         ContextWindowUsage(
             latestTokens = usage.latestTokens,
             totalTokens = usage.totalTokens,
@@ -136,7 +137,7 @@ internal fun rememberChatTimelineContentProjection(
         latestMessage = latestMessage,
         generationReplyKey = generationReplyKey,
         markdownCacheScopeKey = markdownCacheScopeKey,
-        generationMetrics = messageScan.generationMetrics,
+        generationMetrics = sessionGenerationStats?.metrics ?: ChatGenerationMetrics(),
         contextWindowUsage = contextWindowUsage,
         latestRegenerableMessage = latestRegenerableMessage,
         presentationReadiness = presentationReadiness,

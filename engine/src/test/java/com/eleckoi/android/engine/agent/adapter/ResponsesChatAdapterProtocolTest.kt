@@ -702,7 +702,7 @@ class ResponsesChatAdapterProtocolTest {
             allowTerminalReasoningFallback = true,
         )
         stream.acceptData(
-            """{"id":"c","choices":[{"index":0,"delta":{"reasoning_content":"你好，我是守岸人。"},"finish_reason":"stop"}]}""",
+            """{"id":"c","choices":[{"index":0,"delta":{"reasoning_content":"你好，我是测试角色。"},"finish_reason":"stop"}]}""",
         )
 
         val events = stream.acceptData("[DONE]")
@@ -713,12 +713,12 @@ class ResponsesChatAdapterProtocolTest {
 
         assertEquals("final_answer", finalAnswer.string("phase"))
         assertEquals(
-            "你好，我是守岸人。",
+            "你好，我是测试角色。",
             finalAnswer.array("content")[0].jsonObject.string("text"),
         )
         assertTrue(events.any {
             it.type == "response.output_text.delta" &&
-                it.payload.string("delta") == "你好，我是守岸人。"
+                it.payload.string("delta") == "你好，我是测试角色。"
         })
     }
 

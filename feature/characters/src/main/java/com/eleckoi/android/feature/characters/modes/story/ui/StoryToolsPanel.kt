@@ -23,11 +23,9 @@ import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Book
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.Folder
-import androidx.compose.material.icons.rounded.Handyman
 import androidx.compose.material.icons.rounded.PermMedia
 import androidx.compose.material.icons.rounded.Schema
 import androidx.compose.material.icons.rounded.School
-import androidx.compose.material.icons.rounded.SettingsSuggest
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -55,13 +53,11 @@ internal fun StoryToolsPanel(
     appearance: AppearanceTheme,
     layoutScale: Float = 1f,
     onOpenAiCreationAssistant: () -> Unit,
-    onOpenPresetConfig: () -> Unit,
     onOpenSettingLibrary: () -> Unit,
     onOpenDynamicSettings: () -> Unit,
     onOpenVariableConfig: () -> Unit,
     onOpenRegexRules: () -> Unit,
     onOpenFrontendBeauty: () -> Unit,
-    onOpenAgentTools: () -> Unit,
 ) {
     val pagerState = rememberPagerState(pageCount = { 2 })
     val scope = rememberCoroutineScope()
@@ -120,14 +116,14 @@ internal fun StoryToolsPanel(
                     }
                     StoryToolRow(layoutScale) {
                         StoryToolCard(
-                            "预设配置", "一键套用", Icons.Rounded.SettingsSuggest, appearance,
-                            Modifier.weight(1f), layoutScale = layoutScale,
-                            onClick = { openToolOnce(onOpenPresetConfig) },
-                        )
-                        StoryToolCard(
                             "设定库", "世界书", Icons.Rounded.Book, appearance,
                             Modifier.weight(1f), layoutScale = layoutScale,
                             onClick = { openToolOnce(onOpenSettingLibrary) },
+                        )
+                        StoryToolCard(
+                            "变量配置", "状态骨架", Icons.Rounded.Schema, appearance,
+                            Modifier.weight(1f), layoutScale = layoutScale,
+                            onClick = { openToolOnce(onOpenVariableConfig) },
                         )
                     }
                     StoryToolRow(layoutScale) {
@@ -137,9 +133,9 @@ internal fun StoryToolsPanel(
                             onClick = { openToolOnce(onOpenRegexRules) },
                         )
                         StoryToolCard(
-                            "变量配置", "状态骨架", Icons.Rounded.Schema, appearance,
+                            "前端美化", "界面效果", Icons.Rounded.AutoAwesome, appearance,
                             Modifier.weight(1f), layoutScale = layoutScale,
-                            onClick = { openToolOnce(onOpenVariableConfig) },
+                            onClick = { openToolOnce(onOpenFrontendBeauty) },
                         )
                     }
                 } else {
@@ -158,18 +154,6 @@ internal fun StoryToolsPanel(
                         StoryToolCard(
                             "快捷动作", "按钮脚本", Icons.Rounded.Bolt, appearance,
                             Modifier.weight(1f), layoutScale = layoutScale,
-                        )
-                        StoryToolCard(
-                            "前端美化", "界面效果", Icons.Rounded.AutoAwesome, appearance,
-                            Modifier.weight(1f), layoutScale = layoutScale,
-                            onClick = { openToolOnce(onOpenFrontendBeauty) },
-                        )
-                    }
-                    StoryToolRow(layoutScale) {
-                        StoryToolCard(
-                            "工具", "调用能力", Icons.Rounded.Handyman, appearance,
-                            Modifier.weight(1f), layoutScale = layoutScale,
-                            onClick = { openToolOnce(onOpenAgentTools) },
                         )
                         Spacer(Modifier.weight(1f))
                     }

@@ -1,7 +1,9 @@
 package com.eleckoi.android.feature.modelconfig.ui
 
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
 import com.eleckoi.android.engine.generation.config.ModelConfigCollection
 import com.eleckoi.android.engine.generation.model.ModelConfig
 import com.eleckoi.android.engine.generation.model.isImageGenerationConfig
@@ -15,7 +17,7 @@ import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.foundation.design.components.ConfirmDialog
 import com.eleckoi.android.foundation.design.components.ErrorDialog
 import com.eleckoi.android.foundation.design.components.PinnedStatusScaffold
-import kotlinx.coroutines.delay
+import com.eleckoi.android.foundation.design.components.UnsavedChangesDialog
 
 internal typealias ModelSettingsEditorState =
     com.eleckoi.android.feature.modelconfig.ui.settings.ModelSettingsEditorState
@@ -26,7 +28,7 @@ fun ModelSettingsPage(
     target: ModelTarget,
     appearance: AppearanceTheme,
     onBack: () -> Unit,
-    onSave: (ModelConfig) -> Unit,
+    onSave: (ModelConfig, (Result<ModelConfig>) -> Unit) -> Unit,
     onCreateConfig: (String) -> Unit,
     onDeleteConfig: (String) -> Unit,
     onFetchModels: (ModelConfig, (Result<ModelConfig>) -> Unit) -> Unit,
@@ -34,6 +36,7 @@ fun ModelSettingsPage(
 ) {
     val configs = models?.configs.orEmpty()
     val editorState = rememberModelSettingsEditorState(configs, target)
+    val context = LocalContext.current
     val form = editorState.form
     val provider = providerMeta(form.provider)
     val isImageProvider = form.isImageGenerationConfig()
@@ -43,13 +46,23 @@ fun ModelSettingsPage(
             if (list.any { it.id == form.id } || form.id.isBlank()) list else list + form
         }
 
-    LaunchedEffect(form, editorState.dirty) {
-        if (!editorState.dirty) return@LaunchedEffect
-        delay(800)
+    fun saveCurrent(onSaved: (ModelConfig) -> Unit = {}) {
+        if (editorState.saving) return
         editorState.markSaving()
-        onSave(form)
-        editorState.markSaved()
+        onSave(editorState.form) { result ->
+            result.onSuccess { saved ->
+                editorState.markSaved(saved)
+                Toast.makeText(context, "模型配置已保存", Toast.LENGTH_SHORT).show()
+                onSaved(saved)
+            }.onFailure { error ->
+                editorState.markSaveFailed(error.message ?: "模型配置保存失败")
+            }
+        }
     }
+
+    fun requestBack() = editorState.requestDraftReplacement(onBack)
+
+    BackHandler(onBack = ::requestBack)
 
     PinnedStatusScaffold(
         appearance = appearance,
@@ -59,22 +72,20 @@ fun ModelSettingsPage(
         ModelSettingsHeader(
             title = "模型配置",
             appearance = appearance,
-            onBack = {
-                if (editorState.dirty) onSave(editorState.form)
-                onBack()
-            },
-            actionText = "删除",
-            actionDanger = true,
-            onAction = { editorState.confirmDelete = true },
+            onBack = ::requestBack,
+            actionText = if (editorState.saving) "保存中" else if (editorState.saveState == "saved") "已保存" else "保存",
+            actionEnabled = editorState.hasUnsavedChanges && !editorState.saving,
+            onAction = { saveCurrent() },
         )
         ModelSettingsContent(
             state = editorState,
             provider = provider,
             providerConfigs = providerConfigs,
+            canDeleteConfig = configs.any { it.id == form.id },
             isImageProvider = isImageProvider,
             appearance = appearance,
-            onSave = onSave,
             onCreateConfig = onCreateConfig,
+            onDeleteConfig = { editorState.confirmDelete = true },
             onFetchModels = onFetchModels,
             onTestConnection = onTestConnection,
         )
@@ -109,7 +120,7 @@ fun ModelSettingsPage(
             onSelect = { format ->
                 editorState.apiFormatSheetOpen = false
                 if (format != null) {
-                    editorState.update(editorState.form.copy(apiFormat = format, supportsTools = null))
+                    editorState.update(editorState.form.copy(apiFormat = format))
                 }
             },
         )
@@ -153,9 +164,23 @@ fun ModelSettingsPage(
             onDismiss = { editorState.confirmDelete = false },
             onConfirm = {
                 editorState.confirmDelete = false
-                onDeleteConfig(editorState.stopAutosaveForDelete())
+                onDeleteConfig(editorState.prepareForDelete())
                 onBack()
             },
+        )
+    }
+
+    if (editorState.unsavedDialogOpen) {
+        UnsavedChangesDialog(
+            title = "保存修改？",
+            message = "离开前是否保存当前模型配置的修改？",
+            appearance = appearance,
+            saving = editorState.saving,
+            onSave = {
+                saveCurrent(editorState::savedDraftAndContinue)
+            },
+            onDiscard = editorState::discardDraftAndContinue,
+            onCancel = editorState::cancelDraftReplacement,
         )
     }
 }

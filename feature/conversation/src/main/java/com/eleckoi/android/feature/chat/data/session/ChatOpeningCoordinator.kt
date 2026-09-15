@@ -15,27 +15,20 @@ internal class ChatOpeningCoordinator(
     fun replaceUnstartedWith(session: ChatSession) {
         room.databaseTransaction {
             room.dao.sessionsForCharacter(session.characterId)
-                .filter {
-                    it.session.characterMode == session.characterMode &&
-                        it.session.historyUserMessageCount == 0
-                }
+                .filter { it.session.historyUserMessageCount == 0 }
                 .forEach { room.ledger.deleteConversationInTransaction(it.session.id) }
-            room.dao.deleteUnstartedSessions(session.characterId, session.characterMode)
+            room.dao.deleteUnstartedSessions(session.characterId)
             room.writeInTransaction(session)
         }
     }
 
     fun replaceUnstartedOpening(
         characterId: String,
-        characterMode: String,
         content: String,
     ) {
         room.databaseTransaction {
             room.dao.sessionsForCharacter(characterId)
-                .filter {
-                    it.session.characterMode == characterMode &&
-                        it.session.historyUserMessageCount == 0
-                }
+                .filter { it.session.historyUserMessageCount == 0 }
                 .forEach { entity ->
                     val current = room.sessionFromEntity(entity, includeAllMessages = true)
                     val messages = ChatOpeningMessagePolicy.replace(

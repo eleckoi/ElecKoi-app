@@ -1,19 +1,27 @@
 package com.eleckoi.android.app.shell
 
 import com.eleckoi.android.foundation.design.components.*
+import com.eleckoi.android.foundation.design.isVisuallyDark
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import com.eleckoi.android.feature.characters.model.CharacterSlot
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
@@ -23,12 +31,13 @@ import com.eleckoi.android.feature.characters.modes.story.frontendbeauty.ui.Fron
 import com.eleckoi.android.feature.studio.ui.assistant.AiCreationAssistantViewModel
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.ui.SettingLibraryIntent
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.ui.SettingLibraryViewModel
-import com.eleckoi.android.feature.characters.modes.story.presets.ui.StoryPresetViewModel
+import com.eleckoi.android.feature.characters.presets.ui.AgentPresetViewModel
 import com.eleckoi.android.feature.characters.modes.story.variables.ui.VariableConfigIntent
 import com.eleckoi.android.feature.characters.modes.story.variables.ui.VariableConfigViewModel
 import com.eleckoi.android.feature.characters.modes.story.regex.ui.RegexRulesViewModel
 import com.eleckoi.android.feature.chat.ui.ChatViewModel
 import com.eleckoi.android.feature.chat.ui.layout.asRoleplayReadingTheme
+import com.eleckoi.android.foundation.design.withDarkAppearance
 import com.eleckoi.android.feature.preferences.ChatLayoutMode
 import com.eleckoi.android.feature.settings.ui.personalization.chat.ChatDisplaySettingsViewModel
 import com.eleckoi.android.feature.settings.ui.personalization.profile.ProfileViewModel
@@ -36,12 +45,14 @@ import com.eleckoi.android.feature.settings.ui.personalization.theme.ThemeViewMo
 import com.eleckoi.android.feature.modelconfig.ui.ModelsViewModel
 import com.eleckoi.android.app.navigation.MobileBackHandler
 import com.eleckoi.android.app.navigation.MobileRoute
+import com.eleckoi.android.app.navigation.replaceTopWith
 import com.eleckoi.android.feature.settings.ui.runtime.LocalRuntimeSettingsViewModel
 import com.eleckoi.android.feature.settings.ui.websearch.WebSearchSettingsViewModel
 import com.eleckoi.android.feature.settings.ui.remotedsh.RemoteDshSettingsViewModel
 import com.eleckoi.android.engine.agent.remotedsh.RemoteDshPlugin
-import com.eleckoi.android.feature.agenttools.AgentToolsViewModel
 import com.eleckoi.android.engine.agent.tools.AgentToolContextSnapshot
+import com.eleckoi.android.engine.agent.tools.AgentToolGroupSnapshot
+import com.eleckoi.android.feature.characters.presets.ui.editor.AgentPresetQuickToolsDialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.eleckoi.android.app.service.backup.DataBackupService
 import com.eleckoi.android.app.update.AppUpdateViewModel
@@ -51,7 +62,7 @@ internal fun MobileShell(
     shellViewModel: ShellViewModel,
     charactersViewModel: CharactersViewModel,
     settingLibraryViewModel: SettingLibraryViewModel,
-    storyPresetViewModel: StoryPresetViewModel,
+    agentPresetViewModel: AgentPresetViewModel,
     variableConfigViewModel: VariableConfigViewModel,
     regexRulesViewModel: RegexRulesViewModel,
     frontendBeautyViewModel: FrontendBeautyViewModel,
@@ -65,10 +76,10 @@ internal fun MobileShell(
     profileViewModel: ProfileViewModel,
     themeViewModel: ThemeViewModel,
     chatDisplaySettingsViewModel: ChatDisplaySettingsViewModel,
-    agentToolsViewModel: AgentToolsViewModel,
     chatViewModel: ChatViewModel,
     dataBackupService: DataBackupService,
-    toolContextSnapshotProvider: (String) -> AgentToolContextSnapshot,
+    toolContextSnapshotProvider: (Set<String>) -> AgentToolContextSnapshot,
+    toolGroupsProvider: (Set<String>) -> List<AgentToolGroupSnapshot>,
     agentBackgroundProtectionEnabled: Boolean,
     onAgentBackgroundProtectionEnabledChange: (Boolean) -> Unit,
     onAgentBackgroundProtectionPermissionChanged: () -> Unit,
@@ -76,7 +87,7 @@ internal fun MobileShell(
     val shellState by shellViewModel.uiState.collectAsStateWithLifecycle()
     val charactersState by charactersViewModel.uiState.collectAsStateWithLifecycle()
     val settingLibraryState by settingLibraryViewModel.uiState.collectAsStateWithLifecycle()
-    val storyPresetState by storyPresetViewModel.uiState.collectAsStateWithLifecycle()
+    val agentPresetState by agentPresetViewModel.uiState.collectAsStateWithLifecycle()
     val variableConfigState by variableConfigViewModel.uiState.collectAsStateWithLifecycle()
     val regexRulesState by regexRulesViewModel.uiState.collectAsStateWithLifecycle()
     val aiCreationAssistantState by aiCreationAssistantViewModel.uiState.collectAsStateWithLifecycle()
@@ -85,7 +96,12 @@ internal fun MobileShell(
     val themeState by themeViewModel.uiState.collectAsStateWithLifecycle()
     val chatState by chatViewModel.uiState.collectAsStateWithLifecycle()
     val appUpdateState by appUpdateViewModel.uiState.collectAsStateWithLifecycle()
-    val appearance = themeState.appearance
+    val systemDark = isSystemInDarkTheme()
+    val appearance = remember(themeState.appearance, themeState.appearanceMode, systemDark) {
+        themeState.appearance.withDarkAppearance(
+            themeState.appearanceMode.resolvesDark(systemDark),
+        )
+    }
     val user = profileState.user
     val moreOpen = shellState.moreOpen
     val backStack = rememberNavBackStack(MobileRoute.Root)
@@ -93,13 +109,13 @@ internal fun MobileShell(
     val currentShellState = rememberUpdatedState(shellState)
     val currentCharactersState = rememberUpdatedState(charactersState)
     val currentSettingLibraryState = rememberUpdatedState(settingLibraryState)
-    val currentStoryPresetState = rememberUpdatedState(storyPresetState)
+    val currentAgentPresetState = rememberUpdatedState(agentPresetState)
     val currentVariableConfigState = rememberUpdatedState(variableConfigState)
     val currentRegexRulesState = rememberUpdatedState(regexRulesState)
     val currentAiCreationAssistantState = rememberUpdatedState(aiCreationAssistantState)
     val currentModelsState = rememberUpdatedState(modelsState)
     val currentProfileState = rememberUpdatedState(profileState)
-    val currentThemeState = rememberUpdatedState(themeState)
+    val currentThemeState = rememberUpdatedState(themeState.copy(appearance = appearance))
     val currentAppUpdateState = rememberUpdatedState(appUpdateState)
     val currentAgentBackgroundProtectionEnabled =
         rememberUpdatedState(agentBackgroundProtectionEnabled)
@@ -109,7 +125,8 @@ internal fun MobileShell(
         rememberUpdatedState(onAgentBackgroundProtectionPermissionChanged)
     val context = LocalContext.current
     var characterImportSourceOpen by rememberSaveable { mutableStateOf(false) }
-    var storyPresetImportSourceOpen by rememberSaveable { mutableStateOf(false) }
+    var agentPresetImportSourceOpen by rememberSaveable { mutableStateOf(false) }
+    var presetToolsDialogOpen by rememberSaveable { mutableStateOf(false) }
     var rootSearchOpen by rememberSaveable { mutableStateOf(false) }
     val currentRootSearchOpen = rememberUpdatedState(rootSearchOpen)
     fun setRootSearchOpen(open: Boolean) {
@@ -134,8 +151,8 @@ internal fun MobileShell(
             charactersViewModel.onIntent(CharactersIntent.PrepareCharacterImport(files, source))
         },
     )
-    val storyPresetDocumentActions = rememberStoryPresetDocumentActions(
-        onDocumentsSelected = storyPresetViewModel::importPresets,
+    val agentPresetDocumentActions = rememberAgentPresetDocumentActions(
+        onDocumentsSelected = agentPresetViewModel::importPresets,
     )
     val dataBackupActions = rememberDataBackupActions(dataBackupService)
 
@@ -155,34 +172,15 @@ internal fun MobileShell(
     }
 
     fun selectBottomTab(tab: BottomTab) {
-        tab.rootTabOrNull()?.let { rootTab ->
-            shellViewModel.onIntent(ShellIntent.ChangeTab(rootTab))
-            navigateTo(MobileRoute.Root)
-            return
+        if (tab == BottomTab.Presets) {
+            agentPresetViewModel.closeEditor()
         }
-        val nextRoute = when (tab) {
-            BottomTab.Presets -> {
-                storyPresetViewModel.closeEditor()
-                MobileRoute.StoryPresets(rootTab = true)
-            }
-            BottomTab.Plugins -> MobileRoute.AgentTools(rootTab = true)
-            else -> return
-        }
-        if (route != nextRoute) {
-            backStack.clear()
-            backStack.add(MobileRoute.Root)
-            backStack.add(nextRoute)
-        }
+        shellViewModel.onIntent(ShellIntent.ChangeTab(tab.rootTab()))
+        navigateTo(MobileRoute.Root)
     }
 
     fun replaceTop(nextRoute: MobileRoute) {
-        if (backStack.isEmpty()) {
-            backStack.add(nextRoute)
-        } else if (backStack.size >= 2 && backStack[backStack.lastIndex - 1] == nextRoute) {
-            backStack.removeLastOrNull()
-        } else {
-            backStack[backStack.lastIndex] = nextRoute
-        }
+        backStack.replaceTopWith(nextRoute)
     }
 
     fun closeRoute() {
@@ -211,12 +209,12 @@ internal fun MobileShell(
         charactersState = charactersState,
         profileState = profileState,
         settingLibraryState = settingLibraryState,
-        storyPresetState = storyPresetState,
+        agentPresetState = agentPresetState,
         shellViewModel = shellViewModel,
         charactersViewModel = charactersViewModel,
         settingLibraryViewModel = settingLibraryViewModel,
         variableConfigViewModel = variableConfigViewModel,
-        storyPresetViewModel = storyPresetViewModel,
+        agentPresetViewModel = agentPresetViewModel,
         regexRulesViewModel = regexRulesViewModel,
         profileViewModel = profileViewModel,
         chatViewModel = chatViewModel,
@@ -227,16 +225,15 @@ internal fun MobileShell(
 
     val roleplayChatOpen = route == MobileRoute.Chat &&
         chatState.chatLayoutMode == ChatLayoutMode.Roleplay
-    val storyPresetRootOpen = route is MobileRoute.StoryPresets &&
-        route.rootTab &&
-        storyPresetState.editorPreset == null
-    val pluginRootOpen = route is MobileRoute.AgentTools && route.rootTab
-    val bottomChromeOpen = route == MobileRoute.Root || storyPresetRootOpen || pluginRootOpen
+    val presetEditorRootOpen = route == MobileRoute.Root &&
+        shellState.activeTab == RootTab.Presets &&
+        agentPresetState.editorPreset != null
+    val bottomChromeOpen = route == MobileRoute.Root && !presetEditorRootOpen
     val navigationBarColor = when {
         roleplayChatOpen -> appearance.asRoleplayReadingTheme().mobileSurface
         route == MobileRoute.Chat -> appearance.mobileChatBg
-        route == MobileRoute.Root && rootSearchOpen -> Color.White
-        bottomChromeOpen -> appearance.mobileTabbarBg
+        route == MobileRoute.Root && rootSearchOpen -> appearance.mobileSurface
+        bottomChromeOpen -> mobileTabBarContainerColor(appearance)
         else -> appearance.mobileBg
     }
     val routeContext = MobileShellRouteContext(
@@ -255,14 +252,14 @@ internal fun MobileShell(
             currentOnAgentBackgroundProtectionEnabledChange,
         currentOnAgentBackgroundProtectionPermissionChanged =
             currentOnAgentBackgroundProtectionPermissionChanged,
-        currentStoryPresetState = currentStoryPresetState,
+        currentAgentPresetState = currentAgentPresetState,
         chatState = chatState,
         appearance = appearance,
         user = user,
         shellViewModel = shellViewModel,
         charactersViewModel = charactersViewModel,
         settingLibraryViewModel = settingLibraryViewModel,
-        storyPresetViewModel = storyPresetViewModel,
+        agentPresetViewModel = agentPresetViewModel,
         variableConfigViewModel = variableConfigViewModel,
         regexRulesViewModel = regexRulesViewModel,
         frontendBeautyViewModel = frontendBeautyViewModel,
@@ -276,9 +273,9 @@ internal fun MobileShell(
         profileViewModel = profileViewModel,
         themeViewModel = themeViewModel,
         chatDisplaySettingsViewModel = chatDisplaySettingsViewModel,
-        agentToolsViewModel = agentToolsViewModel,
         chatViewModel = chatViewModel,
         toolContextSnapshotProvider = toolContextSnapshotProvider,
+        toolGroupsProvider = toolGroupsProvider,
         documentActions = documentActions,
         dataBackupActions = dataBackupActions,
         activeCharacter = ::activeCharacter,
@@ -290,13 +287,22 @@ internal fun MobileShell(
         rootSearchOpen = currentRootSearchOpen,
         onRootSearchOpenChange = ::setRootSearchOpen,
         onOpenCharacterImportSource = { characterImportSourceOpen = true },
-        onOpenStoryPresetImportSource = { storyPresetImportSourceOpen = true },
+        onOpenAgentPresetImportSource = { agentPresetImportSourceOpen = true },
+        onOpenPresetToolsDialog = { presetToolsDialogOpen = true },
     )
     SyncSystemBars(
         navigationBarColor = navigationBarColor,
-        darkStatusBarIcons =
-            !moreOpen &&
-                !roleplayChatOpen,
+        darkStatusBarIcons = if (moreOpen) {
+            !appearance.mobileSurface.isVisuallyDark()
+        } else if (route == MobileRoute.Chat) {
+            !appearance.asRoleplayReadingTheme().mobileChatHeaderBg.isVisuallyDark()
+        } else if (route == MobileRoute.Root && rootSearchOpen) {
+            !appearance.mobileSurface.isVisuallyDark()
+        } else if (route == MobileRoute.Root) {
+            !appearance.mobileTopbarBg.isVisuallyDark()
+        } else {
+            !appearance.mobileBg.isVisuallyDark()
+        },
     )
 
     MobileBackHandler(
@@ -304,47 +310,85 @@ internal fun MobileShell(
         onBack = { shellViewModel.onIntent(ShellIntent.SetMoreOpen(false)) },
     )
 
+    val presetToolsBackdropBlur by animateDpAsState(
+        targetValue = if (presetToolsDialogOpen) 12.dp else 0.dp,
+        animationSpec = tween(durationMillis = 180),
+        label = "presetToolsBackdropBlur",
+    )
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(appearance.mobileBg)
     ) {
-        NavDisplay(
-            modifier = Modifier.then(
-                if (bottomChromeOpen || route == MobileRoute.Chat) {
-                    Modifier
+        Box(
+            modifier = Modifier.fillMaxSize().then(
+                if (presetToolsBackdropBlur > 0.dp) {
+                    Modifier.blur(presetToolsBackdropBlur, BlurredEdgeTreatment.Unbounded)
                 } else {
-                    Modifier.navigationBarsPadding()
+                    Modifier
                 },
             ),
-            backStack = backStack,
-            onBack = ::goBackInsideApp,
-            transitionSpec = { elecKoiForwardRoute() },
-            popTransitionSpec = { elecKoiBackRoute() },
-            predictivePopTransitionSpec = { elecKoiBackRoute() },
-            entryProvider = { key ->
-                mobileShellRouteEntry(key as? MobileRoute, routeContext)
-            },
-        )
+        ) {
+            NavDisplay(
+                modifier = Modifier.then(
+                    if (bottomChromeOpen || route == MobileRoute.Chat) {
+                        Modifier
+                    } else {
+                        Modifier.navigationBarsPadding()
+                    },
+                ),
+                backStack = backStack,
+                onBack = ::goBackInsideApp,
+                transitionSpec = { elecKoiForwardRoute() },
+                popTransitionSpec = { elecKoiBackRoute() },
+                predictivePopTransitionSpec = { elecKoiBackRoute() },
+                entryProvider = { key ->
+                    mobileShellRouteEntry(key as? MobileRoute, routeContext)
+                },
+            )
 
-        MobileShellOverlays(
-            characterImportSourceOpen = characterImportSourceOpen,
-            onCloseCharacterImportSource = { characterImportSourceOpen = false },
-            storyPresetImportSourceOpen = storyPresetImportSourceOpen,
-            onCloseStoryPresetImportSource = { storyPresetImportSourceOpen = false },
-            charactersState = charactersState,
-            storyPresetState = storyPresetState,
-            appearance = appearance,
-            moreOpen = moreOpen,
-            user = user,
-            appUpdateAvailable = appUpdateState.updateAvailable,
-            navigationBarColor = navigationBarColor,
-            shellViewModel = shellViewModel,
-            charactersViewModel = charactersViewModel,
-            storyPresetViewModel = storyPresetViewModel,
-            characterCardActions = characterCardActions,
-            storyPresetDocumentActions = storyPresetDocumentActions,
-            navigateTo = ::navigateTo,
-        )
+            MobileShellOverlays(
+                characterImportSourceOpen = characterImportSourceOpen,
+                onCloseCharacterImportSource = { characterImportSourceOpen = false },
+                agentPresetImportSourceOpen = agentPresetImportSourceOpen,
+                onCloseAgentPresetImportSource = { agentPresetImportSourceOpen = false },
+                charactersState = charactersState,
+                useCoverArtwork = shellState.listCharacterArtwork == com.eleckoi.android.feature.preferences.ListCharacterArtwork.Cover,
+                agentPresetState = agentPresetState,
+                appearance = appearance,
+                moreOpen = moreOpen,
+                user = user,
+                appUpdateAvailable = appUpdateState.updateAvailable,
+                navigationBarColor = navigationBarColor,
+                shellViewModel = shellViewModel,
+                charactersViewModel = charactersViewModel,
+                agentPresetViewModel = agentPresetViewModel,
+                characterCardActions = characterCardActions,
+                agentPresetDocumentActions = agentPresetDocumentActions,
+                navigateTo = ::navigateTo,
+            )
+        }
+        if (presetToolsDialogOpen) {
+            currentAgentPresetState.value.activePreset?.let { preset ->
+                AgentPresetQuickToolsDialog(
+                    preset = preset,
+                    availableGroups = toolGroupsProvider(preset.toolConfiguration.enabledGroupIds),
+                    modelConfigs = modelsState.models?.configs.orEmpty(),
+                    appearance = appearance,
+                    onUpdate = agentPresetViewModel::update,
+                    onManage = {
+                        presetToolsDialogOpen = false
+                        agentPresetViewModel.openPresetTools(preset.id)
+                        navigateTo(MobileRoute.AgentPresets)
+                    },
+                    onOpenWebSearchSettings = {
+                        presetToolsDialogOpen = false
+                        navigateTo(MobileRoute.WebSearchSettings)
+                    },
+                    onSaveModelConfig = modelsViewModel::saveModelConfig,
+                    onDismiss = { presetToolsDialogOpen = false },
+                )
+            }
+        }
     }
 }

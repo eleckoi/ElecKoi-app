@@ -38,6 +38,7 @@ import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.foundation.design.components.AppIconPaths
 import com.eleckoi.android.foundation.design.components.AppSearchField
 import com.eleckoi.android.foundation.design.components.DshSearchGlyph
+import com.eleckoi.android.foundation.design.components.MobileHeaderSidebarButton
 import com.eleckoi.android.foundation.design.components.StrokeSvgIcon
 import com.eleckoi.android.foundation.design.components.noRippleClickable
 
@@ -46,6 +47,7 @@ internal fun StoryEditorHeader(
     title: String,
     appearance: AppearanceTheme,
     onBack: (() -> Unit)?,
+    onOpenSidebar: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     subtitle: String = "",
     actionWidth: Dp = 48.dp,
@@ -79,6 +81,12 @@ internal fun StoryEditorHeader(
             ) {
                 StrokeSvgIcon(AppIconPaths.Back, appearance.mobileText, iconSize = 23.dp, strokeWidth = 1.9f)
             }
+        } else if (onOpenSidebar != null) {
+            MobileHeaderSidebarButton(
+                appearance = appearance,
+                onClick = onOpenSidebar,
+                modifier = Modifier.align(Alignment.CenterStart),
+            )
         }
         Column(
             modifier = Modifier

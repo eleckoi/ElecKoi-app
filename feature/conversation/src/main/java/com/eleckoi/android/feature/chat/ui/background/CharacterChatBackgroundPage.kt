@@ -52,6 +52,7 @@ import com.eleckoi.android.foundation.design.components.common.BackgroundTunerPa
 import com.eleckoi.android.foundation.design.components.common.TunerSliderRow
 import com.eleckoi.android.foundation.design.components.noRippleClickable
 import com.eleckoi.android.foundation.design.components.saveBitmapToCache
+import com.eleckoi.android.feature.preferences.NewCharacterBackground
 import java.io.File
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
@@ -68,6 +69,7 @@ fun CharacterChatBackgroundPage(
     backgroundOpacity: Float,
     backgroundBlur: Float,
     backgroundScrim: Float,
+    newCharacterBackground: NewCharacterBackground,
     appearance: AppearanceTheme,
     errorMessage: String,
     onSave: (File?, Float, Float, Float, Boolean) -> Unit,
@@ -76,6 +78,7 @@ fun CharacterChatBackgroundPage(
     onUseCharacterCard: () -> Unit,
     onUseCustom: () -> Unit,
     onUseGlobal: () -> Unit,
+    onNewCharacterBackgroundChange: (NewCharacterBackground) -> Unit,
     onDismissError: () -> Unit,
     onBack: () -> Unit,
 ) {
@@ -266,27 +269,15 @@ fun CharacterChatBackgroundPage(
                 .padding(top = 92.dp, start = 14.dp, end = 14.dp),
         ) {
             ChatPreviewBubble(
-                text = when (origin) {
-                    BackgroundOrigin.AppDefault -> "当前使用 App 默认背景色，没有图片"
-                    BackgroundOrigin.CharacterCard -> "当前使用 ${characterName.ifBlank { "这个角色" }} 的角色立绘"
-                    BackgroundOrigin.Global -> "当前使用全局背景"
-                    BackgroundOrigin.CharacterCustom -> "当前使用这个角色的自定义图片"
-                },
+                text = "你好",
                 user = false,
                 appearance = appearance,
                 metrics = metrics,
             )
             Spacer(modifier = Modifier.height(metrics.turnSpacing))
             ChatPreviewBubble(
-                text = "这行字看得清吗，拉遮罩试试",
+                text = "今天想聊什么？",
                 user = true,
-                appearance = appearance,
-                metrics = metrics,
-            )
-            Spacer(modifier = Modifier.height(metrics.replySpacing))
-            ChatPreviewBubble(
-                text = "气泡和文字颜色不会变，那是主题风格管的",
-                user = false,
                 appearance = appearance,
                 metrics = metrics,
             )
@@ -295,18 +286,14 @@ fun CharacterChatBackgroundPage(
         BackgroundTunerPanel(
             appearance = appearance,
             expanded = panelExpanded,
-            summary = if (hasBackground) {
-                listOf(
-                    "透明度 ${(opacity * 100).roundToInt()}%",
-                    "模糊 ${blur.roundToInt()}",
-                    "遮罩 ${(scrim * 100).roundToInt()}%",
-                )
-            } else {
-                listOf(
-                    if (origin == BackgroundOrigin.CharacterCustom) "自定义" else "默认",
-                    "无图片",
-                )
-            },
+            summary = listOf(
+                when (origin) {
+                    BackgroundOrigin.AppDefault -> "纯色背景"
+                    BackgroundOrigin.CharacterCard -> "角色立绘"
+                    BackgroundOrigin.CharacterCustom -> "自定义图片"
+                    BackgroundOrigin.Global -> "共享背景"
+                },
+            ) + if (hasBackground) listOf("阅读遮罩 ${(scrim * 100).roundToInt()}%") else emptyList(),
             modifier = Modifier.align(Alignment.BottomCenter),
             onSetExpanded = { panelExpanded = it },
         ) {
@@ -402,17 +389,6 @@ fun CharacterChatBackgroundPage(
                     onSliderInteractionStart = { sliderInteractionActive = true },
                     onSliderInteractionFinished = { sliderInteractionActive = false },
                 )
-            } else {
-                Text(
-                    if (origin == BackgroundOrigin.CharacterCustom) {
-                        "选择图片后可调整透明度、模糊和阅读遮罩"
-                    } else {
-                        "当前使用 App 默认背景色，不显示图片"
-                    },
-                    color = appearance.mobileMuted,
-                    fontSize = 13.sp,
-                    modifier = Modifier.padding(top = 12.dp, bottom = 14.dp),
-                )
             }
 
             if (origin == BackgroundOrigin.CharacterCustom) {
@@ -434,14 +410,19 @@ fun CharacterChatBackgroundPage(
                     )
                 }
             }
+            NewCharacterBackgroundPicker(
+                selected = newCharacterBackground,
+                appearance = appearance,
+                onSelect = onNewCharacterBackgroundChange,
+            )
         }
 
         if (confirmGlobal) {
             ConfirmDialog(
-                title = "设为全局背景？",
-                message = "将当前图片设为全局背景。其他没有单独设置背景的角色会使用它，已上传独立背景的角色不受影响。",
+                title = "设为共享背景？",
+                message = "将当前图片设为共享背景。其他没有单独设置背景的角色会使用它，已上传独立背景的角色不受影响。",
                 appearance = appearance,
-                confirmText = "设为全局",
+                confirmText = "设为共享",
                 onDismiss = { confirmGlobal = false },
                 onConfirm = {
                     val file = previewFile

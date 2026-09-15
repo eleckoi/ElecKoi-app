@@ -66,11 +66,6 @@ internal class ChatModelSelectionResolver(
 }
 
 internal object ChatModelSelectionPolicy {
-    fun withSessionParameters(
-        global: ChatModelSelection,
-        session: ChatModelSelection?,
-    ): ChatModelSelection = global.copy(parameters = session?.parameters ?: global.parameters)
-
     fun validated(
         selection: ChatModelSelection?,
         collection: ModelConfigCollection,

@@ -10,8 +10,8 @@ internal object PngTextChunkCodec {
     private val signature = byteArrayOf(
         0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
     )
-    private const val MaxPngBytes = 64 * 1024 * 1024
-    private const val MaxChunkBytes = 48 * 1024 * 1024
+    private const val MaxPngBytes = 96 * 1024 * 1024
+    private const val MaxChunkBytes = 96 * 1024 * 1024
 
     fun isPng(bytes: ByteArray): Boolean =
         bytes.size >= signature.size && signature.indices.all { bytes[it] == signature[it] }
@@ -32,9 +32,13 @@ internal object PngTextChunkCodec {
         }
     }
 
-    fun writeText(bytes: ByteArray, values: Map<String, String>): ByteArray {
+    fun writeText(
+        bytes: ByteArray,
+        values: Map<String, String>,
+        removeKeys: Set<String> = emptySet(),
+    ): ByteArray {
         require(values.isNotEmpty()) { "没有要写入的角色卡数据" }
-        val replacementKeys = values.keys.map(String::lowercase).toSet()
+        val replacementKeys = (values.keys + removeKeys).map(String::lowercase).toSet()
         val chunks = parse(bytes).filterNot { chunk ->
             if (chunk.type != "tEXt") return@filterNot false
             val separator = chunk.data.indexOf(0)
@@ -42,7 +46,21 @@ internal object PngTextChunkCodec {
             chunk.data.copyOfRange(0, separator)
                 .toString(StandardCharsets.ISO_8859_1)
                 .lowercase() in replacementKeys
-        }.toMutableList()
+        }
+        return writeTextChunks(chunks, values)
+    }
+
+    /** Replaces every existing tEXt chunk so the result contains only [values] as text metadata. */
+    fun writeTextOnly(bytes: ByteArray, values: Map<String, String>): ByteArray {
+        require(values.isNotEmpty()) { "没有要写入的 PNG 文本数据" }
+        return writeTextChunks(parse(bytes).filterNot { it.type == "tEXt" }, values)
+    }
+
+    private fun writeTextChunks(
+        sourceChunks: List<Chunk>,
+        values: Map<String, String>,
+    ): ByteArray {
+        val chunks = sourceChunks.toMutableList()
         val endIndex = chunks.indexOfLast { it.type == "IEND" }
         require(endIndex >= 0) { "PNG 缺少结束标记" }
         val additions = values.map { (keyword, value) ->
@@ -55,11 +73,13 @@ internal object PngTextChunkCodec {
             Chunk("tEXt", data)
         }
         chunks.addAll(endIndex, additions)
-        return encode(chunks)
+        return encode(chunks).also { result ->
+            require(result.size <= MaxPngBytes) { "PNG 角色卡不能超过 96 MB" }
+        }
     }
 
     private fun parse(bytes: ByteArray): List<Chunk> {
-        require(bytes.size <= MaxPngBytes) { "角色卡图片不能超过 64 MB" }
+        require(bytes.size <= MaxPngBytes) { "角色卡图片不能超过 96 MB" }
         require(isPng(bytes)) { "这不是 PNG 角色卡" }
         val chunks = mutableListOf<Chunk>()
         var offset = signature.size

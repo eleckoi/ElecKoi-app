@@ -44,8 +44,8 @@ import com.eleckoi.android.engine.story.variables.model.VariableReadMode
 import com.eleckoi.android.engine.story.variables.model.VariableValueType
 import com.eleckoi.android.engine.story.variables.model.isInitializationObject
 import com.eleckoi.android.engine.story.variables.model.variableTypeLabel
-import com.eleckoi.android.foundation.design.components.AppIconPaths
-import com.eleckoi.android.foundation.design.components.StrokeSvgIcon
+import com.eleckoi.android.foundation.design.components.DshTreeDisclosureGlyph
+import com.eleckoi.android.foundation.design.components.dshTreeRowEntrance
 import com.eleckoi.android.foundation.design.components.noRippleClickable
 
 internal sealed interface VariableTreeNode {
@@ -182,6 +182,7 @@ internal fun VariableTreeNodeRow(
     var lastClickAt by remember(node.id) { mutableLongStateOf(0L) }
     Row(
         modifier = modifier
+            .dshTreeRowEntrance(enabled = node.depth > 0)
             .horizontalScroll(horizontalScrollState)
             .padding(horizontal = 8.dp, vertical = 1.dp)
             .fillMaxWidth()
@@ -226,11 +227,10 @@ internal fun VariableTreeNodeRow(
                             modifier = Modifier.size(15.dp),
                         )
                     } else {
-                        StrokeSvgIcon(
-                            if (expanded) AppIconPaths.ChevronDown else AppIconPaths.ChevronRight,
-                            appearance.mobileMuted,
+                        DshTreeDisclosureGlyph(
+                            expanded = expanded,
+                            tint = appearance.mobileMuted,
                             iconSize = 14.dp,
-                            strokeWidth = 1.75f,
                         )
                     }
                 }

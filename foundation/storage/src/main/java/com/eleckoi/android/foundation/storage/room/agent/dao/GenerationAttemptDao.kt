@@ -41,6 +41,18 @@ interface GenerationAttemptDao {
     )
     fun liveForConversation(conversationId: String): List<GenerationAttemptEntity>
 
+    @Query(
+        "SELECT * FROM generation_attempts WHERE conversationId = :conversationId " +
+            "AND (ownerId IN (:messageIds) OR outputMessageId IN (:messageIds))",
+    )
+    fun forMessages(conversationId: String, messageIds: List<String>): List<GenerationAttemptEntity>
+
+    @Query(
+        "DELETE FROM generation_attempts WHERE conversationId = :conversationId " +
+            "AND (ownerId IN (:messageIds) OR outputMessageId IN (:messageIds))",
+    )
+    fun deleteForMessages(conversationId: String, messageIds: List<String>)
+
     @Query("SELECT * FROM generation_attempts WHERE parentAttemptId = :parentAttemptId")
     fun children(parentAttemptId: String): List<GenerationAttemptEntity>
 

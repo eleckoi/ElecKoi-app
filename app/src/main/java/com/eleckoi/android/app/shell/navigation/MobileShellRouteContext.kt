@@ -3,11 +3,11 @@ package com.eleckoi.android.app.shell
 import androidx.compose.runtime.State
 import com.eleckoi.android.engine.agent.remotedsh.RemoteDshPlugin
 import com.eleckoi.android.engine.agent.tools.AgentToolContextSnapshot
-import com.eleckoi.android.feature.agenttools.AgentToolsViewModel
+import com.eleckoi.android.engine.agent.tools.AgentToolGroupSnapshot
 import com.eleckoi.android.feature.characters.model.CharacterSlot
 import com.eleckoi.android.feature.characters.modes.story.frontendbeauty.ui.FrontendBeautyViewModel
-import com.eleckoi.android.feature.characters.modes.story.presets.ui.StoryPresetUiState
-import com.eleckoi.android.feature.characters.modes.story.presets.ui.StoryPresetViewModel
+import com.eleckoi.android.feature.characters.presets.ui.AgentPresetUiState
+import com.eleckoi.android.feature.characters.presets.ui.AgentPresetViewModel
 import com.eleckoi.android.feature.characters.modes.story.regex.ui.RegexRulesUiState
 import com.eleckoi.android.feature.characters.modes.story.regex.ui.RegexRulesViewModel
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.ui.SettingLibraryUiState
@@ -52,14 +52,14 @@ internal class MobileShellRouteContext(
     val currentAgentBackgroundProtectionEnabled: State<Boolean>,
     val currentOnAgentBackgroundProtectionEnabledChange: State<(Boolean) -> Unit>,
     val currentOnAgentBackgroundProtectionPermissionChanged: State<() -> Unit>,
-    val currentStoryPresetState: State<StoryPresetUiState>,
+    val currentAgentPresetState: State<AgentPresetUiState>,
     val chatState: ChatUiState,
     val appearance: AppearanceTheme,
     val user: UserProfile,
     val shellViewModel: ShellViewModel,
     val charactersViewModel: CharactersViewModel,
     val settingLibraryViewModel: SettingLibraryViewModel,
-    val storyPresetViewModel: StoryPresetViewModel,
+    val agentPresetViewModel: AgentPresetViewModel,
     val variableConfigViewModel: VariableConfigViewModel,
     val regexRulesViewModel: RegexRulesViewModel,
     val frontendBeautyViewModel: FrontendBeautyViewModel,
@@ -73,9 +73,9 @@ internal class MobileShellRouteContext(
     val profileViewModel: ProfileViewModel,
     val themeViewModel: ThemeViewModel,
     val chatDisplaySettingsViewModel: ChatDisplaySettingsViewModel,
-    val agentToolsViewModel: AgentToolsViewModel,
     val chatViewModel: ChatViewModel,
-    val toolContextSnapshotProvider: (String) -> AgentToolContextSnapshot,
+    val toolContextSnapshotProvider: (Set<String>) -> AgentToolContextSnapshot,
+    val toolGroupsProvider: (Set<String>) -> List<AgentToolGroupSnapshot>,
     val documentActions: ShellDocumentActions,
     val dataBackupActions: DataBackupActions,
     val activeCharacter: (String) -> CharacterSlot?,
@@ -87,5 +87,6 @@ internal class MobileShellRouteContext(
     val rootSearchOpen: State<Boolean>,
     val onRootSearchOpenChange: (Boolean) -> Unit,
     val onOpenCharacterImportSource: () -> Unit,
-    val onOpenStoryPresetImportSource: () -> Unit,
+    val onOpenAgentPresetImportSource: () -> Unit,
+    val onOpenPresetToolsDialog: () -> Unit,
 )

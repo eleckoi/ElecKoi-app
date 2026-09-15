@@ -8,9 +8,6 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 internal val PinnedChatIdsJson = stringPreferencesKey("pinned_chat_ids_json")
 internal val HiddenChatIdsJson = stringPreferencesKey("hidden_chat_ids_json")
 internal val SearchHistoryJson = stringPreferencesKey("search_history_json")
-internal val PresetPagePinned = booleanPreferencesKey("preset_page_pinned")
-internal val PluginPagePinned = booleanPreferencesKey("plugin_page_pinned")
-internal val CommonPageOrderJson = stringPreferencesKey("common_page_order_json")
 internal val LastActiveChatSessionId = stringPreferencesKey("last_active_chat_session_id")
 internal val ActiveChatSessionIdsJson = stringPreferencesKey("active_chat_session_ids_json")
 internal val PinnedCreatorWorkspaceIdsJson = stringPreferencesKey("pinned_creator_workspace_ids_json")
@@ -18,6 +15,10 @@ internal val CreatorWorkspaceExpansionOverridesJson =
     stringPreferencesKey("creator_workspace_expansion_overrides_json")
 internal val LastCreatorWorkspaceId = stringPreferencesKey("last_creator_workspace_id")
 internal val HistorySaveMode = stringPreferencesKey("history_save_mode")
+internal val AppearanceModeKey = stringPreferencesKey("appearance_mode")
+internal val NewCharacterBackgroundKey = stringPreferencesKey("new_character_background")
+// Keep the PC storage name and values so portable preference snapshots agree across clients.
+internal val SidebarCharacterArtwork = stringPreferencesKey("sidebar_character_artwork")
 internal val DefaultChatConfigId = stringPreferencesKey("default_chat_config_id")
 internal val DefaultChatModel = stringPreferencesKey("default_chat_model")
 internal val AssistantBubbleEnabledSocial = booleanPreferencesKey("assistant_bubble_enabled_social")
@@ -34,7 +35,6 @@ internal val ChatAvatarShapeSocial = stringPreferencesKey("chat_avatar_shape_soc
 internal val ChatAvatarShapeAgent = stringPreferencesKey("chat_avatar_shape_agent")
 internal val ChatAvatarShapeRoleplay = stringPreferencesKey("chat_avatar_shape_roleplay")
 internal val ChatRoleplayCardPanel = booleanPreferencesKey("chat_roleplay_card_panel")
-internal val ChatRoleplayScrim = floatPreferencesKey("chat_roleplay_scrim")
 
 // Every layout has its own explicit key for every shared metric.
 internal val ChatBubbleCornerRadiusSocial = floatPreferencesKey("chat_bubble_corner_radius_social")
@@ -81,6 +81,7 @@ internal val ChatTimelineThinkingAnimationRoleplay =
     stringPreferencesKey("chat_timeline_thinking_animation_roleplay")
 internal val AppearanceThemeStored = booleanPreferencesKey("appearance_theme_stored")
 internal val MobileBg = intPreferencesKey("appearance_mobile_bg")
+internal val MobileRootBg = intPreferencesKey("appearance_mobile_root_bg")
 internal val MobilePinnedBg = intPreferencesKey("appearance_mobile_pinned_bg")
 internal val MobileSurface = intPreferencesKey("appearance_mobile_surface")
 internal val MobileText = intPreferencesKey("appearance_mobile_text")

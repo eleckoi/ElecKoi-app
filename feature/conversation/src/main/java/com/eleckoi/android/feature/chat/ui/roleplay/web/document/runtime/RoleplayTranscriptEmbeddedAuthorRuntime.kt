@@ -5,6 +5,7 @@ package com.eleckoi.android.feature.chat.ui.roleplay.web.document.runtime
  * transcript-to-native bridge as the single native boundary.
  */
 internal val RoleplayTranscriptEmbeddedAuthorRuntime = """    const embeddedAuthorFrames = new WeakMap();
+    const embeddedAuthorTargets = new Set();
     const pendingEmbeddedAuthorRequests = new Map();
     let embeddedAuthorSequence = 0;
     const embeddedAuthorBridge = Object.freeze({
@@ -46,6 +47,15 @@ internal val RoleplayTranscriptEmbeddedAuthorRuntime = """    const embeddedAuth
       }
       return true;
     };
+    deliverEmbeddedAuthorEvent = eventMessage => {
+      embeddedAuthorTargets.forEach(target => {
+        if (!richScopeAlive(target.slot, target.scope)) return;
+        const transport = target.frame.contentWindow?.ElecKoiNative;
+        if (typeof transport?.onmessage === 'function') {
+          transport.onmessage({ data: eventMessage });
+        }
+      });
+    };
     const embeddedAuthorBootstrapSource = () => `(() => {
       'use strict';
       const parentBridge = window.parent?.__ElecKoiEmbeddedAuthorBridge;
@@ -69,7 +79,7 @@ internal val RoleplayTranscriptEmbeddedAuthorRuntime = """    const embeddedAuth
       (0, eval)(sdkSource);
     })();`;
     const injectEmbeddedAuthorBootstrap = source => {
-      const bootstrap = '<script>' + embeddedAuthorBootstrapSource() + '<\/script>';
+      const bootstrap = authorLibrariesHead + '<script>' + embeddedAuthorBootstrapSource() + '<\/script>';
       const head = source.match(/<head(?:\s[^>]*)?>/i);
       if (head) return source.replace(head[0], head[0] + bootstrap);
       const html = source.match(/<html(?:\s[^>]*)?>/i);
@@ -81,8 +91,10 @@ internal val RoleplayTranscriptEmbeddedAuthorRuntime = """    const embeddedAuth
       if (!sourceWindow) return;
       const target = { frame, slot, scope };
       embeddedAuthorFrames.set(sourceWindow, target);
+      embeddedAuthorTargets.add(target);
       scope.cleanups.add(() => {
         embeddedAuthorFrames.delete(sourceWindow);
+        embeddedAuthorTargets.delete(target);
         pendingEmbeddedAuthorRequests.forEach((pending, requestId) => {
           if (pending.target === target) pendingEmbeddedAuthorRequests.delete(requestId);
         });

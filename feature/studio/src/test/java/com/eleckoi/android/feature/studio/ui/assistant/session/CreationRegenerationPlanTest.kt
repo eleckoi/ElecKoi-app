@@ -255,17 +255,17 @@ class CreationRegenerationPlanTest {
             inputImages = listOf(
                 ChatUserImageAttachment(
                     id = "image-1",
-                    localPath = "/private/reference.webp",
+                    localPath = "content://test/reference.webp",
                     mediaType = "image/webp",
-                    displayName = "参考图片.webp",
+                    displayName = "input-avatar.webp",
                     creatorMediaReference = "conversation-attachment:input-1",
                 ),
             ),
         )
 
-        assertTrue(prompt.text.contains("参考图片.webp -> asset_id=conversation-attachment:input-1"))
+        assertTrue(prompt.text.contains("input-avatar.webp -> asset_id=conversation-attachment:input-1"))
         assertTrue(prompt.text.contains("不是工作区永久资产"))
         assertTrue(prompt.text.contains("不要登记或复制未选图片"))
-        assertFalse(prompt.text.contains("/private/reference.webp"))
+        assertFalse(prompt.text.contains("content://test/reference.webp"))
     }
 }

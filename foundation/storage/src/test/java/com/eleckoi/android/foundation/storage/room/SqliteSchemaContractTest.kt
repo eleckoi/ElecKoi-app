@@ -10,13 +10,344 @@ import org.junit.Test
 
 /** Executes the same exported DDL that a desktop SQLite client consumes, without an Android device. */
 class SqliteSchemaContractTest {
-    private val directory = File(requireNotNull(System.getProperty("eleckoi.schemaDirectory")))
-    private val storageSources = File(requireNotNull(System.getProperty("eleckoi.storageSourceDirectory")))
+    private val directory = File("schemas")
+    private val storageSources = File("src/main")
     private val schema = JSONObject(File(directory,
+        "com.eleckoi.android.foundation.storage.room.ElecKoiDatabase/2.json").readText()).getJSONObject("database")
+    private val version1Schema = JSONObject(File(directory,
         "com.eleckoi.android.foundation.storage.room.ElecKoiDatabase/1.json").readText()).getJSONObject("database")
 
+    @Test fun `version 1 to 2 removes obsolete data and exactly matches the clean schema`() {
+        sqliteDatabase("eleckoi-common-schema-v1.sql") { db ->
+            insertV1(db, "characters", mapOf("id" to "character-a", "name" to "角色", "characterMode" to "story"))
+            insertV1(db, "setting_libraries", mapOf("characterId" to "character-a"))
+            insertV1(
+                db,
+                "setting_entry_contents",
+                mapOf(
+                    "characterId" to "character-a",
+                    "entryId" to "fixed-roleplay-plan",
+                    "revisionId" to "roleplay-revision",
+                    "payloadJson" to "{\"kind\":\"roleplay_plan\",\"content\":\"读取设定\\n输出正文\"}",
+                ),
+            )
+            insertV1(
+                db,
+                "setting_library_entry_links",
+                mapOf(
+                    "characterId" to "character-a",
+                    "entryId" to "fixed-roleplay-plan",
+                    "revisionId" to "roleplay-revision",
+                ),
+            )
+            db.execute(
+                "INSERT INTO character_text_contents(characterId, kind, content) " +
+                    "VALUES ('character-a', 'assistant_prompt', '废弃提示词')",
+            )
+            db.execute(
+                "INSERT INTO character_text_contents(characterId, kind, content) " +
+                    "VALUES ('character-a', 'opening', '保留开场白')",
+            )
+            db.execute(
+                "INSERT INTO global_tool_config(singletonId, payloadJson, updatedAt) " +
+                    "VALUES (1, '{\"shared\":true}', 'before')",
+            )
+            db.execute(
+                "INSERT INTO character_tool_configs(characterId, payloadJson, updatedAt) " +
+                    "VALUES ('character-a', '{\"scoped\":true}', 'before')",
+            )
+            insertV1(db, "chat_sessions", mapOf("id" to "chat-a", "updatedAt" to "before", "characterMode" to "story"))
+            db.execute(
+                "INSERT INTO chat_session_model_settings(sessionId, settingsJson) " +
+                    "VALUES ('chat-a', '{\"chat\":{\"config_id\":\"openai-config\",\"model\":\"gpt-5\"}}')",
+            )
+            insertV1(
+                db,
+                "chat_session_character_snapshots",
+                mapOf("sessionId" to "chat-a", "personaJson" to "{\"name\":\"角色\"}"),
+            )
+            insertV1(
+                db,
+                "chat_session_variable_states",
+                mapOf("sessionId" to "chat-a", "kind" to "current", "stateJson" to "{\"turn\":1}"),
+            )
+            insertV1(
+                db,
+                "conversation_setting_changes",
+                mapOf(
+                    "sessionId" to "chat-a",
+                    "targetType" to "entry",
+                    "targetId" to "entry-a",
+                    "operation" to "update",
+                    "payloadJson" to "{\"value\":1}",
+                    "updatedAt" to "before",
+                ),
+            )
+            insertV1(
+                db,
+                "conversation_setting_changes",
+                mapOf(
+                    "sessionId" to "chat-a",
+                    "targetType" to "entry",
+                    "targetId" to "fixed-roleplay-plan",
+                    "operation" to "update",
+                    "payloadJson" to "{\"kind\":\"roleplay_plan\",\"content\":\"旧对话计划\"}",
+                    "updatedAt" to "before",
+                ),
+            )
+            db.execute(
+                "INSERT INTO roleplay_rich_heights(" +
+                    "sessionId, messageId, contentRevision, rootIndex, viewportWidthPx, heightPx, measuredAtEpochMs" +
+                    ") VALUES ('chat-a', 'message-a', 'revision-a', 0, 640, 812, 1)",
+            )
+            insertV1(
+                db,
+                "agent_conversations",
+                mapOf("id" to "chat-a", "activeBranchId" to "branch-a"),
+            )
+            db.execute(
+                "INSERT INTO agent_conversation_display_cache(" +
+                    "conversationId, chunkIndex, ledgerRevision, payloadJson, rendererVersion, updatedAt" +
+                    ") VALUES ('chat-a', 0, 0, '[{\"id\":\"message-a\"}]', 1, 'before')",
+            )
+            db.execute(
+                "INSERT INTO agent_branches(" +
+                    "id, conversationId, parentBranchId, forkedFromTurnId, headSequence, name, reason, createdAt" +
+                    ") VALUES ('branch-a', 'chat-a', NULL, NULL, 0, '主分支', 'conversation_created', '')",
+            )
+            insertV1(
+                db,
+                "conversation_speakers",
+                mapOf(
+                    "id" to "speaker-a",
+                    "conversationId" to "chat-a",
+                    "sourceSpeakerId" to "user",
+                    "kind" to "user",
+                ),
+            )
+            insertV1(
+                db,
+                "agent_turns",
+                mapOf(
+                    "id" to "turn-a",
+                    "conversationId" to "chat-a",
+                    "speakerId" to "speaker-a",
+                    "sourceMessageId" to "message-a",
+                ),
+            )
+            insertV1(
+                db,
+                "agent_branch_turns",
+                mapOf("branchId" to "branch-a", "sequence" to 0, "turnId" to "turn-a"),
+            )
+            insertV1(
+                db,
+                "creator_workspaces",
+                mapOf(
+                    "id" to "workspace-a",
+                    "name" to "角色工作区",
+                    "linkedCharacterId" to "character-a",
+                    "linkedCharacterMode" to "story",
+                ),
+            )
+            insertV1(
+                db,
+                "creator_workspace_character_roots",
+                mapOf(
+                    "workspaceId" to "workspace-a",
+                    "id" to "root-a",
+                    "characterId" to "character-a",
+                ),
+            )
+            insertV1(
+                db,
+                "story_presets",
+                mapOf(
+                    "id" to "story-preset-default",
+                    "name" to "默认故事预设",
+                    "modelFamily" to "general",
+                    "activeVersionId" to "story-preset-default:v1",
+                    "description" to "迁移后的使用说明",
+                ),
+            )
+            insertV1(
+                db,
+                "story_preset_state",
+                mapOf("singletonId" to 0, "activePresetId" to "story-preset-default"),
+            )
+            insertV1(
+                db,
+                "story_preset_versions",
+                mapOf(
+                    "presetId" to "story-preset-default",
+                    "versionId" to "story-preset-default:v1",
+                    "versionNumber" to 1,
+                ),
+            )
+            insertV1(
+                db,
+                "story_preset_entries",
+                mapOf(
+                    "presetId" to "story-preset-default",
+                    "entryId" to "fixed-roleplay-plan",
+                    "payloadJson" to "{\"kind\":\"roleplay_plan\",\"content\":\"读取设定\\n输出正文\"}",
+                ),
+            )
+            insertV1(
+                db,
+                "story_preset_entries",
+                mapOf(
+                    "presetId" to "story-preset-default",
+                    "entryId" to "built-in-dsh-harness-identity",
+                    "sortIndex" to 1,
+                    "payloadJson" to "{\"kind\":\"normal\",\"content\":\"旧 DSH 身份\"}",
+                ),
+            )
+            insertV1(
+                db,
+                "story_preset_entries",
+                mapOf(
+                    "presetId" to "story-preset-default",
+                    "entryId" to "author-entry",
+                    "sortIndex" to 2,
+                    "payloadJson" to "{\"kind\":\"normal\",\"content\":\"保留作者提示词\"}",
+                ),
+            )
+            insertV1(
+                db,
+                "story_preset_version_entries",
+                mapOf(
+                    "presetId" to "story-preset-default",
+                    "versionId" to "story-preset-default:v1",
+                    "entryId" to "fixed-roleplay-plan",
+                    "payloadJson" to "{\"kind\":\"roleplay_plan\",\"content\":\"读取版本设定\\n输出版本正文\"}",
+                ),
+            )
+            insertV1(
+                db,
+                "model_configs",
+                mapOf(
+                    "id" to "model-a",
+                    "name" to "保留的模型配置",
+                    "provider" to "custom",
+                    "model" to "model-a",
+                    "supportsTools" to 1,
+                ),
+            )
+
+            // Android may run the schema migration while FK enforcement is temporarily disabled.
+            // In that mode rebuilding a parent table does not cascade-delete its existing child rows,
+            // so restoring the child backups must replace those rows instead of inserting duplicates.
+            db.execute("PRAGMA foreign_keys = OFF")
+            db.execute("PRAGMA legacy_alter_table = ON")
+            db.autoCommit = false
+            try {
+                ElecKoiDatabaseMigrations.version1To2Statements.forEachIndexed { index, statement ->
+                    try {
+                        db.execute(statement)
+                    } catch (error: SQLException) {
+                        throw SQLException("Migration statement #$index failed: $statement", error)
+                    }
+                }
+                db.execute("PRAGMA user_version = 2")
+                val foreignKeyViolations = db.foreignKeyViolations()
+                if (foreignKeyViolations.isNotEmpty()) {
+                    throw SQLException("Migration left foreign-key violations: $foreignKeyViolations")
+                }
+                db.commit()
+            } catch (error: Throwable) {
+                db.rollback()
+                throw error
+            } finally {
+                db.autoCommit = true
+                db.execute("PRAGMA legacy_alter_table = OFF")
+                db.execute("PRAGMA foreign_keys = ON")
+            }
+
+            assertEquals(1, db.number("SELECT COUNT(*) FROM chat_sessions WHERE id = 'chat-a'"))
+            assertEquals(1, db.number("SELECT COUNT(*) FROM chat_session_character_snapshots WHERE sessionId = 'chat-a'"))
+            assertEquals(1, db.number("SELECT COUNT(*) FROM chat_session_variable_states WHERE sessionId = 'chat-a'"))
+            assertEquals(1, db.number("SELECT COUNT(*) FROM conversation_setting_changes WHERE sessionId = 'chat-a'"))
+            assertEquals(1, db.number("SELECT COUNT(*) FROM creator_workspace_character_roots WHERE workspaceId = 'workspace-a'"))
+            assertEquals(
+                0,
+                db.number(
+                    "SELECT COUNT(*) FROM sqlite_master " +
+                        "WHERE type = 'table' AND name = 'chat_session_model_settings'",
+                ),
+            )
+            assertEquals(2, db.number("PRAGMA user_version"))
+            assertEquals(schemaTableNames(), db.tableNames())
+            assertEquals(freshSchemaStructure(), db.schemaStructure())
+            assertEquals(setOf("id", "conversationId"), db.columns("agent_branches"))
+            assertEquals(1, db.number("SELECT COUNT(*) FROM agent_branch_turns WHERE turnId = 'turn-a'"))
+            assertEquals(
+                "保留开场白",
+                db.text("SELECT content FROM character_text_contents WHERE kind = 'opening'"),
+            )
+            assertEquals(
+                0,
+                db.number("SELECT COUNT(*) FROM character_text_contents WHERE kind = 'assistant_prompt'"),
+            )
+            assertEquals(
+                0,
+                db.number("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('global_tool_config', 'character_tool_configs')"),
+            )
+            assertFalse("characterMode" in db.columns("characters"))
+            assertFalse("characterMode" in db.columns("chat_sessions"))
+            assertFalse("supportsTools" in db.columns("model_configs"))
+            assertEquals(
+                "保留的模型配置",
+                db.text("SELECT name FROM model_configs WHERE id = 'model-a'"),
+            )
+            assertEquals("agent-preset-default", db.text("SELECT activePresetId FROM agent_preset_state"))
+            assertEquals(
+                "迁移后的使用说明",
+                db.text("SELECT content FROM agent_preset_contents WHERE presetId = 'agent-preset-default' AND kind = 'usage_instructions'"),
+            )
+            val toolConfiguration = db.text(
+                "SELECT content FROM agent_preset_contents WHERE presetId = 'agent-preset-default' AND kind = 'tool_configuration'",
+            )
+            assertTrue(toolConfiguration.contains("builtin:variables"))
+            assertTrue(toolConfiguration.contains("builtin:setting-library"))
+            assertEquals(
+                0,
+                db.number(
+                    "SELECT COUNT(*) FROM agent_preset_entries " +
+                        "WHERE entryId IN ('fixed-roleplay-plan', 'built-in-dsh-harness-identity')",
+                ),
+            )
+            assertEquals(
+                1,
+                db.number("SELECT COUNT(*) FROM agent_preset_entries WHERE entryId = 'author-entry'"),
+            )
+            assertEquals(
+                0,
+                db.number("SELECT COUNT(*) FROM agent_preset_version_entries WHERE entryId = 'fixed-roleplay-plan'"),
+            )
+            assertEquals(
+                0,
+                db.number("SELECT COUNT(*) FROM setting_entry_contents WHERE entryId = 'fixed-roleplay-plan'"),
+            )
+            assertEquals(
+                0,
+                db.number("SELECT COUNT(*) FROM conversation_setting_changes WHERE targetId = 'fixed-roleplay-plan'"),
+            )
+            assertFalse("updatedAt" in db.columns("agent_conversation_display_cache"))
+            assertEquals(
+                "[{\"id\":\"message-a\"}]",
+                db.text("SELECT payloadJson FROM agent_conversation_display_cache WHERE conversationId = 'chat-a'"),
+            )
+            assertEquals(812, db.number("SELECT heightPx FROM roleplay_rich_heights WHERE messageId = 'message-a'"))
+            assertFalse("measuredAtEpochMs" in db.columns("roleplay_rich_heights"))
+            db.createStatement().use { statement ->
+                statement.executeQuery("PRAGMA foreign_key_check").use { assertFalse(it.next()) }
+            }
+        }
+    }
+
     @Test fun `common DDL preserves business views and foreign keys without Room metadata`() = database { db ->
-        assertEquals(1, db.number("PRAGMA user_version"))
+        assertEquals(schema.getInt("version"), db.number("PRAGMA user_version"))
         val entities = schema.getJSONArray("entities")
         assertEquals(entities.length(), db.number("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table'"))
         assertEquals(0, db.number("SELECT COUNT(*) FROM sqlite_master WHERE name = 'room_master_table'"))
@@ -76,7 +407,7 @@ class SqliteSchemaContractTest {
 
     @Test fun `frequently updated rows do not contain unrelated large documents`() = database { db ->
         assertFalse(db.columns("characters").any {
-            it in setOf("assistantPrompt", "imagePrompt", "opening")
+            it in setOf("imagePrompt", "opening")
         })
         assertFalse(db.columns("chat_sessions").any {
             it in setOf("characterPersonaJson", "modelSettingsJson", "initialVariableStateJson", "variableStateJson")
@@ -85,7 +416,7 @@ class SqliteSchemaContractTest {
         assertFalse(db.columns("variable_config_versions").any {
             it in setOf("initialStateJson", "currentStateJson", "schemaCode", "objectsJson", "variablesJson")
         })
-        assertFalse(db.columns("story_presets").any {
+        assertFalse(db.columns("agent_presets").any {
             it in setOf("timelineJson", "regexRulesJson", "promptPositionsJson")
         })
 
@@ -93,7 +424,7 @@ class SqliteSchemaContractTest {
         insert(db, "characters", mapOf("id" to "split-card", "name" to "原名"))
         insert(db, "character_text_contents", mapOf(
             "characterId" to "split-card",
-            "kind" to "assistant_prompt",
+            "kind" to "opening",
             "content" to large,
         ))
         db.execute("UPDATE characters SET name = '新名' WHERE id = 'split-card'")
@@ -127,14 +458,14 @@ class SqliteSchemaContractTest {
         db.execute("UPDATE creator_workspaces SET totalBytes = 123 WHERE id = 'split-workspace'")
         assertEquals("src/index.html", db.text("SELECT path FROM creator_workspace_files WHERE workspaceId = 'split-workspace'"))
 
-        insert(db, "story_presets", mapOf("id" to "split-preset", "name" to "原预设"))
-        insert(db, "story_preset_contents", mapOf(
+        insert(db, "agent_presets", mapOf("id" to "split-preset", "name" to "原预设"))
+        insert(db, "agent_preset_contents", mapOf(
             "presetId" to "split-preset",
             "kind" to "regex_rules",
             "content" to large,
         ))
-        db.execute("UPDATE story_presets SET name = '新预设' WHERE id = 'split-preset'")
-        assertEquals(large, db.text("SELECT content FROM story_preset_contents WHERE presetId = 'split-preset'"))
+        db.execute("UPDATE agent_presets SET name = '新预设' WHERE id = 'split-preset'")
+        assertEquals(large, db.text("SELECT content FROM agent_preset_contents WHERE presetId = 'split-preset'"))
     }
 
     @Test fun `deleting one card removes its variable versions and regex but preserves shared data`() = database { db ->
@@ -208,8 +539,6 @@ class SqliteSchemaContractTest {
 
     @Test fun `new business domains share card ownership and cleanup work survives interruption`() = database { db ->
         insert(db, "characters", mapOf("id" to "card-a"))
-        insert(db, "global_tool_config", mapOf("singletonId" to 1, "payloadJson" to "{}"))
-        insert(db, "character_tool_configs", mapOf("characterId" to "card-a", "payloadJson" to "{}"))
         insert(db, "frontend_projects", mapOf("id" to "front-a", "characterId" to "card-a"))
         insert(db, "character_frontend_settings", mapOf(
             "characterId" to "card-a",
@@ -237,7 +566,6 @@ class SqliteSchemaContractTest {
         }
         db.execute("DELETE FROM characters WHERE id = 'card-a'")
 
-        assertEquals(0, db.number("SELECT COUNT(*) FROM character_tool_configs"))
         assertEquals(0, db.number("SELECT COUNT(*) FROM frontend_projects"))
         assertEquals(0, db.number("SELECT COUNT(*) FROM character_frontend_settings"))
         assertEquals(0, db.number("SELECT COUNT(*) FROM creator_workspace_character_roots"))
@@ -299,8 +627,12 @@ class SqliteSchemaContractTest {
     }
 
     private fun database(block: (Connection) -> Unit) {
+        sqliteDatabase("eleckoi-common-schema-v2.sql", block)
+    }
+
+    private fun sqliteDatabase(schemaFileName: String, block: (Connection) -> Unit) {
         DriverManager.getConnection("jdbc:sqlite::memory:").use { db ->
-            File(directory, "eleckoi-common-schema-v1.sql").readLines()
+            File(directory, schemaFileName).readLines()
                 .filterNot { it.trimStart().startsWith("--") }
                 .joinToString("\n").split(';').filter(String::isNotBlank)
                 .forEach { db.execute(it) }
@@ -310,7 +642,15 @@ class SqliteSchemaContractTest {
     }
 
     private fun insert(db: Connection, table: String, values: Map<String, Any>) {
-        val entities = schema.getJSONArray("entities")
+        insertFromSchema(db, schema, table, values)
+    }
+
+    private fun insertV1(db: Connection, table: String, values: Map<String, Any>) {
+        insertFromSchema(db, version1Schema, table, values)
+    }
+
+    private fun insertFromSchema(db: Connection, sourceSchema: JSONObject, table: String, values: Map<String, Any>) {
+        val entities = sourceSchema.getJSONArray("entities")
         val entity = (0 until entities.length()).map { entities.getJSONObject(it) }
             .single { it.getString("tableName") == table }
         val fields = entity.getJSONArray("fields")
@@ -338,4 +678,151 @@ class SqliteSchemaContractTest {
             buildSet { while (rows.next()) add(rows.getString("name")) }
         }
     }
+
+    private fun Connection.foreignKeyViolations(): List<String> = createStatement().use { statement ->
+        statement.executeQuery("PRAGMA foreign_key_check").use { rows ->
+            buildList {
+                while (rows.next()) {
+                    add("${rows.getString(1)}:${rows.getString(2)} -> ${rows.getString(3)}#${rows.getInt(4)}")
+                }
+            }
+        }
+    }
+
+    private fun schemaTableNames(): Set<String> {
+        val entities = schema.getJSONArray("entities")
+        return buildSet {
+            for (index in 0 until entities.length()) {
+                add(entities.getJSONObject(index).getString("tableName"))
+            }
+        }
+    }
+
+    private fun Connection.tableNames(): Set<String> = createStatement().use { statement ->
+        statement.executeQuery(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
+        ).use { rows ->
+            buildSet { while (rows.next()) add(rows.getString("name")) }
+        }
+    }
+
+    private fun freshSchemaStructure(): DatabaseStructure {
+        lateinit var structure: DatabaseStructure
+        sqliteDatabase("eleckoi-common-schema-v2.sql") { db ->
+            structure = db.schemaStructure()
+        }
+        return structure
+    }
+
+    private fun Connection.schemaStructure(): DatabaseStructure = DatabaseStructure(
+        tables = tableNames().sorted().associateWith { table -> tableStructure(table) },
+        views = createStatement().use { statement ->
+            statement.executeQuery(
+                "SELECT name, sql FROM sqlite_master WHERE type = 'view' ORDER BY name",
+            ).use { rows ->
+                buildMap {
+                    while (rows.next()) {
+                        put(rows.getString("name"), rows.getString("sql").normalizedSql())
+                    }
+                }
+            }
+        },
+    )
+
+    private fun Connection.tableStructure(table: String): TableStructure = TableStructure(
+        columns = createStatement().use { statement ->
+            statement.executeQuery("PRAGMA table_info(`$table`)").use { rows ->
+                buildList {
+                    while (rows.next()) {
+                        add(ColumnStructure(
+                            name = rows.getString("name"),
+                            type = rows.getString("type"),
+                            notNull = rows.getInt("notnull"),
+                            defaultValue = rows.getString("dflt_value"),
+                            primaryKeyOrder = rows.getInt("pk"),
+                        ))
+                    }
+                }
+            }
+        },
+        foreignKeys = createStatement().use { statement ->
+            statement.executeQuery("PRAGMA foreign_key_list(`$table`)").use { rows ->
+                buildList {
+                    while (rows.next()) {
+                        add(ForeignKeyStructure(
+                            id = rows.getInt("id"),
+                            sequence = rows.getInt("seq"),
+                            parentTable = rows.getString("table"),
+                            childColumn = rows.getString("from"),
+                            parentColumn = rows.getString("to"),
+                            onUpdate = rows.getString("on_update"),
+                            onDelete = rows.getString("on_delete"),
+                        ))
+                    }
+                }.sortedWith(compareBy(ForeignKeyStructure::id, ForeignKeyStructure::sequence))
+            }
+        },
+        indices = explicitIndices(table),
+    )
+
+    private fun Connection.explicitIndices(table: String): List<IndexStructure> {
+        val headers = createStatement().use { statement ->
+            statement.executeQuery("PRAGMA index_list(`$table`)").use { rows ->
+                buildList {
+                    while (rows.next()) {
+                        val name = rows.getString("name")
+                        if (!name.startsWith("sqlite_autoindex_")) {
+                            add(Triple(name, rows.getInt("unique"), rows.getString("origin")))
+                        }
+                    }
+                }
+            }
+        }
+        return headers.map { (name, unique, origin) ->
+            val columns = createStatement().use { statement ->
+                statement.executeQuery("PRAGMA index_info(`$name`)").use { rows ->
+                    buildList { while (rows.next()) add(rows.getString("name")) }
+                }
+            }
+            IndexStructure(name, unique, origin, columns)
+        }.sortedBy(IndexStructure::name)
+    }
+
+    private fun String.normalizedSql(): String = replace(Regex("\\s+"), " ").trim()
+
+    private data class DatabaseStructure(
+        val tables: Map<String, TableStructure>,
+        val views: Map<String, String>,
+    )
+
+    private data class TableStructure(
+        val columns: List<ColumnStructure>,
+        val foreignKeys: List<ForeignKeyStructure>,
+        val indices: List<IndexStructure>,
+    )
+
+    private data class ColumnStructure(
+        val name: String,
+        val type: String,
+        val notNull: Int,
+        val defaultValue: String?,
+        val primaryKeyOrder: Int,
+    )
+
+    private data class ForeignKeyStructure(
+        val id: Int,
+        val sequence: Int,
+        val parentTable: String,
+        val childColumn: String,
+        val parentColumn: String,
+        val onUpdate: String,
+        val onDelete: String,
+    )
+
+    private data class IndexStructure(
+        val name: String,
+        val unique: Int,
+        val origin: String,
+        val columns: List<String>,
+    )
 }

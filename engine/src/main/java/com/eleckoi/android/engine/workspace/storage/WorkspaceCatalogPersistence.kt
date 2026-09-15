@@ -61,7 +61,7 @@ internal class RoomWorkspaceCatalogPersistence(
             schemaVersion = workspace.schemaVersion,
             name = workspace.name,
             linkedCharacterId = workspace.linkedCharacterId,
-            linkedCharacterMode = workspace.linkedCharacterMode,
+            characterOwned = workspace.characterOwned,
             primaryCharacterRootId = workspace.primaryCharacterRootId,
             previewEntryFile = workspace.previewEntryFile,
             createdAt = workspace.createdAt,
@@ -105,7 +105,7 @@ internal class RoomWorkspaceCatalogPersistence(
             id = row.id,
             name = row.name,
             linkedCharacterId = row.linkedCharacterId,
-            linkedCharacterMode = row.linkedCharacterMode,
+            characterOwned = row.characterOwned,
             primaryCharacterRootId = row.primaryCharacterRootId,
             characterRoots = record.characterRoots.map { root ->
                 CreatorWorkspaceCharacterRoot(

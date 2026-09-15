@@ -6,7 +6,6 @@ import com.eleckoi.android.engine.agent.adapter.request.AgentTurnRequestContext
 import com.eleckoi.android.engine.agent.adapter.request.DshCompactionRequestProjector
 import com.eleckoi.android.engine.agent.adapter.request.DshRequestContextProjector
 import com.eleckoi.android.engine.agent.diagnostics.AgentRequestDiagnostics
-import com.eleckoi.android.engine.agent.tools.AgentToolScopes
 import com.eleckoi.android.engine.generation.model.ModelConfig
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -22,8 +21,8 @@ internal class AdapterProviderRoute(
     val systemInstructions: String = "",
     /** Preset-owned directive used only for DSH's auxiliary compaction request. */
     private val historyCompactionInstructions: String? = null,
-    /** Which character's tool switches this route's requests are filtered against. */
-    val toolScopeId: String = AgentToolScopes.Shared,
+    /** Immutable preset selection applied to requests on this session route. */
+    val enabledToolGroupIds: Set<String> = emptySet(),
     /** Android-owned tools available only to this native Harness session. */
     val dynamicTools: List<AgentDynamicTool> = emptyList(),
     private val requestCaptureWorkspaceId: String = "",

@@ -13,9 +13,7 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.S
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryTriggerMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isOpeningEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isPinnedEntry
-import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isRoleplayPlanEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.settingLibraryOpeningEntry
-import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.settingLibraryRoleplayPlanEntry
 import com.eleckoi.android.feature.studio.authoring.CreatorAuthoringException
 import com.eleckoi.android.feature.studio.authoring.creatorArray
 import com.eleckoi.android.feature.studio.authoring.creatorBoolean
@@ -170,7 +168,7 @@ internal fun applyOperations(source: SettingLibrary, operations: List<JsonObject
             "patch_entry" -> {
                 val id = operation.requiredId(index)
                 val current = entries[id] ?: invalid(index, "找不到条目：$id")
-                if (current.isPinnedEntry() && !current.isOpeningEntry() && !current.isRoleplayPlanEntry()) {
+                if (current.isPinnedEntry() && !current.isOpeningEntry()) {
                     invalid(index, "这个系统条目不允许由创作助手修改：${current.title}")
                 }
                 val updated = operation.patchEntry(current, index)
@@ -301,7 +299,6 @@ private fun JsonObject.patchEntry(current: SettingLibraryEntry, index: Int): Set
                 ),
             )
         }
-        current.isRoleplayPlanEntry() -> settingLibraryRoleplayPlanEntry(updated)
         else -> updated
     }
 }

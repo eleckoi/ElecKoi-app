@@ -50,26 +50,18 @@ class ElecKoiRepository private constructor(
     override val modelCollectionFlow = graph.chatService.modelCollectionFlow
     override val characterCollectionFlow = graph.chatService.characterCollectionFlow
     internal val uiPreferencesRepository = graph.uiPreferences
-    internal val storyPresetRepository = graph.storyPresets
+    internal val agentPresetRepository = graph.agentPresets
     internal val dataBackupService = graph.dataBackupService
+
+    internal fun setRuntimeSessionCleanup(cleanup: (Set<String>) -> Unit) {
+        graph.setRuntimeSessionCleanup(cleanup)
+    }
 
     internal constructor(
         context: Context,
-        isCreatorCapabilityEnabled: () -> Boolean,
-        toolModelConfigId: (scopeId: String, groupId: String) -> String,
-        initializeCharacterTools: (characterId: String) -> Unit,
-        deleteCharacterTools: (Collection<String>) -> Unit,
-        exportToolConfig: () -> String,
-        restoreToolConfig: (String) -> Unit,
     ) : this(
         ElecKoiServiceGraph(
             context = context,
-            isCreatorCapabilityEnabled = isCreatorCapabilityEnabled,
-            toolModelConfigId = toolModelConfigId,
-            initializeCharacterTools = initializeCharacterTools,
-            deleteCharacterTools = deleteCharacterTools,
-            exportToolConfig = exportToolConfig,
-            restoreToolConfig = restoreToolConfig,
         ),
     )
 
@@ -77,7 +69,7 @@ class ElecKoiRepository private constructor(
         agentSessions: AgentSessionFactory,
         runtime: LocalRuntimeGateway,
         virtualFileSearch: AgentVirtualFileSearch,
-        toolContextSnapshot: (String) -> AgentToolContextSnapshot,
+        toolContextSnapshot: (Set<String>) -> AgentToolContextSnapshot,
         agentRuns: AgentRunManager,
         publishRemoteDshTurnImages: (String, List<AgentInputImage>) -> Unit,
     ) {

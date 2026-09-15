@@ -33,7 +33,6 @@ class CharacterPayloadJsonCodecTest {
             persona = CharacterCard(
                 assistantName = "测试角色",
                 assistantAvatar = "assistant-circle.png",
-                assistantPrompt = "保持角色设定",
                 profileAge = "20",
                 opening = "你好",
                 showOpening = true,
@@ -59,7 +58,6 @@ class CharacterPayloadJsonCodecTest {
         assertFalse(decoded.listAllExpanded)
         assertEquals("assistant-square.jpg", decodedSlot.squareImage)
         assertEquals("assistant-cover.jpg", decodedSlot.coverImage)
-        assertEquals("保持角色设定", decodedSlot.persona.assistantPrompt)
         assertEquals("当前用户", decodedSlot.persona.userName)
         assertEquals("user-portrait.jpg", decodedSlot.persona.userPortrait)
         assertEquals(8f, decodedSlot.persona.chatBackgroundBlur)

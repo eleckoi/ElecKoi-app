@@ -47,10 +47,15 @@ internal fun buildTheme(seed: Seed, polarity: Polarity, veil: Veil): AppearanceT
     val dark = polarity.dark
     val onSurface = role { onSurface() }
     val rootTopbarBase = role { surfaceContainerLow() }
-    val rootTabbarBase = role { surfaceContainerHigh() }
+    val rootTabbarBase = if (dark) {
+        role { surfaceContainerHigh() }
+    } else {
+        role { surfaceContainerLowest() }
+    }
     val rootChromeAccent = role { primary() }
     return AppearanceTheme(
         mobileBg = role { surfaceContainer() },
+        mobileRootBg = role { surfaceContainer() },
         // `secondaryContainer` rather than `primaryContainer`, even though the latter carries more
         // colour: under the fidelity scheme primaryContainer *is* the seed, at the seed's own tone,
         // in both polarities alike. A role that does not follow the theme can only be used where the
@@ -65,9 +70,9 @@ internal fun buildTheme(seed: Seed, polarity: Polarity, veil: Veil): AppearanceT
         mobileSoft = role { outline() },
         mobileLine = onSurface.copy(alpha = if (dark) 0.13f else 0.11f),
         mobileSearchBg = role { surfaceContainerHighest() },
-        // Root chrome gets two deliberate roles. The top keeps more of the extracted hue while the
-        // bottom stays quieter and one surface step deeper, matching the QQ hierarchy without
-        // forcing a stock blue onto image-derived palettes.
+        // Root chrome gets two deliberate roles. In light mode the bottom bar starts at the
+        // lightest surface so it stays visibly separate from the list; a faint seed tint keeps
+        // image-derived themes recognizable. Dark mode keeps the raised container used elsewhere.
         mobileTopbarBg = rootChromeAccent
             .copy(alpha = if (dark) 0.16f else 0.09f)
             .compositeOver(rootTopbarBase),

@@ -59,17 +59,6 @@ internal class WorkspacePathGuard(
         return normalized
     }
 
-    fun validateCharacterMode(characterMode: String?): String? {
-        val normalized = characterMode?.trim()?.takeIf(String::isNotEmpty) ?: return null
-        require(
-            normalized.length <= MaxCharacterModeLength &&
-                normalized in SupportedCharacterModes,
-        ) {
-            "角色模式无效"
-        }
-        return normalized
-    }
-
     fun validateCheckpointLabel(label: String?): String? {
         val normalized = label?.trim()?.takeIf(String::isNotEmpty) ?: return null
         require(normalized.length <= MaxCheckpointLabelLength && normalized.none(Char::isISOControl)) {
@@ -100,17 +89,17 @@ internal class WorkspacePathGuard(
     fun workspaceDirectory(workspace: CreatorWorkspace): File = workspaceDirectory(
         workspaceId = workspace.id,
         linkedCharacterId = workspace.linkedCharacterId,
-        linkedCharacterMode = workspace.linkedCharacterMode,
+        characterOwned = workspace.characterOwned,
     )
 
     fun workspaceDirectory(
         workspaceId: String,
         linkedCharacterId: String?,
-        linkedCharacterMode: String?,
-    ): File = if (linkedCharacterId != null && linkedCharacterMode != null) {
+        characterOwned: Boolean,
+    ): File = if (linkedCharacterId != null && characterOwned) {
         File(
             characterContainerDirectory(linkedCharacterId),
-            characterModeDirectoryName(linkedCharacterMode),
+            CharacterWorkspaceDirectoryName,
         )
     } else {
         File(workspacesRoot, workspaceId)
@@ -149,7 +138,7 @@ internal class WorkspacePathGuard(
                 container.listFiles()
                     .orEmpty()
                     .filter { directory ->
-                        directory.name in CharacterModeDirectoryNames &&
+                        directory.name == CharacterWorkspaceDirectoryName &&
                             isDirectChildDirectory(container, directory)
                     }
             }
@@ -234,10 +223,10 @@ internal class WorkspacePathGuard(
         if (!isSafeStorageId(workspace.id)) return false
         val directory = runCatching { workspaceDirectory(workspace) }.getOrNull() ?: return false
         if (!isDirectoryNoFollow(directory)) return false
-        return if (workspace.linkedCharacterId != null && workspace.linkedCharacterMode != null) {
+        return if (workspace.linkedCharacterId != null && workspace.characterOwned) {
             val container = characterContainerDirectory(workspace.linkedCharacterId)
             isSafeCharacterContainerDirectory(container) &&
-                directory.name == characterModeDirectoryName(workspace.linkedCharacterMode) &&
+                directory.name == CharacterWorkspaceDirectoryName &&
                 runCatching { directory.canonicalFile.parentFile == container.canonicalFile }
                     .getOrDefault(false)
         } else {
@@ -284,21 +273,15 @@ internal class WorkspacePathGuard(
     }
 
     private fun workspaceStorageSegments(workspace: CreatorWorkspace): List<String> {
-        return if (workspace.linkedCharacterId != null && workspace.linkedCharacterMode != null) {
+        return if (workspace.linkedCharacterId != null && workspace.characterOwned) {
             listOf(
                 CharacterWorkspacesDirectoryName,
                 workspace.linkedCharacterId,
-                characterModeDirectoryName(workspace.linkedCharacterMode),
+                CharacterWorkspaceDirectoryName,
             )
         } else {
             listOf(WorkspacesDirectoryName, workspace.id)
         }
-    }
-
-    private fun characterModeDirectoryName(characterMode: String): String = when (characterMode) {
-        "agent" -> AgentModeDirectoryName
-        "story" -> StoryModeDirectoryName
-        else -> error("不支持的角色模式")
     }
 
     private fun isSafePathSegment(segment: String): Boolean {
@@ -324,17 +307,10 @@ internal class WorkspacePathGuard(
 
         private const val MaxWorkspaceNameLength = 80
         private const val MaxCharacterIdLength = 128
-        private const val MaxCharacterModeLength = 32
         private const val MaxCheckpointLabelLength = 80
         private const val MaxRelativePathLength = 512
         private const val MaxPathSegmentLength = 128
-        private const val AgentModeDirectoryName = "智能体"
-        private const val StoryModeDirectoryName = "剧情小说"
-        private val CharacterModeDirectoryNames = setOf(
-            AgentModeDirectoryName,
-            StoryModeDirectoryName,
-        )
-        private val SupportedCharacterModes = setOf("agent", "story")
+        private const val CharacterWorkspaceDirectoryName = "剧情小说"
         private val InternalStateFileName = Regex("^[a-z][a-z0-9._-]{0,127}$")
     }
 }

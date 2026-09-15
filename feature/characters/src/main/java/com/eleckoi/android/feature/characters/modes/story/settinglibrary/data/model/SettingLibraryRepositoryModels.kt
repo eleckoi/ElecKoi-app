@@ -50,8 +50,6 @@ data class SettingLibraryAgentTurnContext(
     val keywordStrategyEntries: List<SettingLibraryEntry> = emptyList(),
     /** Stable logical groups available to the session-scoped mutation tool. */
     val groups: List<SettingLibraryAgentGroup>,
-    /** Author-defined items that must be retained in update_roleplay_plan calls. */
-    val fixedRoleplayPlanItems: List<String>,
 )
 
 sealed interface SettingLibrarySessionMutation {

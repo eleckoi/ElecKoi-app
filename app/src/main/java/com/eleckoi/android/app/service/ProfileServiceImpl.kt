@@ -23,4 +23,6 @@ internal class ProfileServiceImpl(
     override fun saveUserAvatars(files: Map<AvatarSlot, File>): UserProfile = profile.saveAvatars(files)
 
     override fun saveUserCover(coverUri: Uri): UserProfile = profile.saveCover(coverUri)
+
+    override fun clearUserCover(): UserProfile = profile.clearCover()
 }

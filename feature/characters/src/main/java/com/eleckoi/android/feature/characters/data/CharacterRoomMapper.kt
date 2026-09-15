@@ -8,7 +8,6 @@ import com.eleckoi.android.feature.characters.model.CharacterCard
 import com.eleckoi.android.feature.characters.model.CharacterSlot
 import com.eleckoi.android.feature.characters.model.CharactersPayload
 import com.eleckoi.android.feature.characters.model.UserProfile
-import com.eleckoi.android.feature.characters.model.CharacterMode
 import com.eleckoi.android.feature.characters.modes.story.model.StoryToolSettings
 import org.json.JSONArray
 
@@ -23,7 +22,6 @@ internal fun CharacterSlot.toEntity(): CharacterEntity {
         orderIndex = order,
         groupViewOrder = groupViewOrder,
         folder = folder,
-        characterMode = CharacterMode.fromStorage(characterMode).storageValue,
         frontendBeautyEnabled = storyTools.frontendBeautyEnabled,
         assistantName = persona.assistantName,
         assistantAvatar = persona.assistantAvatar,
@@ -41,7 +39,6 @@ internal fun CharacterSlot.toEntity(): CharacterEntity {
 }
 
 internal fun CharacterSlot.toTextContentEntities(): List<CharacterTextContentEntity> = listOf(
-    CharacterTextContentEntity(id, AssistantPromptContentKind, persona.assistantPrompt),
     CharacterTextContentEntity(id, ImagePromptContentKind, persona.imagePrompt),
     CharacterTextContentEntity(id, OpeningContentKind, persona.opening),
 )
@@ -51,7 +48,6 @@ internal fun CharacterRecord.toSlot(user: UserProfile): CharacterSlot {
     val contentByKind = textContents.associate { it.kind to it.content }
     return entity.toSlot(
         user = user,
-        assistantPrompt = contentByKind[AssistantPromptContentKind].orEmpty(),
         imagePrompt = contentByKind[ImagePromptContentKind].orEmpty(),
         opening = contentByKind[OpeningContentKind].orEmpty(),
     )
@@ -59,7 +55,6 @@ internal fun CharacterRecord.toSlot(user: UserProfile): CharacterSlot {
 
 private fun CharacterEntity.toSlot(
     user: UserProfile,
-    assistantPrompt: String,
     imagePrompt: String,
     opening: String,
 ): CharacterSlot {
@@ -75,7 +70,6 @@ private fun CharacterEntity.toSlot(
         order = orderIndex,
         groupViewOrder = groupViewOrder,
         folder = folder,
-        characterMode = CharacterMode.fromStorage(characterMode).storageValue,
         storyTools = StoryToolSettings(
             frontendBeautyEnabled = frontendBeautyEnabled,
         ),
@@ -87,7 +81,6 @@ private fun CharacterEntity.toSlot(
             assistantAvatar = assistantAvatar.ifBlank { characterAvatar },
             assistantSquare = squareImage,
             assistantCover = coverImage,
-            assistantPrompt = assistantPrompt,
             profileAge = profileAge,
             profileSex = profileSex,
             profileHeight = profileHeight,
@@ -104,7 +97,6 @@ private fun CharacterEntity.toSlot(
     )
 }
 
-private const val AssistantPromptContentKind = "assistant_prompt"
 private const val ImagePromptContentKind = "image_prompt"
 private const val OpeningContentKind = "opening"
 

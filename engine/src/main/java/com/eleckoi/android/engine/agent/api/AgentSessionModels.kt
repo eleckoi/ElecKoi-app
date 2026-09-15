@@ -166,6 +166,10 @@ sealed interface AgentSessionEvent {
         /** ElecKoi phase marker actually observed in the assistant text, not a provider inference. */
         val phaseHeader: AgentMessagePhase? = null,
         val actionCalls: List<AgentActionCall> = emptyList(),
+        /** Whether this native token delta should enter the visible assistant transcript. */
+        val visible: Boolean = true,
+        /** DSH counts native tool-call fragments as first-token boundaries without displaying them. */
+        val tokenObserved: Boolean = delta.isNotBlank(),
     ) : AgentSessionEvent
 
     /** A user-readable phase summary emitted by a harness while it is reasoning. */
@@ -184,6 +188,8 @@ sealed interface AgentSessionEvent {
         val itemId: String,
         val contentIndex: Int,
         val delta: String,
+        val step: Int? = null,
+        val observedAtMillis: Long = 0L,
     ) : AgentSessionEvent
 
     /** One complete native history item, in the exact order recorded by the Agent runtime. */

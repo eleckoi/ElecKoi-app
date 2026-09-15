@@ -1,19 +1,20 @@
 package com.eleckoi.android.app.shell
 
 import com.eleckoi.android.foundation.design.components.*
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.ui.Modifier
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.NavKey
-import com.eleckoi.android.feature.characters.modes.story.presets.ui.StoryPresetPage
+import com.eleckoi.android.feature.characters.presets.ui.AgentPresetPage
 import com.eleckoi.android.feature.modelconfig.ui.ModelSettingsPage
 import com.eleckoi.android.feature.settings.ui.personalization.SettingsPage
 import com.eleckoi.android.feature.settings.ui.personalization.CrashDiagnosticsPage
 import com.eleckoi.android.feature.settings.ui.personalization.about.AboutElecKoiPage
+import com.eleckoi.android.feature.settings.ui.personalization.artwork.ListCharacterArtworkSettingsPage
 import com.eleckoi.android.feature.settings.ui.personalization.chat.ChatDisplaySettingsPage
-import com.eleckoi.android.feature.settings.ui.personalization.common.CommonPagesSettingsPage
 import com.eleckoi.android.feature.settings.ui.personalization.font.FontSettingsPage
 import com.eleckoi.android.feature.settings.ui.personalization.profile.ProfileEditPage
 import com.eleckoi.android.feature.settings.ui.personalization.profile.ProfileIntent
@@ -38,8 +39,8 @@ internal fun mobileSettingsRouteEntry(
                     target = currentRoute.target,
                     appearance = pageAppearance,
                     onBack = closeRoute,
-                    onSave = { config ->
-                        modelsViewModel.onIntent(ModelsIntent.SaveModelConfig(config))
+                    onSave = { config, onResult ->
+                        modelsViewModel.saveModelConfig(config, onResult)
                     },
                     onCreateConfig = { providerId ->
                         replaceTop(
@@ -60,15 +61,20 @@ internal fun mobileSettingsRouteEntry(
         MobileRoute.Settings -> NavEntry(currentRoute) {
                 val pageAppearance = currentThemeState.value.appearance
                 val backupProgress = dataBackupActions.progress.value
+                var communityDialogOpen by rememberSaveable { mutableStateOf(false) }
                 SettingsPage(
                     appearance = pageAppearance,
                     onBack = goBackInsideApp,
                     onOpenUserProfile = { navigateTo(MobileRoute.Profile) },
                     onOpenThemeStyle = { navigateTo(MobileRoute.Theme) },
                     onOpenChatDisplay = { navigateTo(MobileRoute.ChatDisplay) },
-                    onOpenCommonPages = { navigateTo(MobileRoute.CommonPages) },
                     onOpenFont = { navigateTo(MobileRoute.FontSettings) },
+                    listCharacterArtwork = currentShellState.value.listCharacterArtwork,
+                    onOpenListCharacterArtwork = {
+                        navigateTo(MobileRoute.ListCharacterArtworkSettings)
+                    },
                     onOpenAbout = { navigateTo(MobileRoute.About) },
+                    onOpenCommunity = { communityDialogOpen = true },
                     onOpenLocalRuntime = { navigateTo(MobileRoute.RuntimeSettings) },
                     onOpenCrashDiagnostics = { navigateTo(MobileRoute.CrashDiagnostics) },
                     onOpenAppUpdate = { navigateTo(MobileRoute.AppUpdate) },
@@ -90,6 +96,12 @@ internal fun mobileSettingsRouteEntry(
                     onImportBackup = dataBackupActions.import,
                     onCancelBackup = dataBackupActions.cancel,
                 )
+                if (communityDialogOpen) {
+                    MobileCommunityDialog(
+                        appearance = pageAppearance,
+                        onDismiss = { communityDialogOpen = false },
+                    )
+                }
         }
         MobileRoute.About -> NavEntry(currentRoute) {
                 AboutElecKoiPage(
@@ -123,21 +135,12 @@ internal fun mobileSettingsRouteEntry(
                     onBack = goBackInsideApp,
                 )
         }
-        MobileRoute.CommonPages -> NavEntry(currentRoute) {
-                CommonPagesSettingsPage(
+        MobileRoute.ListCharacterArtworkSettings -> NavEntry(currentRoute) {
+                ListCharacterArtworkSettingsPage(
                     appearance = currentThemeState.value.appearance,
-                    presetPagePinned = currentShellState.value.presetPagePinned,
-                    pluginPagePinned = currentShellState.value.pluginPagePinned,
-                    commonPageOrder = currentShellState.value.commonPageOrder,
-                    onOptionalPageChange = { tab ->
-                        shellViewModel.onIntent(
-                            ShellIntent.SetOptionalCommonPage(tab),
-                        )
-                    },
-                    onOrderChange = { visibleTabs ->
-                        shellViewModel.onIntent(
-                            ShellIntent.SetCommonPageOrder(visibleTabs),
-                        )
+                    selectedArtwork = currentShellState.value.listCharacterArtwork,
+                    onArtworkChange = { artwork ->
+                        shellViewModel.onIntent(ShellIntent.SetListCharacterArtwork(artwork))
                     },
                     onBack = goBackInsideApp,
                 )
@@ -191,60 +194,65 @@ internal fun mobileSettingsRouteEntry(
                     onSaveCover = { uri ->
                         profileViewModel.onIntent(ProfileIntent.SaveCover(uri))
                     },
+                    onClearCover = {
+                        profileViewModel.onIntent(ProfileIntent.ClearCover)
+                    },
                 )
         }
-        is MobileRoute.StoryPresets -> NavEntry(currentRoute) {
-                val pageAppearance = currentThemeState.value.appearance
-                val pagePresetState = currentStoryPresetState.value
-                Column(modifier = Modifier.fillMaxSize()) {
-                    Box(modifier = Modifier.weight(1f)) {
-                        StoryPresetPage(
-                            catalog = pagePresetState.catalog,
-                            editorPreset = pagePresetState.editorPreset,
-                            editorEntryId = pagePresetState.editorEntryId,
-                            returnToCallerAfterEntry = pagePresetState.returnToCallerAfterEntry,
-                            loadingEditor = pagePresetState.loadingEditor,
-                            exporting = pagePresetState.exporting,
-                            appearance = pageAppearance,
-                            showRootBackButton = !currentRoute.rootTab,
-                            onBack = goBackInsideApp,
-                            onOpenPreset = storyPresetViewModel::openPreset,
-                            onEditorEntryOpened = storyPresetViewModel::editorEntryOpened,
-                            onReturnFromExternalEntry = goBackInsideApp,
-                            onCloseEditor = storyPresetViewModel::closeEditor,
-                            onSetActive = storyPresetViewModel::setActive,
-                            onCreate = storyPresetViewModel::create,
-                            onImport = onOpenStoryPresetImportSource,
-                            onExport = storyPresetViewModel::exportPresets,
-                            onUpdate = storyPresetViewModel::update,
-                            onRename = storyPresetViewModel::rename,
-                            onDuplicate = storyPresetViewModel::duplicate,
-                            onDelete = storyPresetViewModel::delete,
-                            onCreateGroup = storyPresetViewModel::createLibraryGroup,
-                            onRenameGroup = storyPresetViewModel::renameLibraryGroup,
-                            onDeleteGroup = storyPresetViewModel::deleteLibraryGroup,
-                            onMoveToGroup = storyPresetViewModel::moveToLibraryGroup,
-                            onUpdateProfile = storyPresetViewModel::updateProfile,
-                            onUpdateModelTags = storyPresetViewModel::updateModelTags,
-                            onUpdateAuthorAvatar = storyPresetViewModel::updateAuthorAvatar,
-                        )
-                    }
-                    if (currentRoute.rootTab && pagePresetState.editorPreset == null) {
-                        MobileTabBar(
-                            activeTab = BottomTab.Presets,
-                            tabs = BottomTab.visibleTabs(
-                                presetsPinned = currentShellState.value.presetPagePinned,
-                                pluginsPinned = currentShellState.value.pluginPagePinned,
-                                order = currentShellState.value.commonPageOrder,
-                            ),
-                            appearance = pageAppearance,
-                            onChange = selectBottomTab,
-                        )
-                    }
-                }
+        MobileRoute.AgentPresets -> NavEntry(currentRoute) {
+                AgentPresetPageContent(showRootBackButton = true)
         }
         else -> null
     }
+}
+
+@Composable
+internal fun MobileShellRouteContext.AgentPresetPageContent(
+    showRootBackButton: Boolean,
+    onOpenSidebar: (() -> Unit)? = null,
+) {
+    val pageAppearance = currentThemeState.value.appearance
+    val pagePresetState = currentAgentPresetState.value
+    AgentPresetPage(
+        catalog = pagePresetState.catalog,
+        editorPreset = pagePresetState.editorPreset,
+        editorEntryId = pagePresetState.editorEntryId,
+        editorStartOnTools = pagePresetState.editorStartOnTools,
+        returnToCallerAfterEntry = pagePresetState.returnToCallerAfterEntry,
+        loadingEditor = pagePresetState.loadingEditor,
+        exporting = pagePresetState.exporting,
+        appearance = pageAppearance,
+        toolGroups = pagePresetState.editorPreset?.let { preset ->
+            toolGroupsProvider(preset.toolConfiguration.enabledGroupIds)
+        }.orEmpty(),
+        modelConfigs = currentModelsState.value.models?.configs.orEmpty(),
+        showRootBackButton = showRootBackButton,
+        onOpenSidebar = onOpenSidebar,
+        onBack = goBackInsideApp,
+        onOpenPreset = agentPresetViewModel::openPreset,
+        onEditorEntryOpened = agentPresetViewModel::editorEntryOpened,
+        onReturnFromExternalEntry = goBackInsideApp,
+        onCloseEditor = agentPresetViewModel::closeEditor,
+        onSetActive = agentPresetViewModel::setActive,
+        onCreate = agentPresetViewModel::create,
+        onImport = onOpenAgentPresetImportSource,
+        onExport = agentPresetViewModel::exportPresets,
+        onUpdate = agentPresetViewModel::update,
+        onRename = agentPresetViewModel::rename,
+        onDuplicate = agentPresetViewModel::duplicate,
+        onDelete = agentPresetViewModel::delete,
+        onCreateGroup = agentPresetViewModel::createLibraryGroup,
+        onRenameGroup = agentPresetViewModel::renameLibraryGroup,
+        onDeleteGroup = agentPresetViewModel::deleteLibraryGroup,
+        onMoveToGroup = agentPresetViewModel::moveToLibraryGroup,
+        onUpdateProfile = agentPresetViewModel::updateProfile,
+        onUpdateModelTags = agentPresetViewModel::updateModelTags,
+        onUpdateAuthorAvatar = agentPresetViewModel::updateAuthorAvatar,
+        onOpenWebSearchSettings = {
+            navigateTo(MobileRoute.WebSearchSettings)
+        },
+        onSaveModelConfig = modelsViewModel::saveModelConfig,
+    )
 }
 
 private fun BackupProgress.displayText(): String {

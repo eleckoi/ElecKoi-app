@@ -50,7 +50,7 @@ internal fun ModelCapabilitySections(
         .orEmpty()
 
     ModelInputCapabilitySection(form, activeModelOption, appearance, onUpdate)
-    if (reasoningVariants.isNotEmpty()) {
+    if (form.model.isNotBlank()) {
         ModelSectionHeader("推理", appearance, actions = {})
         ModelFieldGroup(appearance) {
             ModelReasoningSelector(
@@ -121,17 +121,11 @@ private fun ModelLimitSection(
     onUpdate: (ModelConfig) -> Unit,
 ) {
     val automaticContextWindow = form.configuredContextWindowTokens()
-    val temperature = activeModelOption?.temperature ?: 1.0
-    val topP = activeModelOption?.topP ?: 1.0
-    val temperatureEnabled = form.model.isNotBlank() &&
-        (activeModelOption == null || activeModelOption.temperature != null)
-    val topPEnabled = form.model.isNotBlank() &&
-        (activeModelOption == null || activeModelOption.topP != null)
     var temperatureText by remember(form.id, form.model) {
-        mutableStateOf(temperature.parameterText())
+        mutableStateOf(activeModelOption?.temperature?.parameterText().orEmpty())
     }
     var topPText by remember(form.id, form.model) {
-        mutableStateOf(topP.parameterText())
+        mutableStateOf(activeModelOption?.topP?.parameterText().orEmpty())
     }
 
     ModelSectionHeader("参数", appearance, actions = {})
@@ -202,30 +196,16 @@ private fun ModelLimitSection(
         ModelFieldDivider(appearance)
         ModelParameterField(
             label = "温度",
-            detail = if (temperatureEnabled) "= $temperatureText" else "不发送",
+            detail = temperatureText.takeIf(String::isNotBlank)?.let { "= $it" } ?: "留空不发送",
             value = temperatureText,
-            placeholder = "1",
+            placeholder = "留空",
             appearance = appearance,
             keyboardType = KeyboardType.Decimal,
-            fieldEnabled = temperatureEnabled,
-            switchChecked = temperatureEnabled,
-            switchEnabled = form.model.isNotBlank(),
-            onSwitchChange = { enabled ->
-                onUpdate(
-                    form.updateActiveModelOption { option ->
-                        option.copy(
-                            temperature = if (enabled) {
-                                temperatureText.toDoubleOrNull() ?: 1.0
-                            } else {
-                                null
-                            },
-                        )
-                    },
-                )
-            },
+            fieldEnabled = form.model.isNotBlank(),
         ) { value ->
             temperatureText = value.decimalInput()
-            temperatureText.toDoubleOrNull()?.let { parsed ->
+            val parsed = temperatureText.toDoubleOrNull()
+            if (temperatureText.isBlank() || parsed != null) {
                 onUpdate(
                     form.updateActiveModelOption { option ->
                         option.copy(temperature = parsed)
@@ -236,30 +216,16 @@ private fun ModelLimitSection(
         ModelFieldDivider(appearance)
         ModelParameterField(
             label = "Top P",
-            detail = if (topPEnabled) "= $topPText" else "不发送",
+            detail = topPText.takeIf(String::isNotBlank)?.let { "= $it" } ?: "留空不发送",
             value = topPText,
-            placeholder = "1",
+            placeholder = "留空",
             appearance = appearance,
             keyboardType = KeyboardType.Decimal,
-            fieldEnabled = topPEnabled,
-            switchChecked = topPEnabled,
-            switchEnabled = form.model.isNotBlank(),
-            onSwitchChange = { enabled ->
-                onUpdate(
-                    form.updateActiveModelOption { option ->
-                        option.copy(
-                            topP = if (enabled) {
-                                topPText.toDoubleOrNull() ?: 1.0
-                            } else {
-                                null
-                            },
-                        )
-                    },
-                )
-            },
+            fieldEnabled = form.model.isNotBlank(),
         ) { value ->
             topPText = value.decimalInput()
-            topPText.toDoubleOrNull()?.let { parsed ->
+            val parsed = topPText.toDoubleOrNull()
+            if (topPText.isBlank() || parsed != null) {
                 onUpdate(
                     form.updateActiveModelOption { option ->
                         option.copy(topP = parsed)
@@ -289,9 +255,6 @@ private fun ModelParameterField(
     appearance: AppearanceTheme,
     keyboardType: KeyboardType,
     fieldEnabled: Boolean = true,
-    switchChecked: Boolean? = null,
-    switchEnabled: Boolean = true,
-    onSwitchChange: ((Boolean) -> Unit)? = null,
     onChange: (String) -> Unit,
 ) {
     Row(
@@ -301,14 +264,6 @@ private fun ModelParameterField(
         Column(modifier = Modifier.weight(1f).padding(end = 10.dp)) {
             Text(label, color = appearance.mobileText, fontSize = 14.sp)
             Text(detail, color = appearance.mobileMuted, fontSize = 11.sp)
-        }
-        if (switchChecked != null && onSwitchChange != null) {
-            AppSwitch(
-                checked = switchChecked,
-                enabled = switchEnabled,
-                appearance = appearance,
-                onCheckedChange = onSwitchChange,
-            )
         }
         AppInsetTextField(
             value = value,

@@ -11,27 +11,6 @@ enum class AgentToolGroupSource {
     Extension,
 }
 
-/**
- * Which switch set an Agent turn reads. Every character card owns its own, because an author tunes
- * tools per role; the creation assistant deliberately shares one, because it is a single workbench
- * rather than a cast of characters.
- */
-object AgentToolScopes {
-    const val Shared = "shared"
-
-    private const val CharacterPrefix = "character:"
-
-    fun character(characterId: String): String =
-        characterId.trim().takeIf(String::isNotEmpty)?.let { "$CharacterPrefix$it" } ?: Shared
-
-    fun normalize(scopeId: String): String = scopeId.trim().ifEmpty { Shared }
-
-    fun characterId(scopeId: String): String? = normalize(scopeId)
-        .takeIf { it.startsWith(CharacterPrefix) }
-        ?.removePrefix(CharacterPrefix)
-        ?.takeIf(String::isNotBlank)
-}
-
 data class AgentToolMember(
     val name: String,
     val displayName: String,
@@ -111,11 +90,6 @@ object AgentToolRequestPolicy {
     }
 
     fun builtInGroups(): List<AgentToolGroupSnapshot> = builtInAgentToolGroups()
-
-    fun defaultDisabledGroupIds(): Set<String> =
-        (builtInGroups().map(AgentToolGroupSnapshot::id) + BuiltInOther)
-            .filterNot { it == BuiltInCreator }
-            .toSet()
 
     fun mcpGroupId(serverId: String): String = "mcp:${serverId.trim()}"
 

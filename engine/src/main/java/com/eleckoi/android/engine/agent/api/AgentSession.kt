@@ -11,11 +11,10 @@ data class AgentSessionOptions(
     val workspaceProjectPath: String = "",
     /** Stable conversation identity. Several independent native threads may share one workspace. */
     val conversationId: String = workspaceId,
-    /**
-     * Whose tool switches this session obeys. Character chats pass their own card's scope; the
-     * creation assistant leaves it blank and shares one set across every one of its conversations.
-     */
-    val toolScopeId: String = "",
+    /** Tool groups selected by the global preset for this concrete session request route. */
+    val enabledToolGroupIds: Set<String> = emptySet(),
+    /** Preset whose immutable tool configuration was captured for this session. */
+    val presetId: String? = null,
     /** Exact app model configuration version used by this session. Null keeps the active config. */
     val modelConfigId: String? = null,
     /** Optional saved model configuration used only by spawned child Agents. Null follows parent. */
@@ -224,8 +223,11 @@ enum class AgentContextAnchor(val wireValue: String) {
     ToolContext("toolContext"),
     AfterToolContext("afterToolContext"),
     BeforeHistory("beforeHistory"),
-    /** A first-class post-history slot immediately after the current user message. */
+    /** After previous dialogue but before the current turn's user input. */
     AfterHistory("afterHistory"),
+    BeforeLatestUserInput("beforeLatestUserInput"),
+    AfterLatestUserInput("afterLatestUserInput"),
+    BeforeToolFlow("beforeToolFlow"),
     /** Appended after this turn's latest completed tool result, before the model continues. */
     AfterToolFlow("afterToolFlow"),
 }

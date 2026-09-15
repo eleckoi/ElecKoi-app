@@ -15,20 +15,17 @@ import com.eleckoi.android.engine.story.variables.runtime.VariableRuntimeService
 import com.eleckoi.android.engine.workspace.runtime.model.LocalRuntimeGateway
 import com.eleckoi.android.engine.workspace.storage.CreatorWorkspaceRepository
 import com.eleckoi.android.feature.characters.data.CharacterRepository
-import com.eleckoi.android.feature.characters.model.CharacterMode
 import com.eleckoi.android.feature.characters.modes.story.regex.data.RegexRuleProcessor
 import com.eleckoi.android.feature.characters.modes.story.regex.data.RegexRuleRepository
 import com.eleckoi.android.feature.characters.modes.story.regex.data.RegexRuleSurface
 import com.eleckoi.android.feature.characters.modes.story.regex.model.RegexRuleTarget
-import com.eleckoi.android.feature.characters.modes.story.presets.model.StoryPreset
+import com.eleckoi.android.feature.characters.presets.model.AgentPreset
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.data.SettingLibraryRepository
 import com.eleckoi.android.feature.chat.model.ChatDraft
 import com.eleckoi.android.feature.chat.model.ChatMessage
 import com.eleckoi.android.feature.chat.model.ChatSession
 import com.eleckoi.android.feature.chat.model.ChatUserImageAttachment
 import com.eleckoi.android.feature.chat.model.MessageRole
-import com.eleckoi.android.feature.modelconfig.model.ChatModelSelection
-import com.eleckoi.android.feature.modelconfig.model.ModelParameters
 import com.eleckoi.android.foundation.storage.ElecKoiDataException
 import com.eleckoi.android.foundation.storage.newId
 import com.eleckoi.android.foundation.storage.nowIso
@@ -52,12 +49,11 @@ class CharacterAgentGenerationService(
     private val runtime: LocalRuntimeGateway,
     private val agentSessions: AgentSessionFactory,
     private val virtualFileSearch: AgentVirtualFileSearch,
-    private val toolContextSnapshot: (String) -> AgentToolContextSnapshot,
-    private val toolModelConfigId: (scopeId: String, groupId: String) -> String,
+    private val toolContextSnapshot: (Set<String>) -> AgentToolContextSnapshot,
     private val prepareDraftProjection: (ChatSession, ModelConfig) -> (ChatSession) -> ChatDraft,
     private val replyImageGenerator: ReplyImageGenerator,
     private val generationAttempts: GenerationAttemptRepository,
-    private val activeStoryPreset: suspend () -> StoryPreset,
+    private val activeAgentPreset: suspend () -> AgentPreset,
     private val publishRemoteDshTurnImages: (String, List<AgentInputImage>) -> Unit = { _, _ -> },
     private val captureProviderRequests: Boolean,
 ) {
@@ -73,8 +69,7 @@ class CharacterAgentGenerationService(
         variableRuntime = variableRuntime,
         virtualFileSearch = virtualFileSearch,
         toolContextSnapshot = toolContextSnapshot,
-        toolModelConfigId = toolModelConfigId,
-        activeStoryPreset = activeStoryPreset,
+        activeAgentPreset = activeAgentPreset,
         captureProviderRequests = captureProviderRequests,
     )
     private val environment = CharacterAgentGenerationEnvironment(settings, workspaces, sessions)
@@ -105,6 +100,7 @@ class CharacterAgentGenerationService(
         message: String,
         inputImages: List<ChatUserImageAttachment>,
         onDelta: (ChatDraft) -> Unit,
+        onUserTurnPersisted: (ChatDraft, String) -> Unit = { _, _ -> },
     ): ChatSendResult {
         val regexConfig = regexRules.load(draft.session.characterId)
         val content = RegexRuleProcessor.transform(
@@ -119,12 +115,9 @@ class CharacterAgentGenerationService(
         }
         val persisted = sessions.load(draft.session.id, touch = true)
         var session = environment.ensureWorkspace(
-            environment.applyModelSelection(
-                authoritativeGenerationSession(
-                    persisted = persisted,
-                    activeMessages = sessions.activeMessages(persisted.id),
-                ),
-                config,
+            authoritativeGenerationSession(
+                persisted = persisted,
+                activeMessages = sessions.activeMessages(persisted.id),
             ),
         )
         val userMessage = ChatMessage(
@@ -139,6 +132,7 @@ class CharacterAgentGenerationService(
         )
         session = session.copy(messages = session.messages + userMessage, updatedAt = nowIso())
         sessions.appendUserTurn(session, userMessage)
+        onUserTurnPersisted(draft.copy(session = session), userMessage.id)
         sessions.applyHistorySavePolicy(session.characterId)
         return turnRunner.run(
             session = session,
@@ -172,12 +166,9 @@ class CharacterAgentGenerationService(
         val config = environment.selectedConfig(draft)
         val persisted = sessions.load(draft.session.id, touch = true)
         var session = environment.ensureWorkspace(
-            environment.applyModelSelection(
-                authoritativeGenerationSession(
-                    persisted = persisted,
-                    activeMessages = sessions.activeMessages(persisted.id),
-                ),
-                config,
+            authoritativeGenerationSession(
+                persisted = persisted,
+                activeMessages = sessions.activeMessages(persisted.id),
             ),
         )
         val editedReplacement = replacementMessage?.let { replacement ->
@@ -198,8 +189,7 @@ class CharacterAgentGenerationService(
             provider = config.provider,
             model = config.model,
         )
-        val variablesConfigured = CharacterMode.fromStorage(session.characterMode) == CharacterMode.Story &&
-            characterVariableCatalog(variableConfig.load(session.characterId)).isNotEmpty()
+        val variablesConfigured = characterVariableCatalog(variableConfig.load(session.characterId)).isNotEmpty()
         session = session.copy(
             messages = regeneration.messages,
             variableStateJson = regenerationSessionVariableState(
@@ -208,6 +198,7 @@ class CharacterAgentGenerationService(
                 variablesConfigured = variablesConfigured,
             ),
             updatedAt = nowIso(),
+            generationStats = com.eleckoi.android.feature.chat.model.ChatSessionGenerationStats(),
         )
         sessions.truncateForRegeneration(
             session = session,

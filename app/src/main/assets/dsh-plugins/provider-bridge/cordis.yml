@@ -11,33 +11,19 @@
           - id: eleckoi-wire
             contextWindow: !!js Number(process.env.ELECKOI_CONTEXT_WINDOW ?? 262144)
             input: [text, image]
-            reasoningEfforts:
-              off:
-              minimal: minimal
-              low: low
-              medium: medium
-              high: high
-              xhigh: xhigh
-              max: max
+            reasoningEfforts: false
       eleckoi-wire-chat:
         displayName: ElecKoi Chat Completions wire
         apiKeyEnv: ELECKOI_PROVIDER_KEY
         api: openai-completions
         baseURL: !!js process.env.ELECKOI_HOST_TOOLS_URL.replace('/host-tools', '/provider-wire/chat/v1')
         compat:
-          supportsReasoningEffort: true
+          supportsDeveloperRole: false
         models:
           - id: eleckoi-wire
             contextWindow: !!js Number(process.env.ELECKOI_CONTEXT_WINDOW ?? 262144)
             input: [text, image]
-            reasoningEfforts:
-              off:
-              minimal: minimal
-              low: low
-              medium: medium
-              high: high
-              xhigh: xhigh
-              max: max
+            reasoningEfforts: false
       eleckoi-wire-chat-thinking:
         displayName: ElecKoi Chat Completions thinking wire
         apiKeyEnv: ELECKOI_PROVIDER_KEY
@@ -45,19 +31,12 @@
         baseURL: !!js process.env.ELECKOI_HOST_TOOLS_URL.replace('/host-tools', '/provider-wire/chat-thinking/v1')
         compat:
           thinkingFormat: deepseek
-          supportsReasoningEffort: true
+          supportsDeveloperRole: false
         models:
           - id: eleckoi-wire
             contextWindow: !!js Number(process.env.ELECKOI_CONTEXT_WINDOW ?? 262144)
             input: [text, image]
-            reasoningEfforts:
-              off:
-              minimal: minimal
-              low: low
-              medium: medium
-              high: high
-              xhigh: xhigh
-              max: max
+            reasoningEfforts: false
       eleckoi-wire-anthropic:
         displayName: ElecKoi Claude Messages wire
         apiKeyEnv: ELECKOI_PROVIDER_KEY
@@ -67,12 +46,7 @@
           - id: eleckoi-wire
             contextWindow: !!js Number(process.env.ELECKOI_CONTEXT_WINDOW ?? 262144)
             input: [text, image]
-            reasoningEfforts:
-              off:
-              minimal: minimal
-              low: low
-              medium: medium
-              high: high
+            reasoningEfforts: false
       google:
         displayName: ElecKoi Gemini wire
         apiKeyEnv: ELECKOI_PROVIDER_KEY
@@ -81,12 +55,21 @@
           - id: eleckoi-wire
             contextWindow: !!js Number(process.env.ELECKOI_CONTEXT_WINDOW ?? 262144)
             input: [text, image]
+            reasoningEfforts: false
+      moonshotai-cn:
+        displayName: ElecKoi Kimi wire
+        apiKeyEnv: ELECKOI_PROVIDER_KEY
+        api: openai-completions
+        baseURL: !!js process.env.ELECKOI_HOST_TOOLS_URL.replace('/host-tools', '/provider-wire/chat/v1')
+        models:
+          - id: kimi-k3
+            contextWindow: !!js Number(process.env.ELECKOI_CONTEXT_WINDOW ?? 262144)
             reasoningEfforts:
-              off:
-              minimal: minimal
               low: low
-              medium: medium
               high: high
+              max: max
+            compat:
+              supportsDeveloperRole: false
 
 - id: eleckoi-provider-bridge
   name: ./provider-bridge.mjs

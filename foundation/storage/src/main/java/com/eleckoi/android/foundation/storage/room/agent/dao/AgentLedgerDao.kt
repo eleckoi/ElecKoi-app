@@ -190,6 +190,41 @@ interface AgentLedgerDao {
         sourceMessageId: String,
     ): AgentTurnEntity?
 
+    @Query(
+        "SELECT * FROM agent_responses WHERE conversationId = :conversationId " +
+            "AND sourceMessageId = :sourceMessageId LIMIT 1",
+    )
+    fun responseBySourceMessageId(conversationId: String, sourceMessageId: String): AgentResponseEntity?
+
+    @Query(
+        "SELECT DISTINCT runtimeThreadId FROM agent_responses " +
+            "WHERE conversationId = :conversationId AND runtimeThreadId != ''",
+    )
+    fun runtimeThreadIds(conversationId: String): List<String>
+
+    @Query(
+        "UPDATE agent_responses SET runtimeThreadId = '', runtimeTurnId = '' " +
+            "WHERE conversationId = :conversationId",
+    )
+    fun clearRuntimeAssociations(conversationId: String)
+
+    /** Public IDs and runtime references only: never materialize message bodies for suffix deletion. */
+    @Query("""
+        SELECT path.sequence AS sequence, turn.id AS turnId,
+            turn.sourceMessageId AS turnMessageId,
+            turn.variableStateJson AS turnVariableStateJson,
+            response.id AS responseId,
+            response.responseIndex AS responseIndex,
+            response.sourceMessageId AS responseMessageId,
+            response.variableStateJson AS responseVariableStateJson
+        FROM agent_branch_turns AS path
+        INNER JOIN agent_turns AS turn ON turn.id = path.turnId
+        LEFT JOIN agent_responses AS response ON response.turnId = turn.id
+        WHERE path.branchId = :branchId AND path.sequence >= :fromSequence
+        ORDER BY path.sequence ASC, response.responseIndex ASC
+    """)
+    fun publicMessagesFrom(branchId: String, fromSequence: Int): List<AgentPublicMessageRef>
+
     @Query("SELECT * FROM agent_responses WHERE turnId IN (:turnIds)")
     fun responsesForTurns(turnIds: List<String>): List<AgentResponseEntity>
 
@@ -213,14 +248,14 @@ interface AgentLedgerDao {
     @Query("DELETE FROM agent_responses WHERE turnId IN (:turnIds)")
     fun deleteResponsesForTurns(turnIds: List<String>)
 
+    @Query("DELETE FROM agent_responses WHERE turnId = :turnId AND responseIndex >= :fromResponseIndex")
+    fun deleteResponsesFromIndex(turnId: String, fromResponseIndex: Int)
+
     @Query("DELETE FROM agent_responses WHERE id IN (:responseIds)")
     fun deleteResponses(responseIds: List<String>)
 
     @Query("DELETE FROM agent_branch_turns WHERE branchId = :branchId AND sequence >= :fromSequence")
     fun deleteBranchTurnsFrom(branchId: String, fromSequence: Int)
-
-    @Query("UPDATE agent_branches SET headSequence = :headSequence WHERE id = :branchId")
-    fun updateBranchHead(branchId: String, headSequence: Int)
 
     @Query(
         """
@@ -250,4 +285,15 @@ interface AgentLedgerDao {
 data class AgentPagedTurnRef(
     val sequence: Int,
     val turnId: String,
+)
+
+data class AgentPublicMessageRef(
+    val sequence: Int,
+    val turnId: String,
+    val turnMessageId: String,
+    val turnVariableStateJson: String,
+    val responseId: String?,
+    val responseIndex: Int?,
+    val responseMessageId: String?,
+    val responseVariableStateJson: String?,
 )

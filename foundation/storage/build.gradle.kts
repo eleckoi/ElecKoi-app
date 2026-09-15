@@ -8,8 +8,7 @@ plugins {
 android {
     namespace = "com.eleckoi.android.foundation.storage"
     testOptions.unitTests.all {
-        it.systemProperty("eleckoi.schemaDirectory", file("schemas").absolutePath)
-        it.systemProperty("eleckoi.storageSourceDirectory", file("src/main").absolutePath)
+        it.workingDir(projectDir)
     }
 }
 
@@ -31,8 +30,8 @@ dependencies {
 // stays in Room's JSON export; every SQLite client gets the same business tables and views.
 val exportSqliteSchema by tasks.registering {
     dependsOn("kspDebugKotlin")
-    val roomSchema = file("schemas/com.eleckoi.android.foundation.storage.room.ElecKoiDatabase/1.json")
-    val sqlFile = file("schemas/eleckoi-common-schema-v1.sql")
+    val roomSchema = file("schemas/com.eleckoi.android.foundation.storage.room.ElecKoiDatabase/2.json")
+    val sqlFile = file("schemas/eleckoi-common-schema-v2.sql")
     inputs.file(roomSchema)
     outputs.file(sqlFile)
     doLast {

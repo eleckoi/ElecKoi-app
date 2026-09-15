@@ -27,22 +27,19 @@ import androidx.compose.ui.unit.sp
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.foundation.design.ElecKoiDanger
 import com.eleckoi.android.foundation.design.components.ConfirmDialog
-import com.eleckoi.android.feature.characters.model.CharacterMode
-import com.eleckoi.android.feature.characters.model.UserProfile
 import com.eleckoi.android.feature.chat.model.ChatListItem
 
 @Composable
 internal fun MessagesRootPage(
-    user: UserProfile,
     chats: List<ChatListItem>,
     pinnedChatIds: List<String>,
     hiddenChatIds: List<String>,
     activeChatSessionIds: Map<String, String>,
-    characterModesById: Map<String, String>,
+    useCoverArtwork: Boolean,
     appearance: AppearanceTheme,
     onSearch: () -> Unit,
     onAdd: () -> Unit,
-    onOpenProfile: () -> Unit,
+    onOpenSidebar: () -> Unit,
     onOpenChat: (String) -> Unit,
     onTogglePinnedChat: (String) -> Unit,
     onHideChat: (String) -> Unit,
@@ -54,75 +51,79 @@ internal fun MessagesRootPage(
         pinnedChatIds = pinnedChatIds,
         hiddenChatIds = hiddenChatIds,
         activeChatSessionIds = activeChatSessionIds,
-        characterModesById = characterModesById,
     )
     val pinnedItems = conversationChats.filter { it.id in pinned }
     val regularItems = conversationChats.filterNot { it.id in pinned }
     MobileRootSurface(
         appearance = appearance,
         header = {
-            MobileProfileHeader(
-                userName = user.userName,
-                userAvatarPath = user.userAvatar,
-                title = user.userName.ifBlank { "用户" },
-                subtitle = "在线 - WiFi",
+            MobileRootActionHeader(
+                title = "消息",
                 appearance = appearance,
+                onOpenSidebar = onOpenSidebar,
                 onSearch = {
                     swipeState.close()
                     onSearch()
                 },
                 onAdd = onAdd,
-                onOpenProfile = onOpenProfile,
             )
         },
     ) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(top = 0.dp),
-        ) {
-            if (conversationChats.isEmpty()) {
-                item { MobileEmptyState("还没有会话", appearance) }
-            }
-            if (pinnedItems.isNotEmpty()) {
-                item("pinned-section") {
-                    MessageListSectionHeader(
-                        label = "置顶",
-                        showPin = true,
-                        appearance = appearance,
-                    )
+        if (conversationChats.isEmpty()) {
+            MobileRootEmptyState(
+                title = "还没有消息",
+                message = "点击右上角的加号，开始新的对话",
+                appearance = appearance,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(top = 0.dp),
+            ) {
+                if (pinnedItems.isNotEmpty()) {
+                    item("pinned-section") {
+                        MessageListSectionHeader(
+                            label = "置顶",
+                            showPin = true,
+                            appearance = appearance,
+                        )
+                    }
+                    items(pinnedItems, key = { "pinned-${it.id}" }) { chat ->
+                        MessageChatRow(
+                            chat = chat,
+                            isPinned = true,
+                            appearance = appearance,
+                            rowContainerColor = mobileRootContentColor(appearance),
+                            useCoverArtwork = useCoverArtwork,
+                            swipeState = swipeState,
+                            onOpenChat = onOpenChat,
+                            onTogglePinnedChat = onTogglePinnedChat,
+                            onHideChat = onHideChat,
+                        )
+                    }
+                    if (regularItems.isNotEmpty()) {
+                        item("regular-section") {
+                            MessageListSectionHeader(
+                                label = "最近消息",
+                                appearance = appearance,
+                            )
+                        }
+                    }
                 }
-                items(pinnedItems, key = { "pinned-${it.id}" }) { chat ->
+                items(regularItems, key = { it.id }) { chat ->
                     MessageChatRow(
                         chat = chat,
-                        isPinned = true,
+                        isPinned = false,
                         appearance = appearance,
-                        rowContainerColor = appearance.mobileBg,
+                        rowContainerColor = mobileRootContentColor(appearance),
+                        useCoverArtwork = useCoverArtwork,
                         swipeState = swipeState,
                         onOpenChat = onOpenChat,
                         onTogglePinnedChat = onTogglePinnedChat,
                         onHideChat = onHideChat,
                     )
                 }
-                if (regularItems.isNotEmpty()) {
-                    item("regular-section") {
-                        MessageListSectionHeader(
-                            label = "最近消息",
-                            appearance = appearance,
-                        )
-                    }
-                }
-            }
-            items(regularItems, key = { it.id }) { chat ->
-                MessageChatRow(
-                    chat = chat,
-                    isPinned = false,
-                    appearance = appearance,
-                    rowContainerColor = appearance.mobileBg,
-                    swipeState = swipeState,
-                    onOpenChat = onOpenChat,
-                    onTogglePinnedChat = onTogglePinnedChat,
-                    onHideChat = onHideChat,
-                )
             }
         }
     }
@@ -133,7 +134,6 @@ internal fun orderMessageChats(
     pinnedChatIds: List<String>,
     hiddenChatIds: List<String> = emptyList(),
     activeChatSessionIds: Map<String, String> = emptyMap(),
-    characterModesById: Map<String, String> = emptyMap(),
 ): List<ChatListItem> {
     val pinned = pinnedChatIds.toSet()
     val pinnedOrder = pinnedChatIds.withIndex().associate { it.value to it.index }
@@ -143,42 +143,22 @@ internal fun orderMessageChats(
                 .thenBy { pinnedOrder[it.id] ?: Int.MAX_VALUE }
                 .thenByDescending { it.updatedAt },
         )
-        .collapseByCharacter(activeChatSessionIds, characterModesById)
+        .collapseByCharacter(activeChatSessionIds)
         .filterNot { it.id in hiddenChatIds }
 }
 
 private fun List<ChatListItem>.collapseByCharacter(
     activeChatSessionIds: Map<String, String>,
-    characterModesById: Map<String, String>,
 ): List<ChatListItem> {
     val byId = associateBy(ChatListItem::id)
     val byCharacter = linkedMapOf<String, ChatListItem>()
     forEach { chat ->
         val key = chat.characterId.ifBlank { chat.characterName.ifBlank { chat.id } }
         if (key !in byCharacter) {
-            val currentMode = characterModesById[key]
-                ?.let { CharacterMode.fromStorage(it).storageValue }
-            val modeActive = currentMode
-                ?.let { mode -> activeChatSessionIds["$key:$mode"] }
-                ?.let(byId::get)
-                ?.takeIf { candidate ->
-                    candidate.characterId == chat.characterId &&
-                        CharacterMode.fromStorage(candidate.characterMode).storageValue == currentMode
-                }
-            val currentModeLatest = currentMode?.let { mode ->
-                firstOrNull { candidate ->
-                    candidate.characterId == chat.characterId &&
-                        CharacterMode.fromStorage(candidate.characterMode).storageValue == mode
-                }
-            }
             val characterActive = activeChatSessionIds[key]
                 ?.let(byId::get)
-                ?.takeIf { candidate ->
-                    candidate.characterId == chat.characterId &&
-                        (currentMode == null ||
-                            CharacterMode.fromStorage(candidate.characterMode).storageValue == currentMode)
-                }
-            byCharacter[key] = modeActive ?: characterActive ?: currentModeLatest ?: chat
+                ?.takeIf { candidate -> candidate.characterId == chat.characterId }
+            byCharacter[key] = characterActive ?: chat
         }
     }
     return byCharacter.values.toList()
@@ -207,6 +187,7 @@ private fun MessageChatRow(
     isPinned: Boolean,
     appearance: AppearanceTheme,
     rowContainerColor: androidx.compose.ui.graphics.Color,
+    useCoverArtwork: Boolean,
     swipeState: MobileSwipeState,
     onOpenChat: (String) -> Unit,
     onTogglePinnedChat: (String) -> Unit,
@@ -246,7 +227,7 @@ private fun MessageChatRow(
                 },
             ),
         ),
-        rowHeight = 62.dp,
+        rowHeight = mobileConversationRowHeight(useCoverArtwork),
         rowContainerColor = rowContainerColor,
         onClick = { onOpenChat(chat.id) },
     ) { rowClick ->
@@ -255,6 +236,8 @@ private fun MessageChatRow(
             subtitle = chat.summary.ifBlank { "新对话" },
             avatarName = messageRootEntryTitle(chat),
             avatarPath = chat.characterAvatar,
+            coverPath = chat.characterCover,
+            useCoverArtwork = useCoverArtwork,
             sideText = formatShortDate(chat.updatedAt),
             appearance = appearance,
             pinned = isPinned,

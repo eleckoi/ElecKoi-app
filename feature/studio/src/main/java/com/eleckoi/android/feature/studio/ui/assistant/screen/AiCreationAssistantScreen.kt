@@ -74,7 +74,7 @@ internal fun AiCreationAssistantScreen(
     viewModel: AiCreationAssistantViewModel,
     chatGateway: AuthorChatGateway,
     onBack: () -> Unit,
-    onOpenPlugins: () -> Unit,
+    onOpenTools: () -> Unit,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val imagePicker = rememberLauncherForActivityResult(
@@ -382,7 +382,7 @@ internal fun AiCreationAssistantScreen(
                                             viewModel.onIntent(AiCreationAssistantIntent.LoadCharacterDirectory)
                                             showCharacterRoots = true
                                         },
-                                        onOpenTools = onOpenPlugins,
+                                        onOpenTools = onOpenTools,
                                         onOpenCommand = {
                                             showSnackbar("命令入口将在后续版本继续设计")
                                         },

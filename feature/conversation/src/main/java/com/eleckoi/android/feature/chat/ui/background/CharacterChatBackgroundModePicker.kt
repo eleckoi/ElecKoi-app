@@ -22,6 +22,7 @@ import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.foundation.design.components.AppIconPaths
 import com.eleckoi.android.foundation.design.components.StrokeSvgIcon
 import com.eleckoi.android.foundation.design.components.noRippleClickable
+import com.eleckoi.android.feature.preferences.NewCharacterBackground
 import androidx.compose.foundation.background
 
 internal enum class BackgroundOrigin {
@@ -29,6 +30,59 @@ internal enum class BackgroundOrigin {
     CharacterCard,
     Global,
     CharacterCustom,
+}
+
+@Composable
+internal fun NewCharacterBackgroundPicker(
+    selected: NewCharacterBackground,
+    appearance: AppearanceTheme,
+    onSelect: (NewCharacterBackground) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "新角色默认背景",
+            modifier = Modifier.weight(1f),
+            color = appearance.mobileText,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+        )
+        Row(
+            modifier = Modifier
+                .height(38.dp)
+                .clip(RoundedCornerShape(11.dp))
+                .background(appearance.mobileSearchBg)
+                .padding(3.dp),
+        ) {
+            listOf(
+                NewCharacterBackground.App to "纯色背景",
+                NewCharacterBackground.Character to "角色立绘",
+            ).forEach { (choice, label) ->
+                val active = selected == choice
+                Row(
+                    modifier = Modifier
+                        .height(32.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (active) appearance.mobileSurface else androidx.compose.ui.graphics.Color.Transparent)
+                        .noRippleClickable { onSelect(choice) }
+                        .padding(horizontal = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = label,
+                        color = if (active) appearance.mobileText else appearance.mobileMuted,
+                        fontSize = 11.sp,
+                        fontWeight = if (active) FontWeight.Medium else FontWeight.Normal,
+                        maxLines = 1,
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -40,10 +94,10 @@ internal fun BackgroundModePicker(
     onSelect: (BackgroundOrigin) -> Unit,
 ) {
     val choices = listOf(
-        Triple(BackgroundOrigin.AppDefault, "默认", true),
-        Triple(BackgroundOrigin.CharacterCustom, "自定义", true),
+        Triple(BackgroundOrigin.AppDefault, "纯色背景", true),
         Triple(BackgroundOrigin.CharacterCard, "角色立绘", characterCardEnabled),
-        Triple(BackgroundOrigin.Global, "全局背景", globalEnabled),
+        Triple(BackgroundOrigin.CharacterCustom, "自定义图片", true),
+        Triple(BackgroundOrigin.Global, "共享背景", globalEnabled),
     )
     Text(
         text = "背景来源",
@@ -74,17 +128,6 @@ internal fun BackgroundModePicker(
             }
         }
     }
-    Text(
-        text = when (origin) {
-            BackgroundOrigin.AppDefault -> "App 默认背景色，不显示图片"
-            BackgroundOrigin.CharacterCustom -> "为当前角色选择一张独立背景"
-            BackgroundOrigin.CharacterCard -> "使用当前角色卡的立绘"
-            BackgroundOrigin.Global -> "使用所有选择全局背景的角色共享图片"
-        },
-        color = appearance.mobileMuted,
-        fontSize = 12.sp,
-        modifier = Modifier.padding(top = 8.dp, bottom = 2.dp),
-    )
 }
 
 @Composable

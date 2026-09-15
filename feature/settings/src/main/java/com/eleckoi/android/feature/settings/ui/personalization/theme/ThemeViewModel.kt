@@ -6,6 +6,8 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.eleckoi.android.feature.settings.api.AppearanceService
 import com.eleckoi.android.foundation.design.AppearanceTheme
+import com.eleckoi.android.feature.preferences.AppearanceMode
+import com.eleckoi.android.feature.preferences.NewCharacterBackground
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,6 +19,8 @@ import kotlinx.coroutines.withContext
 
 data class ThemeUiState(
     val appearance: AppearanceTheme = AppearanceTheme(),
+    val appearanceMode: AppearanceMode = AppearanceMode.Default,
+    val newCharacterBackground: NewCharacterBackground = NewCharacterBackground.Default,
     val errorMessage: String = "",
 )
 
@@ -34,6 +38,8 @@ sealed interface ThemeIntent {
         val scrim: Float,
     ) : ThemeIntent
     data object ClearRootBackground : ThemeIntent
+    data class SaveAppearanceMode(val mode: AppearanceMode) : ThemeIntent
+    data class SaveNewCharacterBackground(val background: NewCharacterBackground) : ThemeIntent
     data class SaveAppearanceTheme(val appearance: AppearanceTheme) : ThemeIntent
     data object ResetAppearanceTheme : ThemeIntent
 }
@@ -55,6 +61,8 @@ class ThemeViewModel(
             is ThemeIntent.SaveRootBackground -> saveRootBackground(intent)
             is ThemeIntent.SaveRootBackgroundTuning -> saveRootBackgroundTuning(intent)
             ThemeIntent.ClearRootBackground -> clearRootBackground()
+            is ThemeIntent.SaveAppearanceMode -> saveAppearanceMode(intent.mode)
+            is ThemeIntent.SaveNewCharacterBackground -> saveNewCharacterBackground(intent.background)
             is ThemeIntent.SaveAppearanceTheme -> saveAppearanceTheme(intent.appearance)
             ThemeIntent.ResetAppearanceTheme -> resetAppearanceTheme()
         }
@@ -115,6 +123,8 @@ class ThemeViewModel(
                 _uiState.update {
                     it.copy(
                         appearance = preferences.appearanceTheme,
+                        appearanceMode = preferences.appearanceMode,
+                        newCharacterBackground = preferences.newCharacterBackground,
                         errorMessage = "",
                     )
                 }
@@ -139,6 +149,30 @@ class ThemeViewModel(
                 withContext(Dispatchers.IO) { appearanceService.saveAppearanceTheme(appearance) }
             }.onFailure { error ->
                 _uiState.update { it.copy(errorMessage = error.message ?: "保存主题失败") }
+            }
+        }
+    }
+
+    private fun saveAppearanceMode(mode: AppearanceMode) {
+        _uiState.update { it.copy(appearanceMode = mode, errorMessage = "") }
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) { appearanceService.saveAppearanceMode(mode) }
+            }.onFailure { error ->
+                _uiState.update { it.copy(errorMessage = error.message ?: "外观模式保存失败") }
+            }
+        }
+    }
+
+    private fun saveNewCharacterBackground(background: NewCharacterBackground) {
+        _uiState.update { it.copy(newCharacterBackground = background, errorMessage = "") }
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    appearanceService.saveNewCharacterBackground(background)
+                }
+            }.onFailure { error ->
+                _uiState.update { it.copy(errorMessage = error.message ?: "新角色默认背景保存失败") }
             }
         }
     }

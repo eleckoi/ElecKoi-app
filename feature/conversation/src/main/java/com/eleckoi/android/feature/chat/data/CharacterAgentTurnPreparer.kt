@@ -12,7 +12,6 @@ import com.eleckoi.android.engine.agent.api.AgentVirtualFileSearch
 import com.eleckoi.android.engine.agent.eleckoi.conversation.roomConversationHistory
 import com.eleckoi.android.engine.agent.tools.AgentToolContextSnapshot
 import com.eleckoi.android.engine.agent.tools.AgentToolRequestPolicy
-import com.eleckoi.android.engine.agent.tools.AgentToolScopes
 import com.eleckoi.android.engine.generation.config.ModelConfigRepository
 import com.eleckoi.android.engine.generation.model.ModelConfig
 import com.eleckoi.android.engine.generation.model.isImageGenerationConfig
@@ -23,7 +22,6 @@ import com.eleckoi.android.engine.story.variables.runtime.EjsTemplateSource
 import com.eleckoi.android.engine.story.variables.runtime.VariableConditionExpression
 import com.eleckoi.android.engine.story.variables.runtime.VariableRuntimeService
 import com.eleckoi.android.engine.workspace.storage.CreatorWorkspaceRepository
-import com.eleckoi.android.feature.characters.model.CharacterMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.data.SettingLibraryAgentTurnContext
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.data.SettingLibraryAgentEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.data.SettingLibraryRepository
@@ -41,9 +39,8 @@ import com.eleckoi.android.feature.chat.roleplay.actions.generateImageActionCont
 import com.eleckoi.android.feature.chat.roleplay.protocol.effectiveRoleplayPlanItems
 import com.eleckoi.android.feature.chat.roleplay.protocol.roleplayPlanDynamicTool
 import com.eleckoi.android.feature.chat.roleplay.protocol.roleplayPlanFixedItemsInstructions
-import com.eleckoi.android.feature.chat.roleplay.protocol.roleplayOutputProtocolInstructions
-import com.eleckoi.android.feature.characters.modes.story.presets.model.StoryPreset
-import com.eleckoi.android.feature.characters.modes.story.presets.model.historyCompactionInstructions
+import com.eleckoi.android.feature.characters.presets.model.AgentPreset
+import com.eleckoi.android.feature.characters.presets.model.historyCompactionInstructions
 import com.eleckoi.android.foundation.storage.ElecKoiDataException
 
 internal data class CharacterAgentTurnPreparation(
@@ -62,9 +59,8 @@ internal class CharacterAgentTurnPreparer(
     private val variableConfig: VariableConfigRepository,
     private val variableRuntime: VariableRuntimeService,
     private val virtualFileSearch: AgentVirtualFileSearch,
-    private val toolContextSnapshot: (String) -> AgentToolContextSnapshot,
-    private val toolModelConfigId: (scopeId: String, groupId: String) -> String,
-    private val activeStoryPreset: suspend () -> StoryPreset,
+    private val toolContextSnapshot: (Set<String>) -> AgentToolContextSnapshot,
+    private val activeAgentPreset: suspend () -> AgentPreset,
     private val captureProviderRequests: Boolean,
 ) {
     suspend fun prepare(
@@ -75,19 +71,17 @@ internal class CharacterAgentTurnPreparer(
     ): CharacterAgentTurnPreparation {
         val workspaceProjectPath = workspaces.get(session.workspaceId)
             ?.let(workspaces::runtimeProjectPath)
-            ?: throw ElecKoiDataException("角色模式工作区不存在")
-        val characterMode = CharacterMode.fromStorage(session.characterMode)
-        val storyPreset = if (characterMode == CharacterMode.Story) activeStoryPreset() else null
-        val toolScopeId = AgentToolScopes.character(session.characterId)
-        val activeToolContext = toolContextSnapshot(toolScopeId)
+            ?: throw ElecKoiDataException("角色工作区不存在")
+        val agentPreset = activeAgentPreset()
+        val toolConfiguration = agentPreset.toolConfiguration.normalized()
+        val activeToolContext = toolContextSnapshot(toolConfiguration.enabledGroupIds)
         val settingLibraryEnabled = activeToolContext.isEnabled(
             AgentToolRequestPolicy.BuiltInSettingLibrary,
         )
         val roleplayPlanEnabled = activeToolContext.isEnabled(
             AgentToolRequestPolicy.BuiltInRoleplayWorkflow,
         )
-        val variablesEnabled = characterMode == CharacterMode.Story &&
-            activeToolContext.isEnabled(AgentToolRequestPolicy.BuiltInVariables)
+        val variablesEnabled = activeToolContext.isEnabled(AgentToolRequestPolicy.BuiltInVariables)
         val macroValues = CharacterCardMacroValues(
             userName = session.characterPersona.userName.ifBlank { "用户" },
             characterName = session.characterName.ifBlank {
@@ -103,18 +97,12 @@ internal class CharacterAgentTurnPreparer(
             )
         }
         val regexConfig = regexRules.load(session.characterId)
-        val storyTurnContext = if (characterMode == CharacterMode.Story) {
-            settingLibrary.loadAgentTurnContext(
-                characterId = session.characterId,
-                sessionId = session.id,
-                additionalLibrary = storyPreset?.asRuntimeSettingLibrary(),
-            )
-        } else {
-            null
-        }
-        val activeVariableConfig = if (
-            characterMode == CharacterMode.Story && (variablesEnabled || settingLibraryEnabled)
-        ) {
+        val storyTurnContext = settingLibrary.loadAgentTurnContext(
+            characterId = session.characterId,
+            sessionId = session.id,
+            additionalLibrary = agentPreset.asRuntimeSettingLibrary(),
+        )
+        val activeVariableConfig = if (variablesEnabled || settingLibraryEnabled) {
             variableConfig.load(session.characterId)
                 .resolveCharacterCardMacros(macroValues)
         } else {
@@ -126,19 +114,19 @@ internal class CharacterAgentTurnPreparer(
             )
         }
         val promotedStoryTurnContext = storyTurnContext
-            ?.resolveCharacterCardMacros(macroValues)
-            ?.resolveDynamicEntries(
+            .resolveCharacterCardMacros(macroValues)
+            .resolveDynamicEntries(
                 messages = roomHistory,
                 stateJson = variableTurnState?.stateJson.orEmpty(),
                 runtime = variableRuntime,
             )
-        val storyLibrary = promotedStoryTurnContext?.automaticLibrary?.let { library ->
+        val storyLibrary = promotedStoryTurnContext.automaticLibrary.let { library ->
             if (settingLibraryEnabled) {
                 library
             } else {
                 library.copy(
-                    entries = library.entries.filter { it.id.startsWith("story-preset:") },
-                    groups = library.groups.filter { it.id.startsWith("story-preset:") },
+                    entries = library.entries.filter { it.id.startsWith("agent-preset:") },
+                    groups = library.groups.filter { it.id.startsWith("agent-preset:") },
                 )
             }
         }
@@ -160,10 +148,9 @@ internal class CharacterAgentTurnPreparer(
             messages = promptHistory.map { it.toLedgerMessage() },
             currentUserMessageId = currentUserMessageId,
         )
-        val selectedImageConfigId = toolModelConfigId(
-            toolScopeId,
-            AgentToolRequestPolicy.BuiltInAutoIllustration,
-        )
+        val selectedImageConfigId = toolConfiguration.toolModelConfigIds[
+            AgentToolRequestPolicy.BuiltInAutoIllustration
+        ].orEmpty()
         val imageConfig = settings.loadModelConfigCollection().configs.firstOrNull {
             it.id == selectedImageConfigId && it.isImageGenerationConfig()
         }
@@ -171,18 +158,10 @@ internal class CharacterAgentTurnPreparer(
                 activeToolContext.isEnabled(AgentToolRequestPolicy.BuiltInAutoIllustration)
             }
         val resolvedRoleplayPlanItems = effectiveRoleplayPlanItems(
-            items = promotedStoryTurnContext?.fixedRoleplayPlanItems.orEmpty(),
+            items = agentPreset.roleplayPlan.steps.map { it.resolveCharacterCardMacros(macroValues) },
             imageActionEnabled = imageConfig != null,
         )
-        val instructions = characterAgentInstructions(
-            mode = characterMode,
-            authorPrompt = session.characterPersona.assistantPrompt.resolveCharacterCardMacros(macroValues),
-            protocolInstructions = if (characterMode == CharacterMode.Story) {
-                ""
-            } else {
-                roleplayOutputProtocolInstructions(actionCallEnabled = imageConfig != null)
-            },
-        )
+        val protocolInstructions = ""
         val contextInjections = buildList {
             addAll(CharacterSettingContextResolver.resolve(
                 library = storyLibrary,
@@ -232,12 +211,12 @@ internal class CharacterAgentTurnPreparer(
             if (roleplayPlanEnabled && resolvedRoleplayPlanItems.isNotEmpty()) {
                 add(roleplayPlanDynamicTool(resolvedRoleplayPlanItems))
             }
-            if (characterMode == CharacterMode.Story && settingLibraryEnabled) {
+            if (settingLibraryEnabled) {
                 val liveSettingContext: suspend () -> SettingLibraryAgentTurnContext = {
                     settingLibrary.loadAgentTurnContext(
                         characterId = session.characterId,
                         sessionId = session.id,
-                        additionalLibrary = storyPreset?.asRuntimeSettingLibrary(),
+                        additionalLibrary = agentPreset.asRuntimeSettingLibrary(),
                     )
                         .resolveCharacterCardMacros(macroValues)
                         .resolveDynamicEntries(
@@ -286,18 +265,22 @@ internal class CharacterAgentTurnPreparer(
                 workspaceId = session.workspaceId,
                 workspaceProjectPath = workspaceProjectPath,
                 conversationId = roleConversationId(session.id),
-                toolScopeId = toolScopeId,
+                enabledToolGroupIds = toolConfiguration.enabledGroupIds,
+                presetId = agentPreset.id,
                 modelConfigId = config.id,
+                subagentModelConfigId = toolConfiguration.subagentModelConfigId
+                    .takeIf(String::isNotBlank),
+                subagentModel = toolConfiguration.subagentModel.takeIf(String::isNotBlank),
                 model = config.model,
                 modelProvider = config.provider,
-                baseInstructions = instructions.baseInstructions,
-                developerInstructions = instructions.developerInstructions,
+                baseInstructions = protocolInstructions,
+                developerInstructions = "",
                 threadStart = threadStart,
                 discardThreadIds = obsoleteRuntimeThreadIds,
                 ephemeral = false,
                 initialHistoryItems = roomHistoryItems,
                 historyPolicy = AgentHistoryPolicy.ProductDialogue,
-                historyCompactionInstructions = storyPreset?.historyCompactionInstructions(),
+                historyCompactionInstructions = agentPreset.historyCompactionInstructions(),
                 captureProviderRequests = captureProviderRequests,
                 permissionMode = session.permissionMode,
                 fileAccessScope = AgentFileAccessScope.CurrentWorkspace,

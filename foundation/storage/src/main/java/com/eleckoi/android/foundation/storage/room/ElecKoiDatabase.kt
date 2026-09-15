@@ -22,7 +22,6 @@ import com.eleckoi.android.foundation.storage.room.agent.entity.GenerationAttemp
     entities = [
         ChatSessionEntity::class,
         ChatSessionCharacterSnapshotEntity::class,
-        ChatSessionModelSettingsEntity::class,
         ChatSessionVariableStateEntity::class,
         CharacterEntity::class,
         CharacterTextContentEntity::class,
@@ -39,8 +38,6 @@ import com.eleckoi.android.foundation.storage.room.agent.entity.GenerationAttemp
         CharacterRegexRuleEntity::class,
         RegexEnablementVersionEntity::class,
         RegexStateEntity::class,
-        GlobalToolConfigEntity::class,
-        CharacterToolConfigEntity::class,
         FrontendProjectEntity::class,
         CharacterFrontendSettingsEntity::class,
         CreatorWorkspaceEntity::class,
@@ -66,21 +63,19 @@ import com.eleckoi.android.foundation.storage.room.agent.entity.GenerationAttemp
         SettingLibraryVersionGroupEntity::class,
         ConversationSettingChangeEntity::class,
         RoleplayRichHeightEntity::class,
-        StoryPresetStateEntity::class,
-        StoryPresetLibraryGroupEntity::class,
-        StoryPresetEntity::class,
-        StoryPresetContentEntity::class,
-        StoryPresetEntryEntity::class,
-        StoryPresetGroupEntity::class,
-        StoryPresetRuntimeEntryEntity::class,
-        StoryPresetVersionEntity::class,
-        StoryPresetVersionContentEntity::class,
-        StoryPresetVersionEntryEntity::class,
-        StoryPresetVersionGroupEntity::class,
-        StoryPresetVersionRuntimeEntryEntity::class,
+        AgentPresetStateEntity::class,
+        AgentPresetLibraryGroupEntity::class,
+        AgentPresetEntity::class,
+        AgentPresetContentEntity::class,
+        AgentPresetEntryEntity::class,
+        AgentPresetGroupEntity::class,
+        AgentPresetVersionEntity::class,
+        AgentPresetVersionContentEntity::class,
+        AgentPresetVersionEntryEntity::class,
+        AgentPresetVersionGroupEntity::class,
     ],
     views = [SettingLibraryEntryEntity::class, SettingLibraryVersionEntryEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class ElecKoiDatabase : RoomDatabase() {
@@ -90,7 +85,6 @@ abstract class ElecKoiDatabase : RoomDatabase() {
     abstract fun modelConfigDao(): ModelConfigDao
     abstract fun variableConfigDao(): VariableConfigDao
     abstract fun regexRuleDao(): RegexRuleDao
-    abstract fun agentToolConfigDao(): AgentToolConfigDao
     abstract fun authorFrontendDao(): AuthorFrontendDao
     abstract fun creatorWorkspaceDao(): CreatorWorkspaceDao
     abstract fun cleanupOperationDao(): CleanupOperationDao
@@ -99,7 +93,7 @@ abstract class ElecKoiDatabase : RoomDatabase() {
     abstract fun settingLibraryDao(): SettingLibraryDao
     abstract fun conversationSettingChangeDao(): ConversationSettingChangeDao
     abstract fun roleplayRichHeightDao(): RoleplayRichHeightDao
-    abstract fun storyPresetDao(): StoryPresetDao
+    abstract fun agentPresetDao(): AgentPresetDao
 
     companion object {
         @Volatile
@@ -111,6 +105,7 @@ abstract class ElecKoiDatabase : RoomDatabase() {
                 ElecKoiDatabase::class.java,
                 "eleckoi-dsh.db",
             )
+                .addMigrations(ElecKoiDatabaseMigrations.version1To2)
                 .addCallback(object : Callback() {
                     override fun onOpen(db: SupportSQLiteDatabase) {
                         // Scrub deleted b-tree cells without adding extra disk I/O for freelist pages.

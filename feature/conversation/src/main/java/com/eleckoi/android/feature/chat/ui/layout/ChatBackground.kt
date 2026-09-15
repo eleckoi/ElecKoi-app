@@ -39,7 +39,6 @@ data class ChatBackdropSpec(
     val characterBackgroundBlur: Float = 0f,
     val characterBackgroundScrim: Float = 0.22f,
     val characterBackgroundResolved: Boolean = true,
-    val roleplayScrim: Float = 0f,
 )
 
 @Composable
@@ -52,7 +51,6 @@ fun ChatBackground(spec: ChatBackdropSpec, modifier: Modifier = Modifier) {
         characterBackgroundBlur = spec.characterBackgroundBlur,
         characterBackgroundScrim = spec.characterBackgroundScrim,
         characterBackgroundResolved = spec.characterBackgroundResolved,
-        roleplayScrim = spec.roleplayScrim,
         modifier = modifier,
     )
 }
@@ -69,12 +67,6 @@ fun ChatBackground(
     // reads as "this character has no background" and the global texture gets painted for a frame
     // before the character's own image replaces it.
     characterBackgroundResolved: Boolean = true,
-    // The roleplay layout has no bubble to read against, so the surface itself has to carry the
-    // text. Pure colour taken from the theme, no blur. Applied
-    // here rather than on the message list because this layer is the one that reaches up behind
-    // the status bar — anywhere else and the clock sits on the raw photo while the chat below it
-    // does not, which is the seam you can see.
-    roleplayScrim: Float = 0f,
     modifier: Modifier = Modifier,
 ) {
     val characterFile = remember(characterBackgroundPath) {
@@ -113,8 +105,7 @@ fun ChatBackground(
     val textureFile = backgroundChoice.file
     val usingGlobalTexture = backgroundChoice.source == ChatBackgroundSource.Global
     val effectiveOpacity = if (usingGlobalTexture) appearance.textureOpacity else characterBackgroundOpacity
-    // Blur stays entirely the background editor's business. The roleplay scrim is colour only, so
-    // the two controls never fight over the same pixels.
+    // Blur and reading veil are entirely the background editor's business.
     val effectiveBlur = if (usingGlobalTexture) appearance.textureBlur else characterBackgroundBlur
     val effectiveScrim = if (usingGlobalTexture) appearance.textureScrim else characterBackgroundScrim
     val scrimBase = appearance.mobileChatTextureScrim
@@ -157,13 +148,6 @@ fun ChatBackground(
             } else {
                 DirectionalScrim(appearance = appearance, base = scrimBase, strength = effectiveScrim)
             }
-        }
-        if (roleplayScrim > 0f) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(RoleplayScrimColor.copy(alpha = roleplayScrim.coerceIn(0f, 1f))),
-            )
         }
     }
 }

@@ -106,14 +106,13 @@ class CreatorWorkspaceRepository constructor(
     suspend fun create(
         name: String,
         linkedCharacterId: String? = null,
-        linkedCharacterMode: String? = null,
+        characterOwned: Boolean = false,
     ): CreatorWorkspace = withContext(Dispatchers.IO) {
         mutex.withLock {
             val normalizedName = paths.validateName(name)
             val normalizedCharacterId = paths.validateCharacterId(linkedCharacterId)
-            val normalizedCharacterMode = paths.validateCharacterMode(linkedCharacterMode)
-            require(normalizedCharacterMode == null || normalizedCharacterId != null) {
-                "角色模式工作区必须关联角色"
+            require(!characterOwned || normalizedCharacterId != null) {
+                "角色工作区必须关联角色"
             }
             val workspaceId = createUniqueWorkspaceId()
             val createdAt = now().toString()
@@ -121,7 +120,7 @@ class CreatorWorkspaceRepository constructor(
             val destinationDirectory = paths.workspaceDirectory(
                 workspaceId = workspaceId,
                 linkedCharacterId = normalizedCharacterId,
-                linkedCharacterMode = normalizedCharacterMode,
+                characterOwned = characterOwned,
             )
 
             require(!Files.exists(destinationDirectory.toPath(), LinkOption.NOFOLLOW_LINKS)) {
@@ -148,7 +147,7 @@ class CreatorWorkspaceRepository constructor(
                     id = workspaceId,
                     name = normalizedName,
                     linkedCharacterId = normalizedCharacterId,
-                    linkedCharacterMode = normalizedCharacterMode,
+                    characterOwned = characterOwned,
                     createdAt = createdAt,
                     updatedAt = createdAt,
                     files = projectState.files.map(CreatorWorkspaceFile::path),
@@ -160,10 +159,10 @@ class CreatorWorkspaceRepository constructor(
                     File(stagingDirectory, WorkspacePathGuard.ManifestFileName),
                     ElecKoiPrettyJson.encodeToString(workspace),
                 )
-                if (normalizedCharacterId != null && normalizedCharacterMode != null) {
+                if (normalizedCharacterId != null && characterOwned) {
                     val container = paths.ensureCharacterContainer(normalizedCharacterId)
                     require(destinationDirectory.parentFile?.canonicalFile == container.canonicalFile) {
-                        "角色模式工作区路径无效"
+                        "角色工作区路径无效"
                     }
                 }
                 require(stagingDirectory.renameTo(destinationDirectory)) { "无法创建创作工作区" }
@@ -182,24 +181,21 @@ class CreatorWorkspaceRepository constructor(
         }
     }
 
-    /** Returns the one persistent physical workspace owned by a character-mode pair. */
-    suspend fun ensureCharacterModeWorkspace(
+    /** Returns the one persistent physical runtime workspace owned by a character. */
+    suspend fun ensureCharacterWorkspace(
         characterId: String,
-        characterMode: String,
         name: String,
     ): CreatorWorkspace = characterWorkspaceMutex.withLock {
         val normalizedCharacterId = paths.validateCharacterId(characterId)
             ?: error("角色关联编号不能为空")
-        val normalizedCharacterMode = paths.validateCharacterMode(characterMode)
-            ?: error("角色模式不能为空")
         list().firstOrNull { workspace ->
             workspace.linkedCharacterId == normalizedCharacterId &&
-                workspace.linkedCharacterMode == normalizedCharacterMode
+                workspace.characterOwned
         }?.let { return@withLock it }
         create(
             name = name,
             linkedCharacterId = normalizedCharacterId,
-            linkedCharacterMode = normalizedCharacterMode,
+            characterOwned = true,
         )
     }
 
@@ -213,9 +209,9 @@ class CreatorWorkspaceRepository constructor(
                 ?: error("角色关联编号不能为空")
             require(
                 catalog.catalog().workspaces.none {
-                    it.linkedCharacterId == normalizedCharacterId && it.linkedCharacterMode != null
+                    it.linkedCharacterId == normalizedCharacterId && it.characterOwned
                 },
-            ) { "角色仍有关联的模式工作区" }
+            ) { "角色仍有关联的工作区" }
             val directory = paths.characterContainerDirectory(normalizedCharacterId)
             if (!Files.exists(directory.toPath(), LinkOption.NOFOLLOW_LINKS)) return@withLock
             require(paths.isSafeCharacterContainerDirectory(directory)) { "角色工作区容器无效" }
@@ -234,7 +230,7 @@ class CreatorWorkspaceRepository constructor(
                 .filterNot { it.name in retained }
                 .filter { container ->
                     catalog.catalog().workspaces.none {
-                        it.linkedCharacterId == container.name && it.linkedCharacterMode != null
+                        it.linkedCharacterId == container.name && it.characterOwned
                     }
                 }
                 .forEach(paths::deleteTreeNoFollow)
@@ -267,7 +263,7 @@ class CreatorWorkspaceRepository constructor(
     ): CreatorWorkspace = withContext(Dispatchers.IO) {
         mutex.withLock {
             val workspace = catalog.requireWorkspace(workspaceId).withNormalizedCharacterRoots()
-            require(workspace.linkedCharacterMode == null) { "角色模式工作区不能挂载创作角色" }
+            require(!workspace.characterOwned) { "角色工作区不能挂载创作角色" }
             val normalizedCharacterId = paths.validateCharacterId(characterId)
                 ?: error("角色编号不能为空")
             val rootId = creatorCharacterRootId(normalizedCharacterId)
@@ -343,7 +339,7 @@ class CreatorWorkspaceRepository constructor(
         mutex.withLock {
             if (characterIds.isEmpty()) return@withLock
             catalog.catalog().workspaces
-                .filter { it.linkedCharacterMode == null }
+                .filterNot { it.characterOwned }
                 .forEach { rawWorkspace ->
                     val workspace = rawWorkspace.withNormalizedCharacterRoots()
                     val roots = workspace.characterRoots.filterNot { it.characterId in characterIds }

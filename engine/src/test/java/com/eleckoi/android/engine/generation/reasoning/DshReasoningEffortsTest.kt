@@ -9,60 +9,52 @@ import org.junit.Test
 
 class DshReasoningEffortsTest {
     @Test
-    fun `Responses and Chat expose every DSH effort`() {
-        listOf(ModelApiFormat.Responses, ModelApiFormat.ChatCompletions).forEach { format ->
-            val option = ModelOption("model")
-            val config = ModelConfig(model = option.id, modelOptions = listOf(option), apiFormat = format)
-
-            assertEquals(
-                listOf("off", "minimal", "low", "medium", "high", "xhigh", "max"),
-                DshReasoningEfforts.forModel(config, option).map { it.id },
-            )
-        }
-    }
-
-    @Test
-    fun `Messages and Gemini omit levels pi-ai would clamp`() {
-        listOf(ModelApiFormat.AnthropicMessages, ModelApiFormat.GoogleGemini).forEach { format ->
-            val option = ModelOption("model")
-            val config = ModelConfig(model = option.id, modelOptions = listOf(option), apiFormat = format)
-
-            assertEquals(
-                listOf("off", "minimal", "low", "medium", "high"),
-                DshReasoningEfforts.forModel(config, option).map { it.id },
-            )
-        }
-    }
-
-    @Test
-    fun `DeepSeek exposes only efforts accepted by the DSH DeepSeek adapter`() {
-        listOf(ModelApiFormat.Responses, ModelApiFormat.ChatCompletions).forEach { format ->
-            val option = ModelOption("deepseek-v4-flash-vision-exp")
-            val config = ModelConfig(
-                provider = "deepseek",
-                model = option.id,
-                modelOptions = listOf(option),
-                apiFormat = format,
-            )
-
-            assertEquals(
-                listOf("off", "low", "high", "max"),
-                DshReasoningEfforts.forModel(config, option).map { it.id },
-            )
-        }
-    }
-
-    @Test
-    fun `selected effort is validated against active protocol`() {
-        val option = ModelOption("model", reasoningEffort = "MAX")
-        val responses = ModelConfig(
+    fun `Kimi K3 Chat exposes only its declared efforts`() {
+        val option = ModelOption("kimi-k3")
+        val config = ModelConfig(
+            provider = "moonshot",
             model = option.id,
             modelOptions = listOf(option),
-            apiFormat = ModelApiFormat.Responses,
+            apiFormat = ModelApiFormat.ChatCompletions,
         )
-        val messages = responses.copy(apiFormat = ModelApiFormat.AnthropicMessages)
 
-        assertEquals("max", DshReasoningEfforts.selected(responses))
-        assertNull(DshReasoningEfforts.selected(messages))
+        assertEquals(
+            listOf("low", "high", "max"),
+            DshReasoningEfforts.forModel(config, option).map { it.id },
+        )
+        assertEquals(DshModelCapabilities.KimiK3WireProfile, DshModelCapabilities.active(config).wireProfile)
+    }
+
+    @Test
+    fun `unknown models and unsupported protocols do not guess reasoning levels`() {
+        ModelApiFormat.entries.forEach { format ->
+            val option = ModelOption("custom-model")
+            val config = ModelConfig(model = option.id, modelOptions = listOf(option), apiFormat = format)
+            assertEquals(emptyList<String>(), DshReasoningEfforts.forModel(config, option).map { it.id })
+            assertEquals(
+                DshModelCapabilities.DefaultWireProfile,
+                DshModelCapabilities.active(config).wireProfile,
+            )
+        }
+
+        val kimiResponses = ModelConfig(model = "kimi-k3", apiFormat = ModelApiFormat.Responses)
+        assertEquals(emptyList<String>(), DshReasoningEfforts.forModel(kimiResponses, ModelOption("kimi-k3")).map { it.id })
+    }
+
+    @Test
+    fun `selected effort is validated against the exact model capability`() {
+        val option = ModelOption("kimi-k3", reasoningEffort = "MAX")
+        val kimi = ModelConfig(
+            model = option.id,
+            modelOptions = listOf(option),
+            apiFormat = ModelApiFormat.ChatCompletions,
+        )
+        val unsupportedOff = kimi.copy(modelOptions = listOf(option.copy(reasoningEffort = "off")))
+        val unknown = kimi.copy(model = "custom", modelOptions = listOf(ModelOption("custom", reasoningEffort = "high")))
+
+        assertEquals("max", DshReasoningEfforts.selected(kimi))
+        assertNull(DshReasoningEfforts.selected(unsupportedOff))
+        assertNull(DshReasoningEfforts.selected(unknown))
+        assertEquals("跟随模型默认", DshReasoningEfforts.label(null))
     }
 }

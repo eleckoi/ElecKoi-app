@@ -2,7 +2,6 @@ package com.eleckoi.android.feature.characters.ui.components
 
 import android.graphics.Bitmap
 import android.net.Uri
-import androidx.annotation.RawRes
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -75,21 +74,18 @@ fun AvatarSlotsPage(
     cachePrefix: String,
     appearance: AppearanceTheme,
     initialSlot: AvatarSlot? = null,
-    defaultResources: Map<AvatarSlot, Int> = emptyMap(),
-    blankWhenMissing: Set<AvatarSlot> = emptySet(),
     onBack: () -> Unit,
     onSave: (Map<AvatarSlot, File>) -> Unit,
     onClear: ((AvatarSlot) -> Unit)? = null,
 ) {
     val context = LocalContext.current
-    val initialSource = remember(avatars, initialSlot, defaultResources) {
+    val initialSource = remember(avatars, initialSlot) {
         initialSlot?.let { slot ->
             slot.pathIn(avatars)
                 .takeIf { it.isNotBlank() }
                 ?.let(::File)
                 ?.takeIf { it.exists() }
                 ?.let(Uri::fromFile)
-                ?: defaultResources[slot]?.let(context::rawResourceUri)
         }
     }
     var editing by remember(initialSlot) { mutableStateOf(initialSlot) }
@@ -121,7 +117,7 @@ fun AvatarSlotsPage(
             .takeIf { it.isNotBlank() }
             ?.let(::File)
             ?.takeIf { it.exists() }
-        val source = existing?.let(Uri::fromFile) ?: defaultResources[slot]?.let(context::rawResourceUri)
+        val source = existing?.let(Uri::fromFile)
         if (source == null) picker.launch("image/*") else cropSource = source
     }
 
@@ -210,8 +206,6 @@ fun AvatarSlotsPage(
                     avatars = avatars,
                     displayName = displayName,
                     appearance = appearance,
-                    fallbackImage = defaultResources[AvatarSlot.Circle],
-                    showInitialWhenEmpty = AvatarSlot.Circle !in blankWhenMissing,
                     onClick = { open(AvatarSlot.Circle) },
                 )
                 AvatarSlotCell(
@@ -219,8 +213,6 @@ fun AvatarSlotsPage(
                     avatars = avatars,
                     displayName = displayName,
                     appearance = appearance,
-                    fallbackImage = defaultResources[AvatarSlot.Square],
-                    showInitialWhenEmpty = AvatarSlot.Square !in blankWhenMissing,
                     onClick = { open(AvatarSlot.Square) },
                 )
             }
@@ -235,8 +227,6 @@ fun AvatarSlotsPage(
                     avatars = avatars,
                     displayName = displayName,
                     appearance = appearance,
-                    fallbackImage = defaultResources[AvatarSlot.Portrait],
-                    showInitialWhenEmpty = AvatarSlot.Portrait !in blankWhenMissing,
                     onClick = { open(AvatarSlot.Portrait) },
                 )
                 Spacer(modifier = Modifier.weight(1f))
@@ -264,8 +254,6 @@ private fun RowScope.AvatarSlotCell(
     avatars: AvatarSet,
     displayName: String,
     appearance: AppearanceTheme,
-    fallbackImage: Any?,
-    showInitialWhenEmpty: Boolean,
     onClick: () -> Unit,
 ) {
     val slotWidth = SlotWidth.dp
@@ -276,7 +264,6 @@ private fun RowScope.AvatarSlotCell(
     }
     val slotHeight = if (slot == AvatarSlot.Portrait) PortraitSlotHeight else SlotWidth
     val path = slot.pathIn(avatars)
-    val visiblyEmpty = path.isBlank() && fallbackImage == null && !showInitialWhenEmpty
     Column(
         modifier = Modifier
             .weight(1f)
@@ -285,43 +272,16 @@ private fun RowScope.AvatarSlotCell(
             .padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        if (visiblyEmpty) {
-            Box(
-                modifier = Modifier
-                    .size(width = slotWidth, height = slotHeight.dp)
-                    .clip(shape)
-                    .background(appearance.mobilePinnedBg)
-                    .border(1.dp, appearance.mobileLine, shape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    StrokeSvgIcon(AppIconPaths.Plus, appearance.mobileSoft, iconSize = 23.dp)
-                    Text(
-                        "还没设",
-                        color = appearance.mobileMuted,
-                        fontSize = 11.sp,
-                        modifier = Modifier.padding(top = 7.dp),
-                    )
-                }
-            }
-        } else {
-            AvatarCircle(
-                name = displayName,
-                size = SlotWidth,
-                fontSize = 28,
-                appearance = appearance,
-                avatarPath = path,
-                modifier = if (slot == AvatarSlot.Portrait) {
-                    Modifier
-                } else {
-                    Modifier.border(1.dp, appearance.mobileLine, shape)
-                },
-                shape = shape,
-                height = slotHeight,
-                fallbackImage = fallbackImage,
-                showInitialWhenEmpty = showInitialWhenEmpty,
-            )
-        }
+        AvatarCircle(
+            name = displayName,
+            size = SlotWidth,
+            fontSize = 28,
+            appearance = appearance,
+            avatarPath = path,
+            modifier = Modifier.border(1.dp, appearance.mobileLine, shape),
+            shape = shape,
+            height = slotHeight,
+        )
         Column(
             modifier = Modifier.padding(top = 10.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -394,6 +354,3 @@ private fun File.stage(cachePrefix: String, slot: AvatarSlot, bitmap: Bitmap): F
         if (png) 100 else 94,
     )
 }
-
-private fun android.content.Context.rawResourceUri(@RawRes resourceId: Int): Uri =
-    Uri.parse("android.resource://$packageName/$resourceId")

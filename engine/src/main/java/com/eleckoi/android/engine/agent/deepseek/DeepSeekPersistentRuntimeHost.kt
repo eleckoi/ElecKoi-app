@@ -57,7 +57,7 @@ class DeepSeekPersistentRuntimeHost(
     private val runtime: LocalRuntimeGateway,
     private val runtimePaths: RuntimePaths,
     private val modelConfigProvider: suspend (String?) -> ModelConfig,
-    private val toolRequestFilter: (String, JsonObject) -> JsonObject,
+    private val toolRequestFilter: (Set<String>, JsonObject) -> JsonObject,
 ) : DeepSeekSessionBackendFactory, AutoCloseable {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val lifecycleMutex = Mutex()
@@ -100,7 +100,7 @@ class DeepSeekPersistentRuntimeHost(
             modelConfig = routeConfig,
             subagentModelConfig = subagentConfig,
             systemInstructions = buildDeepSeekSessionSystemInstructions(options, runtimeWorkspacePath),
-            toolScopeId = options.toolScopeId,
+            enabledToolGroupIds = options.enabledToolGroupIds,
             dynamicTools = options.dynamicTools,
             requestCaptureWorkspaceId = options.workspaceId,
             requestCaptureConversationId = options.conversationId,
@@ -284,7 +284,7 @@ class DeepSeekPersistentRuntimeHost(
         private val modelConfig: ModelConfig,
         private val subagentModelConfig: ModelConfig?,
         private val systemInstructions: String,
-        private val toolScopeId: String,
+        private val enabledToolGroupIds: Set<String>,
         private val dynamicTools: List<AgentDynamicTool>,
         private val requestCaptureWorkspaceId: String,
         private val requestCaptureConversationId: String,
@@ -312,7 +312,7 @@ class DeepSeekPersistentRuntimeHost(
                 routeSubagentModelConfig = subagentModelConfig,
                 routeSystemInstructions = systemInstructions,
                 routeHistoryCompactionInstructions = historyCompactionInstructions,
-                routeToolScopeId = toolScopeId,
+                routeEnabledToolGroupIds = enabledToolGroupIds,
                 routeDynamicTools = dynamicTools,
                 routeRequestCaptureWorkspaceId = requestCaptureWorkspaceId,
                 routeRequestCaptureConversationId = requestCaptureConversationId,

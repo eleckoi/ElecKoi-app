@@ -2,7 +2,6 @@ package com.eleckoi.android.feature.characters.data
 
 import com.eleckoi.android.feature.characters.model.AvatarSlot
 import com.eleckoi.android.feature.characters.model.CharacterCard
-import com.eleckoi.android.feature.characters.model.CharacterMode
 import com.eleckoi.android.feature.characters.model.CharacterSlot
 import com.eleckoi.android.feature.characters.model.CharactersPayload
 import com.eleckoi.android.feature.characters.model.UserProfile
@@ -17,6 +16,7 @@ import kotlinx.coroutines.flow.combine
 class CharacterRepository(
     store: JsonFileStore,
     private val database: ElecKoiDatabase,
+    private val defaultChatBackground: () -> String = { "" },
 ) {
     private val dao = database.characterDao()
     private val userProfileDao = database.userProfileDao()
@@ -129,7 +129,8 @@ class CharacterRepository(
         return saved
     }
 
-    fun createCharacter(group: String = defaultGroup): CharacterSlot {
+    /** Builds a complete character-shaped draft without writing it to Room or creating media. */
+    fun createCharacterDraft(group: String = defaultGroup): CharacterSlot {
         val current = loadCharacters()
         val user = loadUserProfile()
         val cleanGroup = normalizeGroupName(group)
@@ -143,20 +144,46 @@ class CharacterRepository(
             order = current.items.size + 1,
             groupViewOrder = 0,
             folder = folderNameForCharacter(id),
-            characterMode = CharacterMode.Story.storageValue,
             persona = CharacterCard(
                 characterId = id,
                 characterName = "未命名角色",
                 assistantName = "",
                 assistantAvatar = "",
-                assistantPrompt = "",
                 opening = "",
                 showOpening = false,
+                chatBackground = defaultChatBackground(),
             ).withUser(user),
         )
-        saveCharacters(
+        return slot
+    }
+
+    fun createCharacter(group: String = defaultGroup): CharacterSlot {
+        return createCharacter(createCharacterDraft(group))
+    }
+
+    /** Commits a previously in-memory draft in one collection write. */
+    fun createCharacter(draft: CharacterSlot): CharacterSlot {
+        val current = loadCharacters()
+        if (current.items.any { it.id == draft.id }) {
+            throw ElecKoiDataException("角色已存在")
+        }
+        val cleanGroup = normalizeGroupName(draft.group)
+        val name = draft.persona.assistantName.trim().ifBlank { "未命名角色" }
+        val slot = normalizeCharacter(
+            draft.copy(
+                name = name,
+                group = cleanGroup,
+                order = current.items.size + 1,
+                persona = draft.persona.copy(
+                    characterName = name,
+                    assistantName = draft.persona.assistantName.trim(),
+                    showOpening = draft.persona.opening.isNotBlank(),
+                ),
+            ),
+        )
+        val saved = saveCharacters(
             CharactersPayload(
-                activeCharacterId = current.activeCharacterId.ifBlank { id },
+                activeCharacterId = current.activeCharacterId.ifBlank { slot.id },
                 groups = if (cleanGroup.isBlank() || current.groups.contains(cleanGroup)) {
                     current.groups
                 } else {
@@ -171,7 +198,7 @@ class CharacterRepository(
                 },
             ),
         )
-        return slot
+        return saved.items.first { it.id == slot.id }
     }
 
     fun createCharacterGroup(name: String): CharactersPayload {
@@ -248,7 +275,6 @@ class CharacterRepository(
             persona = target.persona.copy(
                 assistantName = persona.assistantName,
                 assistantAvatar = persona.assistantAvatar,
-                assistantPrompt = persona.assistantPrompt,
                 profileAge = persona.profileAge.trim().take(16),
                 profileSex = persona.profileSex.trim().take(16),
                 profileHeight = persona.profileHeight.trim().take(16),
@@ -295,12 +321,4 @@ class CharacterRepository(
         return chatBackgrounds.applyGlobal(sourceCharacterId)
     }
 
-    fun saveCharacterMode(characterId: String, characterMode: String): CharactersPayload {
-        val current = loadCharacters()
-        val mode = normalizeCharacterMode(characterMode)
-        val updated = current.items.map { slot ->
-            if (slot.id == characterId) slot.copy(characterMode = mode) else slot
-        }
-        return saveCharacters(current.copy(items = updated))
-    }
 }

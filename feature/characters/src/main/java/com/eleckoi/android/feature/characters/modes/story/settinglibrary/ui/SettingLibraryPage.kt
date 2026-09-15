@@ -4,7 +4,6 @@ import com.eleckoi.android.feature.characters.modes.story.ui.shared.*
 
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -45,13 +44,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.eleckoi.android.foundation.design.AppearanceTheme
-import com.eleckoi.android.feature.characters.modes.story.presets.model.StoryPreset
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibrary
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibrarySource
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryVersion
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isFixedEntry
-import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isRoleplayPlanEntry
 import com.eleckoi.android.foundation.design.components.PinnedStatusScaffold
 import com.eleckoi.android.foundation.design.components.noRippleClickable
 import kotlinx.coroutines.delay
@@ -69,15 +66,10 @@ fun SettingLibraryPage(
     toolContextNames: List<String> = emptyList(),
     importSources: List<SettingLibrarySource> = emptyList(),
     loadingImportSources: Boolean = false,
-    activePreset: StoryPreset? = null,
     onBack: () -> Unit,
     onSave: (SettingLibrary) -> Unit,
-    onUpdateActivePreset: (StoryPreset) -> Unit = {},
-    onOpenActivePreset: (String) -> Unit = {},
-    onOpenActivePresetEntry: (String, String) -> Unit = { _, _ -> },
     onImport: () -> Unit = {},
     onExport: () -> Unit = {},
-    onRoleplayPlanEnabledChange: (Boolean) -> Unit = {},
     onRequestImportSources: () -> Unit = {},
     onParseImportFile: (String) -> SettingLibraryVersion? = { null },
 ) {
@@ -88,7 +80,6 @@ fun SettingLibraryPage(
     val listState = rememberLazyListState()
     val editorState = rememberSettingLibraryEditorState(library)
     var searchOpen by remember { mutableStateOf(false) }
-    var selectedExternalPresetNodeId by remember(activePreset?.id) { mutableStateOf<String?>(null) }
 
     with(editorState) {
 
@@ -169,23 +160,6 @@ fun SettingLibraryPage(
     )
     val displayedTreeNodes = treeInternalReorder.displayNodes()
     val selectedLocalTreeNode = treeNodes.firstOrNull { it.id == selectedTreeNodeId }
-    val presetTreeNodes = remember(
-        activePreset?.id,
-        activePreset?.groups,
-        activePreset?.entries,
-        activePreset?.expandedGroupIds,
-        search,
-    ) {
-        val preset = activePreset ?: return@remember emptyList()
-        settingTreeNodes(
-            groups = preset.groups,
-            entries = preset.entries,
-            expandedGroupIds = preset.expandedGroupIds.toSet(),
-            search = search,
-        )
-    }
-    val visiblePreset = activePreset?.takeIf { presetTreeNodes.isNotEmpty() }
-
     if (library != null && editorEntryId != null) {
         val entry = entries.firstOrNull { it.id == editorEntryId }
         if (entry != null) {
@@ -267,12 +241,8 @@ fun SettingLibraryPage(
                 modifier = Modifier
                     .fillMaxSize()
                     .clearSettingTreeSelectionOnBlankTap(
-                        enabled = !searchOpen &&
-                            (selectedTreeNodeId != RootNodeId || selectedExternalPresetNodeId != null),
-                        onClear = {
-                            focusTreeNode(RootNodeId)
-                            selectedExternalPresetNodeId = null
-                        },
+                        enabled = !searchOpen && selectedTreeNodeId != RootNodeId,
+                        onClear = { focusTreeNode(RootNodeId) },
                     ),
             ) {
                 if (!searchOpen) {
@@ -290,7 +260,7 @@ fun SettingLibraryPage(
                         )
                     }
                 }
-                if (!hasUserTreeNodes && visiblePreset == null && !searchOpen) {
+                if (!hasUserTreeNodes && !searchOpen) {
                     item(key = "empty") {
                         EmptySettingRootGuide(
                             appearance = appearance,
@@ -304,21 +274,12 @@ fun SettingLibraryPage(
                             key = { settingTreeLazyItemKey(it.id, LibraryTreeItemKeyPrefix) },
                         ) { node ->
                             val dragging = treeInternalReorder.isDragging(node)
-                            val placementModifier = if (dragging) {
-                                Modifier
-                            } else {
-                                Modifier.animateItem(
-                                    fadeInSpec = tween(durationMillis = 150),
-                                    placementSpec = tween(durationMillis = 150),
-                                    fadeOutSpec = tween(durationMillis = 75),
-                                )
-                            }
                             SettingTreeNodeRow(
                                 node = node,
                                 selected = selectedTreeNodeId == node.id,
                                 dropTarget = false,
                                 dragging = dragging,
-                                modifier = placementModifier
+                                modifier = Modifier
                                     .zIndex(if (dragging) 2f else 0f)
                                     .offset { IntOffset(0, treeInternalReorder.dragOffsetY(node).roundToInt()) },
                                 reorderModifier = treeInternalReorder.dragModifier(node),
@@ -329,7 +290,6 @@ fun SettingLibraryPage(
                                 horizontalScrollState = horizontalTreeScroll,
                                 appearance = appearance,
                                 onSelect = {
-                                    selectedExternalPresetNodeId = null
                                     when (node) {
                                         is SettingTreeNode.File -> focusTreeNode(node.id)
                                         is SettingTreeNode.Folder -> selectTreeNode(node.id)
@@ -347,9 +307,6 @@ fun SettingLibraryPage(
                                         conflictingOrderEntry = entry
                                     } else {
                                         updateEntry(entry.id) { it.copy(enabled = enabled) }
-                                        if (entry.isRoleplayPlanEntry()) {
-                                            onRoleplayPlanEnabledChange(enabled)
-                                        }
                                     }
                                 },
                                 onToggle = {
@@ -370,27 +327,7 @@ fun SettingLibraryPage(
                             )
                         }
                     }
-                    if (visiblePreset != null) {
-                        activePresetTreeRows(
-                            preset = visiblePreset,
-                            nodes = presetTreeNodes,
-                            selectedNodeId = selectedExternalPresetNodeId,
-                            search = search,
-                            horizontalScrollState = horizontalTreeScroll,
-                            appearance = appearance,
-                            onSelectNode = { nodeId ->
-                                focusTreeNode(RootNodeId)
-                                selectedExternalPresetNodeId =
-                                    nodeId.takeUnless { it == selectedExternalPresetNodeId }
-                            },
-                            onOpenPreset = onOpenActivePreset,
-                            onOpenEntry = onOpenActivePresetEntry,
-                            onUpdatePreset = onUpdateActivePreset,
-                            onInvalidEnable = { invalidEnableEntry = it },
-                            onConflictingOrder = { conflictingOrderEntry = it },
-                        )
-                    }
-                    if (searchOpen && displayedTreeNodes.isEmpty() && visiblePreset == null) {
+                    if (searchOpen && displayedTreeNodes.isEmpty()) {
                         item(key = "empty_search") { EmptySearchResult(appearance) }
                     }
                 }

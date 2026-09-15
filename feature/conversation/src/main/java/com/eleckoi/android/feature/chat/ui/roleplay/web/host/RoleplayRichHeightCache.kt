@@ -14,6 +14,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import java.util.concurrent.ConcurrentHashMap
 
 /** Exact rich-document heights retained in memory and Room across process recreation. */
 internal object RoleplayRichHeightCache {
@@ -28,6 +29,7 @@ internal object RoleplayRichHeightCache {
     private val writerMutex = Mutex()
     @Volatile
     private var persistentDao: RoleplayRichHeightDao? = null
+    private val deletedMessages = ConcurrentHashMap.newKeySet<String>()
     private val heights = object : LinkedHashMap<String, Int>(MaxEntries, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Int>?): Boolean =
             size > MaxEntries
@@ -40,6 +42,7 @@ internal object RoleplayRichHeightCache {
 
     fun putPersistent(context: Context, key: String, heightPx: Int) {
         val parsed = parseKey(key) ?: return
+        if (deletedKey(parsed.sessionId, parsed.messageId) in deletedMessages) return
         if (heightPx !in 1..MaxHeightPx) return
         if (!rememberIfChanged(key, heightPx)) return
         val entity = parsed.toEntity(heightPx)
@@ -58,9 +61,32 @@ internal object RoleplayRichHeightCache {
         }
     }
 
+    /** Wait for queued writes, then prevent deleted message heights from returning from memory/Room. */
+    suspend fun discardMessages(sessionId: String, messageIds: List<String>) {
+        if (messageIds.isEmpty()) return
+        val ids = messageIds.toSet()
+        writerMutex.withLock {
+            synchronized(this) {
+                ids.forEach { deletedMessages += deletedKey(sessionId, it) }
+                val keys = heights.keys.filter { key ->
+                    val parsed = parseKey(key)
+                    parsed?.sessionId == sessionId && parsed.messageId in ids
+                }
+                keys.forEach { heights.remove(it) }
+            }
+            persistentDao?.deleteForMessages(sessionId, messageIds)
+        }
+    }
+
     @Synchronized
     private fun rememberIfChanged(key: String, heightPx: Int): Boolean {
-        if (parseKey(key) == null || heightPx !in 1..MaxHeightPx || heights[key] == heightPx) {
+        val parsed = parseKey(key)
+        if (
+            parsed == null ||
+            deletedKey(parsed.sessionId, parsed.messageId) in deletedMessages ||
+            heightPx !in 1..MaxHeightPx ||
+            heights[key] == heightPx
+        ) {
             return false
         }
         heights[key] = heightPx
@@ -82,7 +108,11 @@ internal object RoleplayRichHeightCache {
         return JSONObject().apply {
             stored.forEach { entity ->
                 val key = entity.cacheKey().encoded()
-                if (parseKey(key) != null && entity.heightPx in 1..MaxHeightPx) {
+                if (
+                    parseKey(key) != null &&
+                    deletedKey(entity.sessionId, entity.messageId) !in deletedMessages &&
+                    entity.heightPx in 1..MaxHeightPx
+                ) {
                     put(key, entity.heightPx)
                 }
             }
@@ -106,6 +136,7 @@ internal object RoleplayRichHeightCache {
     @Synchronized
     internal fun clearForTest() {
         heights.clear()
+        deletedMessages.clear()
     }
 
     @Synchronized
@@ -120,6 +151,7 @@ internal object RoleplayRichHeightCache {
             val encoded = key.encoded()
             if (
                 parseKey(encoded) != null &&
+                deletedKey(entity.sessionId, entity.messageId) !in deletedMessages &&
                 entity.heightPx in 1..MaxHeightPx &&
                 encoded !in heights
             ) {
@@ -134,6 +166,8 @@ internal object RoleplayRichHeightCache {
                 .roleplayRichHeightDao()
                 .also { persistentDao = it }
         }
+
+    private fun deletedKey(sessionId: String, messageId: String) = "$sessionId$KeySeparator$messageId"
 
     private fun parseKey(key: String): CacheKey? {
         if (key.isBlank() || key.length > MaxKeyCharacters) return null
@@ -176,7 +210,6 @@ internal object RoleplayRichHeightCache {
             rootIndex = rootIndex,
             viewportWidthPx = viewportWidthPx,
             heightPx = heightPx,
-            measuredAtEpochMs = System.currentTimeMillis(),
         )
     }
 

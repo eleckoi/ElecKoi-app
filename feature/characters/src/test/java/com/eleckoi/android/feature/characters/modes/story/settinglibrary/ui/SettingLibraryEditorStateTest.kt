@@ -6,7 +6,6 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.S
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryTriggerMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryVersion
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isOpeningEntry
-import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isRoleplayPlanEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.settingLibraryOpeningEntry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -19,7 +18,7 @@ class SettingLibraryEditorStateTest {
         val state = SettingLibraryEditorState(SettingLibrary(characterId = "character"))
 
         state.addEntry()
-        val created = state.entries.single { !it.isOpeningEntry() && !it.isRoleplayPlanEntry() }
+        val created = state.entries.single { !it.isOpeningEntry() }
 
         assertEquals(SettingLibraryTriggerMode.AgentTool, created.triggerMode)
         assertEquals(null, created.position)
@@ -39,7 +38,7 @@ class SettingLibraryEditorStateTest {
         state.focusTreeNode(RootNodeId)
         state.addEntry()
 
-        val created = state.entries.filterNot { it.isOpeningEntry() || it.isRoleplayPlanEntry() }
+        val created = state.entries.filterNot { it.isOpeningEntry() }
         assertEquals(listOf("新建设定", "新建设定 2"), created.map { it.title })
         assertEquals(created.last().id, state.editorEntryId)
     }
@@ -137,9 +136,8 @@ class SettingLibraryEditorStateTest {
 
         assertEquals(2, state.versions.size)
         assertEquals("current", state.versions.first().id)
-        assertEquals(2, state.entries.size)
-        assertTrue(state.entries[0].isOpeningEntry())
-        assertTrue(state.entries[1].isRoleplayPlanEntry())
+        assertEquals(1, state.entries.size)
+        assertTrue(state.entries.single().isOpeningEntry())
     }
 
     @Test

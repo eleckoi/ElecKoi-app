@@ -8,7 +8,6 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.S
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPromptPosition
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isOpeningEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isPinnedEntry
-import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isRoleplayPlanEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.settingLibraryOpeningEntry
 import com.eleckoi.android.feature.studio.authoring.CreatorAuthoringContext
 import com.eleckoi.android.feature.studio.authoring.CreatorAuthoringException
@@ -130,7 +129,7 @@ internal fun SettingLibraryEntry.summaryJson() = buildJsonObject {
     put("agentReadStrategy", agentReadStrategy.storageValue)
     put("contentPreview", content.compactPreview())
     put("pinned", isPinnedEntry())
-    put("editable", !isPinnedEntry() || isOpeningEntry() || isRoleplayPlanEntry())
+    put("editable", !isPinnedEntry() || isOpeningEntry())
     put("deletable", !isPinnedEntry())
 }
 
@@ -183,7 +182,7 @@ internal fun SettingLibraryEntry.fullJson(
     put("order", order)
     put("treeViewOrder", treeViewOrder)
     put("pinned", isPinnedEntry())
-    put("editable", !isPinnedEntry() || isOpeningEntry() || isRoleplayPlanEntry())
+    put("editable", !isPinnedEntry() || isOpeningEntry())
     put("deletable", !isPinnedEntry())
     if (opening != null) {
         put("defaultOpeningMessageId", opening.defaultOpeningMessageId)

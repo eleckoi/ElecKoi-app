@@ -7,11 +7,85 @@ import androidx.room.Upsert
 
 @Dao
 interface RegexRuleDao {
-    @Query("SELECT * FROM global_regex_rules ORDER BY sortIndex, id")
-    fun globalRules(): List<GlobalRegexRuleEntity>
+    @Transaction
+    fun globalRules(): List<GlobalRegexRuleEntity> = globalRuleMetadata().map { metadata ->
+        GlobalRegexRuleEntity(
+            id = metadata.id,
+            rule = readRegexRuleFields(metadata) { start, length ->
+                globalRuleTextChunk(metadata.id, start, length)
+            },
+        )
+    }
 
-    @Query("SELECT * FROM character_regex_rules WHERE characterId = :characterId ORDER BY sortIndex, id")
-    fun characterRules(characterId: String): List<CharacterRegexRuleEntity>
+    @Transaction
+    fun characterRules(characterId: String): List<CharacterRegexRuleEntity> =
+        characterRuleMetadata(characterId).map { row ->
+            CharacterRegexRuleEntity(
+                characterId = row.characterId,
+                id = row.metadata.id,
+                rule = readRegexRuleFields(row.metadata) { start, length ->
+                    characterRuleTextChunk(row.characterId, row.metadata.id, start, length)
+                },
+            )
+        }
+
+    @Query(
+        """
+        SELECT id, enabled, displayOnly, promptOnly, runOnEdit, sortIndex,
+            length(name) AS nameLength,
+            length(pattern) AS patternLength,
+            length(replacement) AS replacementLength,
+            length(targetsJson) AS targetsJsonLength
+        FROM global_regex_rules
+        ORDER BY sortIndex, id
+        """,
+    )
+    fun globalRuleMetadata(): List<RegexRuleReadMetadata>
+
+    @Query(
+        """
+        SELECT characterId, id, enabled, displayOnly, promptOnly, runOnEdit, sortIndex,
+            length(name) AS nameLength,
+            length(pattern) AS patternLength,
+            length(replacement) AS replacementLength,
+            length(targetsJson) AS targetsJsonLength
+        FROM character_regex_rules
+        WHERE characterId = :characterId
+        ORDER BY sortIndex, id
+        """,
+    )
+    fun characterRuleMetadata(characterId: String): List<CharacterRegexRuleReadMetadata>
+
+    @Query(
+        """
+        SELECT
+            substr(name, :start, :length) AS nameChunk,
+            substr(pattern, :start, :length) AS patternChunk,
+            substr(replacement, :start, :length) AS replacementChunk,
+            substr(targetsJson, :start, :length) AS targetsJsonChunk
+        FROM global_regex_rules
+        WHERE id = :id
+        """,
+    )
+    fun globalRuleTextChunk(id: String, start: Int, length: Int): RegexRuleTextChunk
+
+    @Query(
+        """
+        SELECT
+            substr(name, :start, :length) AS nameChunk,
+            substr(pattern, :start, :length) AS patternChunk,
+            substr(replacement, :start, :length) AS replacementChunk,
+            substr(targetsJson, :start, :length) AS targetsJsonChunk
+        FROM character_regex_rules
+        WHERE characterId = :characterId AND id = :id
+        """,
+    )
+    fun characterRuleTextChunk(
+        characterId: String,
+        id: String,
+        start: Int,
+        length: Int,
+    ): RegexRuleTextChunk
 
     @Query("SELECT * FROM regex_enablement_versions ORDER BY sortIndex, id")
     fun versions(): List<RegexEnablementVersionEntity>
@@ -75,4 +149,42 @@ interface RegexRuleDao {
 
     @Query("SELECT DISTINCT characterId FROM character_regex_rules")
     fun characterOwners(): List<String>
+}
+
+internal const val RegexRuleCursorChunkCharacters = 32 * 1024
+
+internal fun readRegexRuleFields(
+    metadata: RegexRuleReadMetadata,
+    readChunk: (start: Int, length: Int) -> RegexRuleTextChunk,
+): RegexRuleFields {
+    val name = StringBuilder()
+    val pattern = StringBuilder()
+    val replacement = StringBuilder()
+    val targetsJson = StringBuilder()
+    val longestField = maxOf(
+        metadata.nameLength,
+        metadata.patternLength,
+        metadata.replacementLength,
+        metadata.targetsJsonLength,
+    )
+    var start = 1 // SQLite substr uses one-based character positions.
+    while (start <= longestField) {
+        val chunk = readChunk(start, RegexRuleCursorChunkCharacters)
+        name.append(chunk.nameChunk)
+        pattern.append(chunk.patternChunk)
+        replacement.append(chunk.replacementChunk)
+        targetsJson.append(chunk.targetsJsonChunk)
+        start += RegexRuleCursorChunkCharacters
+    }
+    return RegexRuleFields(
+        name = name.toString(),
+        pattern = pattern.toString(),
+        replacement = replacement.toString(),
+        targetsJson = targetsJson.toString(),
+        enabled = metadata.enabled,
+        displayOnly = metadata.displayOnly,
+        promptOnly = metadata.promptOnly,
+        runOnEdit = metadata.runOnEdit,
+        sortIndex = metadata.sortIndex,
+    )
 }

@@ -3,7 +3,6 @@ package com.eleckoi.android.feature.characters.modes.story.settinglibrary.ui
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibrary
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryOpeningEntryId
-import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryRoleplayPlanEntryId
 
 internal fun SettingLibraryEntry.matchesSettingLibrarySearch(query: String): Boolean {
     if (query.isBlank()) return true
@@ -56,6 +55,5 @@ internal fun initialAllEntriesExpanded(library: SettingLibrary?): Boolean {
 
 private fun fixedEntryRank(entry: SettingLibraryEntry): Int = when (entry.id) {
     SettingLibraryOpeningEntryId -> 0
-    SettingLibraryRoleplayPlanEntryId -> 1
-    else -> 2
+    else -> 1
 }

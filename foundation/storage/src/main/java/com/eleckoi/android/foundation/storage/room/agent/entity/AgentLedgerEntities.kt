@@ -43,7 +43,6 @@ data class AgentConversationDisplayCacheEntity(
     val ledgerRevision: Long,
     val payloadJson: String,
     val rendererVersion: Int,
-    val updatedAt: String,
 )
 
 @Entity(
@@ -57,20 +56,11 @@ data class AgentConversationDisplayCacheEntity(
             onDelete = ForeignKey.CASCADE,
         ),
     ],
-    indices = [
-        Index("conversationId"),
-        Index(value = ["conversationId", "createdAt"]),
-    ],
+    indices = [Index("conversationId")],
 )
 data class AgentBranchEntity(
     val id: String,
     val conversationId: String,
-    val parentBranchId: String?,
-    val forkedFromTurnId: String?,
-    val headSequence: Int,
-    val name: String,
-    val reason: String,
-    val createdAt: String,
 )
 
 /** Stable speaker identity inside one saved conversation, separate from the model that produced it. */

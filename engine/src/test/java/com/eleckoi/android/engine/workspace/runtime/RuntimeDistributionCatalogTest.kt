@@ -45,7 +45,7 @@ class RuntimeDistributionCatalogTest {
         assertEquals(setOf("deepseek"), catalog.harnesses.keys)
         assertEquals("ubuntu-base-24.04.4-arm64.egruntime", catalog.rootfs.assetPath)
         val deepSeek = catalog.requireHarness("deepseek")
-        assertEquals("deepseek-harness-0.1.1-rc.2-eleckoi.6-arm64.egruntime", deepSeek.assetPath)
+        assertEquals("deepseek-harness-0.1.1-rc.2-eleckoi.7-arm64.egruntime", deepSeek.assetPath)
         assertEquals("bin/dsh-jsonrpc-agent", deepSeek.entrypoint)
         assertEquals("etc/deepseek/cordis.yml", deepSeek.configPath)
         assertEquals("b150a551b8d465e31e418e1b2eaf5e79bbb7d28e", deepSeek.sourceCommit)

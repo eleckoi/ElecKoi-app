@@ -5,16 +5,17 @@ import com.eleckoi.android.engine.agent.api.AgentPermissionMode
 import com.eleckoi.android.engine.agent.eleckoi.conversation.PagedConversationTurn
 import com.eleckoi.android.engine.generation.config.ModelConfigCollection
 import com.eleckoi.android.engine.generation.model.ModelConfig
-import com.eleckoi.android.feature.characters.model.CharacterMode
 import com.eleckoi.android.feature.characters.model.CharacterSlot
 import com.eleckoi.android.feature.characters.model.CharactersPayload
 import com.eleckoi.android.feature.chat.data.ChatSendResult
+import com.eleckoi.android.feature.chat.data.ChatDeleteMessagesResult
 import com.eleckoi.android.feature.chat.data.PreparedChatRegeneration
 import com.eleckoi.android.feature.chat.model.ChatDraft
 import com.eleckoi.android.feature.chat.model.ChatListItem
 import com.eleckoi.android.feature.chat.model.ChatMessage
 import com.eleckoi.android.feature.modelconfig.model.ChatModelSelection
 import com.eleckoi.android.feature.chat.model.ChatUserImageAttachment
+import com.eleckoi.android.feature.chat.model.ChatEncodedImageInput
 import com.eleckoi.android.feature.preferences.UiPreferences
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import java.io.File
@@ -33,12 +34,9 @@ interface ChatService {
     suspend fun loadChatDraft(sessionId: String): ChatDraft
     /** Read-only first-frame projection used by the bounded navigation preloader. */
     suspend fun previewChatDraft(sessionId: String): ChatDraft = loadChatDraft(sessionId)
-    suspend fun nextChatDraftForCharacter(characterId: String, characterMode: String): ChatDraft?
-    suspend fun chatDraftForCharacter(characterId: String, characterMode: String? = null): ChatDraft
-    suspend fun createNewChat(
-        characterId: String,
-        characterMode: String = CharacterMode.Agent.storageValue,
-    ): ChatDraft
+    suspend fun nextChatDraftForCharacter(characterId: String): ChatDraft?
+    suspend fun chatDraftForCharacter(characterId: String): ChatDraft
+    suspend fun createNewChat(characterId: String): ChatDraft
     suspend fun saveChatModelSelection(sessionId: String, selection: ChatModelSelection): ChatDraft
     suspend fun saveChatPermissionMode(
         sessionId: String,
@@ -53,13 +51,16 @@ interface ChatService {
     suspend fun applyHistoryPolicy(characterId: String)
     fun isStreamCancelled(error: Throwable): Boolean
     suspend fun prepareInputImages(uriValues: List<String>): List<ChatUserImageAttachment>
+    suspend fun prepareEncodedInputImages(images: List<ChatEncodedImageInput>): List<ChatUserImageAttachment>
     fun discardInputImage(image: ChatUserImageAttachment)
     suspend fun sendMessage(
         draft: ChatDraft,
         message: String,
         inputImages: List<ChatUserImageAttachment> = emptyList(),
         onDelta: (ChatDraft) -> Unit,
+        onUserTurnPersisted: (ChatDraft, String) -> Unit = { _, _ -> },
     ): ChatSendResult
+    suspend fun deleteMessagesFrom(sessionId: String, messageId: String): ChatDeleteMessagesResult
     suspend fun prepareRegeneration(
         draft: ChatDraft,
         targetMessageId: String,

@@ -3,18 +3,10 @@ package com.eleckoi.android.feature.settings.ui.personalization.about
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -25,19 +17,12 @@ import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.BlurredEdgeTreatment
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -48,8 +33,6 @@ import com.eleckoi.android.feature.settings.ui.personalization.components.Settin
 import com.eleckoi.android.feature.settings.ui.personalization.components.SettingsRowTextStart
 import com.eleckoi.android.feature.settings.ui.personalization.components.SettingsSection
 import com.eleckoi.android.foundation.design.AppearanceTheme
-import com.eleckoi.android.foundation.design.components.MobileBottomSheetOverlay
-import com.eleckoi.android.foundation.design.components.noRippleClickable
 
 @Composable
 fun AboutElecKoiPage(
@@ -59,140 +42,83 @@ fun AboutElecKoiPage(
 ) {
     val context = LocalContext.current
     val versionName = remember(context) { installedVersionName(context) }
-    val licenseText = remember(context) { readPackagedProjectLicense(context) }
-    var licenseOpen by rememberSaveable { mutableStateOf(false) }
-    val backgroundBlur by animateDpAsState(
-        targetValue = if (licenseOpen) 12.dp else 0.dp,
-        animationSpec = tween(durationMillis = 180),
-        label = "aboutLicenseBackdropBlur",
-    )
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        CompactSettingsScaffold(
-            title = "关于电子爱",
-            appearance = appearance,
-            onBack = { if (licenseOpen) licenseOpen = false else onBack() },
-            modifier = if (backgroundBlur > 0.dp) {
-                Modifier.blur(backgroundBlur, BlurredEdgeTreatment.Unbounded)
-            } else {
-                Modifier
-            },
+    CompactSettingsScaffold(
+        title = "关于电子爱",
+        appearance = appearance,
+        onBack = onBack,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp, bottom = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp, bottom = 4.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
+            Surface(
+                modifier = Modifier.size(112.dp),
+                shape = RoundedCornerShape(28.dp),
+                color = appearance.mobileSurface,
+                shadowElevation = 6.dp,
             ) {
-                Surface(
-                    modifier = Modifier.size(112.dp),
-                    shape = RoundedCornerShape(28.dp),
-                    color = appearance.mobileSurface,
-                    shadowElevation = 6.dp,
-                ) {
-                    Image(
-                        painter = painterResource(appIconResId),
-                        contentDescription = "电子爱 App 图标",
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(RoundedCornerShape(28.dp)),
-                    )
-                }
-                Spacer(modifier = Modifier.height(18.dp))
-                Text(
-                    text = "电子爱",
-                    color = appearance.mobileText,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = "ElecKoi",
-                    color = appearance.mobileMuted,
-                    fontSize = 14.sp,
-                    modifier = Modifier.padding(top = 3.dp),
-                )
-                Text(
-                    text = "版本 $versionName",
-                    color = appearance.mobileSoft,
-                    fontSize = 13.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 8.dp),
+                Image(
+                    painter = painterResource(appIconResId),
+                    contentDescription = "电子爱 App 图标",
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(28.dp)),
                 )
             }
-
-            SettingsSection(label = "项目", appearance = appearance) {
-                SettingsDestinationRow(
-                    iconPath = GitHubMarkPath,
-                    iconViewportSize = 24f,
-                    title = "GitHub",
-                    subtitle = "github.com/eleckoi/ElecKoi",
-                    appearance = appearance,
-                    onClick = {
-                        openExternalPage(
-                            context = context,
-                            url = ElecKoiGithubUrl,
-                            failureMessage = "没有可打开 GitHub 的应用",
-                        )
-                    },
-                )
-                SettingsDivider(appearance, startIndent = SettingsRowTextStart)
-                SettingsDestinationRow(
-                    icon = Icons.Rounded.Description,
-                    title = "开源许可证",
-                    subtitle = "GNU AGPL v3 或更高版本 · 内置全文",
-                    appearance = appearance,
-                    onClick = { licenseOpen = true },
-                )
-            }
+            Spacer(modifier = Modifier.height(18.dp))
+            Text(
+                text = "电子爱",
+                color = appearance.mobileText,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = "ElecKoi",
+                color = appearance.mobileMuted,
+                fontSize = 14.sp,
+                modifier = Modifier.padding(top = 3.dp),
+            )
+            Text(
+                text = "版本 $versionName",
+                color = appearance.mobileSoft,
+                fontSize = 13.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 8.dp),
+            )
         }
 
-        MobileBottomSheetOverlay(
-            visible = licenseOpen,
-            appearance = appearance,
-            onDismiss = { licenseOpen = false },
-            sheetModifier = Modifier.fillMaxHeight(0.86f),
-            showHandle = true,
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 20.dp, end = 12.dp, bottom = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "开源许可证",
-                    modifier = Modifier.weight(1f),
-                    color = appearance.mobileText,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = "关闭",
-                    color = appearance.mobileBlue,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier
-                        .noRippleClickable { licenseOpen = false }
-                        .padding(horizontal = 10.dp, vertical = 8.dp),
-                )
-            }
-            SettingsDivider(appearance)
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .background(appearance.mobileSurface)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp, vertical = 16.dp),
-            ) {
-                Text(
-                    text = licenseText,
-                    color = appearance.mobileMuted,
-                    fontSize = 12.sp,
-                    lineHeight = 18.sp,
-                    fontFamily = FontFamily.Monospace,
-                )
-            }
+        SettingsSection(label = "项目", appearance = appearance) {
+            SettingsDestinationRow(
+                iconPath = GitHubMarkPath,
+                iconViewportSize = 24f,
+                title = "GitHub",
+                subtitle = "github.com/eleckoi/ElecKoi-app",
+                appearance = appearance,
+                onClick = {
+                    openExternalPage(
+                        context = context,
+                        url = ElecKoiGithubUrl,
+                        failureMessage = "没有可打开 GitHub 的应用",
+                    )
+                },
+            )
+            SettingsDivider(appearance, startIndent = SettingsRowTextStart)
+            SettingsDestinationRow(
+                icon = Icons.Rounded.Description,
+                title = "开源许可证",
+                subtitle = "GNU AGPL v3 或更高版本",
+                appearance = appearance,
+                onClick = {
+                    openExternalPage(
+                        context = context,
+                        url = ElecKoiLicenseUrl,
+                        failureMessage = "没有可打开许可证页面的应用",
+                    )
+                },
+            )
         }
     }
 }
@@ -218,15 +144,8 @@ private fun openExternalPage(
     }
 }
 
-private fun readPackagedProjectLicense(context: android.content.Context): String =
-    runCatching {
-        context.assets.open(ProjectLicenseAssetPath).bufferedReader().use { it.readText() }
-    }.getOrElse {
-        "无法读取随应用打包的开源许可证。"
-    }
-
-private const val ElecKoiGithubUrl = "https://github.com/eleckoi/ElecKoi"
-private const val ProjectLicenseAssetPath = "licenses/ElecKoi-AGPL-3.0-or-later.txt"
+private const val ElecKoiGithubUrl = "https://github.com/eleckoi/ElecKoi-app"
+private const val ElecKoiLicenseUrl = "https://github.com/eleckoi/ElecKoi-app/blob/main/LICENSE"
 
 // GitHub's official Primer Octicons `mark-github-24` path, used without shape changes.
 // Source: https://github.com/primer/octicons/blob/main/icons/mark-github-24.svg

@@ -7,7 +7,7 @@ import com.eleckoi.android.foundation.storage.stringOrEmpty
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** Shared lossless representation used by regex storage and story-preset cards. */
+/** Shared lossless representation used by regex storage and agent-preset cards. */
 internal object RegexRuleJsonCodec {
     fun encodeRules(rules: List<RegexRule>): String = JSONArray(rules.map(::ruleToJson)).toString()
 

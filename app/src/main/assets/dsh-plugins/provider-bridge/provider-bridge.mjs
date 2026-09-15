@@ -12,6 +12,16 @@ const WIRE_PROVIDERS = Object.freeze({
   'anthropic-messages': 'eleckoi-wire-anthropic',
   'google-generative-ai': 'google',
 })
+const PROFILE_WIRE_ROUTES = Object.freeze({
+  'kimi-k3': Object.freeze({
+    'openai-completions': Object.freeze({ provider: 'moonshotai-cn', model: 'kimi-k3' }),
+  }),
+})
+const WIRE_PROVIDER_IDS = new Set([
+  ...Object.values(WIRE_PROVIDERS),
+  ...Object.values(PROFILE_WIRE_ROUTES).flatMap(routes =>
+    Object.values(routes).map(route => route.provider)),
+])
 
 export function apply(ctx, config = {}) {
   const baseUrl = requireLoopbackUrl(config.baseUrl)
@@ -61,15 +71,12 @@ export function apply(ctx, config = {}) {
       validatePrepared(prepared)
       let requestTokenPending = true
       try {
-        const provider = WIRE_PROVIDERS[prepared.api]
-        if (provider === undefined) {
-          throw new Error(`ElecKoi provider bridge does not support protocol ${prepared.api}`)
-        }
+        const wireRoute = resolveWireRoute(prepared.api, prepared.wireProfile)
         const projected = await admitElecKoiDataImages(prepared.request, ctx.attachments)
-        const replayReady = retargetPiAiReplaySources(projected, provider)
+        const replayReady = retargetPiAiReplaySources(projected, wireRoute.provider, wireRoute.model)
         const delegated = withRouteTool(replayReady, prepared.requestToken)
-        delegated.provider = provider
-        delegated.model = WIRE_MODEL
+        delegated.provider = wireRoute.provider
+        delegated.model = wireRoute.model
         delegated.sessionId = options.sessionId
         delegated.signal = options.signal
         if (prepared.reasoningEffort === undefined) {
@@ -103,7 +110,7 @@ export function apply(ctx, config = {}) {
  * that produced it. Restore that inner provenance immediately before delegating so DSH keeps the
  * envelope and pi-ai can replay native reasoning/tool metadata on the next step of the same turn.
  */
-export function retargetPiAiReplaySources(request, targetProvider) {
+export function retargetPiAiReplaySources(request, targetProvider, targetModel = WIRE_MODEL) {
   return {
     ...request,
     messages: request.messages.map(message => {
@@ -114,7 +121,7 @@ export function retargetPiAiReplaySources(request, targetProvider) {
         source?.kind !== 'model' ||
         response?.kind !== 'pi-ai' ||
         response?.version !== 2 ||
-        !Object.values(WIRE_PROVIDERS).includes(response.provider) ||
+        !WIRE_PROVIDER_IDS.has(response.provider) ||
         typeof response.model !== 'string' ||
         response.model.length === 0
       ) {
@@ -130,8 +137,23 @@ export function retargetPiAiReplaySources(request, targetProvider) {
       }
     }),
     provider: targetProvider,
-    model: WIRE_MODEL,
+    model: targetModel,
   }
+}
+
+export function resolveWireRoute(api, wireProfile) {
+  if (wireProfile !== 'default') {
+    const profileRoute = PROFILE_WIRE_ROUTES[wireProfile]?.[api]
+    if (profileRoute === undefined) {
+      throw new Error(`ElecKoi provider bridge does not support profile ${wireProfile} on ${api}`)
+    }
+    return profileRoute
+  }
+  const provider = WIRE_PROVIDERS[api]
+  if (provider === undefined) {
+    throw new Error(`ElecKoi provider bridge does not support protocol ${api}`)
+  }
+  return { provider, model: WIRE_MODEL }
 }
 
 function serializableRequest(options) {
@@ -141,7 +163,7 @@ function serializableRequest(options) {
     messages: options.messages,
     sessionId: String(options.sessionId),
   }
-  for (const key of ['system', 'tools', 'temperature', 'maxTokens', 'stop', 'purpose', 'reasoningEffort']) {
+  for (const key of ['system', 'tools', 'temperature', 'topP', 'maxTokens', 'stop', 'purpose', 'reasoningEffort']) {
     if (options[key] !== undefined) request[key] = options[key]
   }
   return request
@@ -197,7 +219,7 @@ function parseDataImage(value) {
 
 function validatePrepared(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw invalidPrepared()
-  for (const key of ['requestToken', 'api', 'model']) {
+  for (const key of ['requestToken', 'api', 'model', 'wireProfile']) {
     if (typeof value[key] !== 'string' || value[key].length === 0) throw invalidPrepared()
   }
   if (!value.request || typeof value.request !== 'object' || !Array.isArray(value.request.messages)) {
@@ -209,6 +231,7 @@ function validatePrepared(value) {
   ) {
     throw invalidPrepared()
   }
+  resolveWireRoute(value.api, value.wireProfile)
 }
 
 function invalidPrepared() {
