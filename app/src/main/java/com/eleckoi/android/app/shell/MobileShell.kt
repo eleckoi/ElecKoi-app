@@ -56,6 +56,8 @@ import com.eleckoi.android.feature.characters.presets.ui.editor.AgentPresetQuick
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.eleckoi.android.app.service.backup.DataBackupService
 import com.eleckoi.android.app.update.AppUpdateViewModel
+import com.eleckoi.android.app.update.AppUpdatePromptDialog
+import com.eleckoi.android.app.update.shouldShowAppUpdatePrompt
 
 @Composable
 internal fun MobileShell(
@@ -128,6 +130,7 @@ internal fun MobileShell(
     var agentPresetImportSourceOpen by rememberSaveable { mutableStateOf(false) }
     var presetToolsDialogOpen by rememberSaveable { mutableStateOf(false) }
     var rootSearchOpen by rememberSaveable { mutableStateOf(false) }
+    var dismissedUpdateTag by rememberSaveable { mutableStateOf("") }
     val currentRootSearchOpen = rememberUpdatedState(rootSearchOpen)
     fun setRootSearchOpen(open: Boolean) {
         rootSearchOpen = open
@@ -390,5 +393,28 @@ internal fun MobileShell(
                 )
             }
         }
+    }
+
+    val updateRelease = appUpdateState.latestRelease
+    val updateTag = updateRelease?.tagName.orEmpty()
+    if (
+        shouldShowAppUpdatePrompt(
+            remindersEnabled = appUpdateState.remindersEnabled,
+            updateAvailable = appUpdateState.updateAvailable,
+            latestTag = updateTag,
+            dismissedTag = dismissedUpdateTag,
+        )
+    ) {
+        AppUpdatePromptDialog(
+            appearance = appearance,
+            installedVersion = appUpdateState.installedVersion,
+            latestVersion = appUpdateState.latestVersion,
+            releaseNotes = updateRelease?.notes.orEmpty(),
+            onDismiss = { dismissedUpdateTag = updateTag },
+            onOpenUpdate = {
+                dismissedUpdateTag = updateTag
+                navigateTo(MobileRoute.AppUpdate)
+            },
+        )
     }
 }

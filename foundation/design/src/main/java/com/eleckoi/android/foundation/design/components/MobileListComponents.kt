@@ -84,34 +84,114 @@ fun MobileConversationRow(
                 coverCornerRadius = 9,
                 fontSize = if (useCoverArtwork) 16 else 18,
             )
-            MobileArtworkRowText(
-                title = title,
-                subtitle = subtitle,
-                useCoverArtwork = useCoverArtwork,
-                appearance = appearance,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 9.dp),
-            )
-            if (sideText.isNotBlank()) {
-                if (pinned) {
-                    Icon(
-                        imageVector = Icons.Outlined.PushPin,
-                        contentDescription = "已置顶",
-                        tint = appearance.mobileSoft,
-                        modifier = Modifier
-                            .padding(end = 7.dp)
-                            .size(16.dp),
-                    )
-                }
-                Text(
-                    text = sideText,
-                    color = appearance.mobileSoft,
-                    fontSize = 13.sp,
-                    lineHeight = 13.sp,
+            if (useCoverArtwork) {
+                MobileCoverConversationText(
+                    title = title,
+                    subtitle = subtitle,
+                    sideText = sideText,
+                    pinned = pinned,
+                    appearance = appearance,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 9.dp),
+                )
+            } else {
+                MobileArtworkRowText(
+                    title = title,
+                    subtitle = subtitle,
+                    useCoverArtwork = false,
+                    appearance = appearance,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 9.dp),
+                )
+                MobileConversationSideText(
+                    sideText = sideText,
+                    pinned = pinned,
+                    appearance = appearance,
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun MobileCoverConversationText(
+    title: String,
+    subtitle: String,
+    sideText: String,
+    pinned: Boolean,
+    appearance: AppearanceTheme,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.height(72.dp),
+        verticalArrangement = Arrangement.Top,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = title,
+                color = appearance.mobileText,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Medium,
+                lineHeight = 21.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            MobileConversationSideText(
+                sideText = sideText,
+                pinned = pinned,
+                appearance = appearance,
+                compact = true,
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = subtitle,
+            color = appearance.mobileMuted.copy(alpha = 0.72f),
+            fontSize = 13.sp,
+            lineHeight = 16.sp,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun MobileConversationSideText(
+    sideText: String,
+    pinned: Boolean,
+    appearance: AppearanceTheme,
+    compact: Boolean = false,
+    modifier: Modifier = Modifier,
+) {
+    if (sideText.isBlank()) return
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (pinned) {
+            Icon(
+                imageVector = Icons.Outlined.PushPin,
+                contentDescription = "已置顶",
+                tint = appearance.mobileSoft,
+                modifier = Modifier
+                    .padding(end = if (compact) 5.dp else 7.dp)
+                    .size(if (compact) 14.dp else 16.dp),
+            )
+        }
+        Text(
+            text = sideText,
+            color = appearance.mobileSoft,
+            fontSize = if (compact) 12.sp else 13.sp,
+            lineHeight = if (compact) 12.sp else 13.sp,
+            maxLines = 1,
+        )
     }
 }
 

@@ -6,6 +6,22 @@ import org.junit.Test
 
 class GitHubReleaseClientTest {
     @Test
+    fun updateEndpointsUseTheElecKoiAppRepository() {
+        assertEquals(
+            "https://github.com/eleckoi/ElecKoi-app",
+            GitHubReleaseClient.RepositoryUrl,
+        )
+        assertEquals(
+            "https://github.com/eleckoi/ElecKoi-app/releases",
+            GitHubReleaseClient.ReleasesUrl,
+        )
+        assertEquals(
+            "https://api.github.com/repos/eleckoi/ElecKoi-app/releases/latest",
+            GitHubReleaseClient.LatestReleaseEndpoint,
+        )
+    }
+
+    @Test
     fun releasePayloadKeepsOnlyUpdateMetadata() {
         val release = GitHubReleaseClient.parseRelease(
             """
@@ -33,6 +49,20 @@ class GitHubReleaseClientTest {
                 {
                   "tag_name": "v1.0.0",
                   "html_url": "https://example.invalid/releases/v1.0.0"
+                }
+                """.trimIndent(),
+            )
+        }
+    }
+
+    @Test
+    fun formerRepositoryReleaseUrlIsRejected() {
+        assertThrows(IllegalArgumentException::class.java) {
+            GitHubReleaseClient.parseRelease(
+                """
+                {
+                  "tag_name": "v0.1.6",
+                  "html_url": "https://github.com/eleckoi/ElecKoi/releases/tag/v0.1.6"
                 }
                 """.trimIndent(),
             )
