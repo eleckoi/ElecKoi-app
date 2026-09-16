@@ -3,7 +3,7 @@ package com.eleckoi.android.engine.agent.tools
 import kotlinx.serialization.json.JsonObject
 
 /**
- * Process-local discovery catalog. User choices belong exclusively to the active Agent preset.
+ * Process-local discovery catalog. User choices remain owned by the consuming surface.
  */
 class AgentToolCatalogStore {
     private val lock = Any()

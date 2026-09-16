@@ -20,6 +20,7 @@ import com.eleckoi.android.feature.characters.modes.story.regex.ui.RegexRulesVie
 import com.eleckoi.android.feature.characters.modes.story.frontendbeauty.ui.FrontendBeautyViewModel
 import com.eleckoi.android.feature.studio.ui.assistant.AiCreationAssistantViewModel
 import com.eleckoi.android.feature.chat.ui.ChatViewModel
+import com.eleckoi.android.engine.agent.deepseek.trajectory.DshTrajectoryReader
 import com.eleckoi.android.feature.chat.ui.ChatRenderingPreferences
 import com.eleckoi.android.feature.chat.ui.LocalChatRenderingPreferences
 import com.eleckoi.android.feature.modelconfig.ui.ModelsViewModel
@@ -54,6 +55,7 @@ fun ElecKoiApp() {
     )
     val darkAppearance = uiPreferences.appearanceMode.resolvesDark(isSystemInDarkTheme())
     val initialAppearance = uiPreferences.appearanceTheme.withDarkAppearance(darkAppearance)
+    val dshTrajectoryReader = remember(context) { DshTrajectoryReader(context) }
     val chatViewModel: ChatViewModel = viewModel(
         factory = ChatViewModel.factory(
             chatService = repository,
@@ -61,6 +63,7 @@ fun ElecKoiApp() {
             initialAppearance = initialAppearance,
             isSettingLibraryToolEnabled = container::isCharacterSettingLibraryToolEnabled,
             enableSettingLibraryTool = container::enableCharacterSettingLibraryTool,
+            readDshTrajectory = dshTrajectoryReader::read,
         ),
     )
     val shellViewModel: ShellViewModel = viewModel(
@@ -92,6 +95,11 @@ fun ElecKoiApp() {
             agentSessionFactory = container.agentSessions,
             agentRuns = container.agentRuns,
             localRuntime = container.localRuntime,
+            toolGroupsProvider = container::agentToolGroups,
+            loadEnabledToolGroupIds = container::creatorAssistantEnabledToolGroupIds,
+            saveEnabledToolGroupIds = container::setCreatorAssistantEnabledToolGroupIds,
+            loadImageModelConfigId = container::creatorAssistantImageModelConfigId,
+            saveImageModelConfigId = container::setCreatorAssistantImageModelConfigId,
         ),
     )
     val localRuntimeSettingsViewModel: LocalRuntimeSettingsViewModel = viewModel(

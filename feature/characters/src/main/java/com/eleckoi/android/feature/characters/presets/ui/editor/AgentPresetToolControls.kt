@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -35,7 +34,6 @@ import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Schema
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
@@ -62,6 +60,7 @@ import com.eleckoi.android.engine.agent.tools.AgentToolGroupSnapshot
 import com.eleckoi.android.engine.agent.tools.AgentToolRequestPolicy
 import com.eleckoi.android.engine.generation.model.ModelConfig
 import com.eleckoi.android.feature.characters.presets.model.AgentPreset
+import com.eleckoi.android.feature.characters.presets.model.AgentPresetRoleplayPlan
 import com.eleckoi.android.feature.characters.presets.model.AgentPresetToolConfiguration
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.foundation.design.components.AppSearchField
@@ -210,11 +209,52 @@ fun AgentPresetQuickToolsDialog(
     onSaveModelConfig: (ModelConfig, (Result<ModelConfig>) -> Unit) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var detailGroupId by rememberSaveable(preset.id) { mutableStateOf("") }
     val configuration = preset.toolConfiguration.normalized()
     val groupsById = remember(availableGroups) { availableGroups.associateBy(AgentToolGroupSnapshot::id) }
     val included = configuration.includedGroupIds.mapNotNull(groupsById::get)
-    val detailGroup = included.firstOrNull { it.id == detailGroupId }
+    AgentToolQuickDialog(
+        stateKey = preset.id,
+        title = "预设工具",
+        groups = included,
+        configuration = configuration,
+        roleplayPlan = preset.roleplayPlan,
+        modelConfigs = modelConfigs,
+        appearance = appearance,
+        onEnabledChange = { groupId, enabled -> onUpdate(preset.withToolEnabled(groupId, enabled)) },
+        onOpenWebSearchSettings = onOpenWebSearchSettings,
+        onRoleplayPlanChange = { roleplayPlan -> onUpdate(preset.copy(roleplayPlan = roleplayPlan)) },
+        onSubagentModelChange = { configId, model -> onUpdate(preset.withSubagentModel(configId, model)) },
+        onToolModelConfigChange = { groupId, configId ->
+            onUpdate(preset.withToolModelConfig(groupId, configId))
+        },
+        onSaveModelConfig = onSaveModelConfig,
+        onManage = onManage,
+        onDismiss = onDismiss,
+    )
+}
+
+@Composable
+fun AgentToolQuickDialog(
+    stateKey: String,
+    title: String,
+    groups: List<AgentToolGroupSnapshot>,
+    configuration: AgentPresetToolConfiguration,
+    roleplayPlan: AgentPresetRoleplayPlan,
+    modelConfigs: List<ModelConfig>,
+    appearance: AppearanceTheme,
+    interactionEnabled: Boolean = true,
+    showPresetSpecificConfiguration: Boolean = true,
+    onEnabledChange: (String, Boolean) -> Unit,
+    onOpenWebSearchSettings: () -> Unit,
+    onRoleplayPlanChange: (AgentPresetRoleplayPlan) -> Unit,
+    onSubagentModelChange: (String, String) -> Unit,
+    onToolModelConfigChange: (String, String) -> Unit,
+    onSaveModelConfig: (ModelConfig, (Result<ModelConfig>) -> Unit) -> Unit,
+    onManage: (() -> Unit)? = null,
+    onDismiss: () -> Unit,
+) {
+    var detailGroupId by rememberSaveable(stateKey) { mutableStateOf("") }
+    val detailGroup = groups.firstOrNull { it.id == detailGroupId }
 
     PresetBottomSheetDialog(
         appearance = appearance,
@@ -225,35 +265,37 @@ fun AgentPresetQuickToolsDialog(
                 group = detailGroup,
                 enabled = detailGroup.id in configuration.enabledGroupIds,
                 configuration = configuration,
-                roleplayPlan = preset.roleplayPlan,
+                roleplayPlan = roleplayPlan,
                 modelConfigs = modelConfigs,
                 allowRemove = false,
                 showBack = true,
+                interactionEnabled = interactionEnabled,
+                showPresetSpecificConfiguration = showPresetSpecificConfiguration,
                 appearance = appearance,
                 onBack = { detailGroupId = "" },
                 onDismiss = onDismiss,
-                onEnabledChange = { enabled -> onUpdate(preset.withToolEnabled(detailGroup.id, enabled)) },
+                onEnabledChange = { enabled -> onEnabledChange(detailGroup.id, enabled) },
                 onOpenWebSearchSettings = {
                     onDismiss()
                     onOpenWebSearchSettings()
                 },
-                onRoleplayPlanChange = { roleplayPlan -> onUpdate(preset.copy(roleplayPlan = roleplayPlan)) },
-                onSubagentModelChange = { configId, model ->
-                    onUpdate(preset.withSubagentModel(configId, model))
-                },
+                onRoleplayPlanChange = onRoleplayPlanChange,
+                onSubagentModelChange = onSubagentModelChange,
                 onToolModelConfigChange = { configId ->
-                    onUpdate(preset.withToolModelConfig(detailGroup.id, configId))
+                    onToolModelConfigChange(detailGroup.id, configId)
                 },
                 onSaveModelConfig = onSaveModelConfig,
                 onRemove = {},
             )
         } else {
             QuickToolListContent(
-                groups = included,
+                title = title,
+                groups = groups,
                 enabledGroupIds = configuration.enabledGroupIds,
+                interactionEnabled = interactionEnabled,
                 appearance = appearance,
                 onOpen = { detailGroupId = it },
-                onEnabledChange = { groupId, enabled -> onUpdate(preset.withToolEnabled(groupId, enabled)) },
+                onEnabledChange = onEnabledChange,
                 onManage = onManage,
                 onDismiss = onDismiss,
             )
@@ -263,64 +305,54 @@ fun AgentPresetQuickToolsDialog(
 
 @Composable
 private fun QuickToolListContent(
+    title: String,
     groups: List<AgentToolGroupSnapshot>,
     enabledGroupIds: Set<String>,
+    interactionEnabled: Boolean,
     appearance: AppearanceTheme,
     onOpen: (String) -> Unit,
     onEnabledChange: (String, Boolean) -> Unit,
-    onManage: () -> Unit,
+    onManage: (() -> Unit)?,
     onDismiss: () -> Unit,
 ) {
-    SheetHeader(title = "预设工具", appearance = appearance, onDismiss = onDismiss)
+    SheetHeader(title = title, appearance = appearance, onDismiss = onDismiss)
     if (groups.isEmpty()) {
         Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-            ToolEmptyState("当前预设还没有添加工具", appearance)
+            ToolEmptyState("当前没有可用工具", appearance)
         }
     } else {
-        Surface(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            color = appearance.mobileSurface,
-            shape = RoundedCornerShape(18.dp),
-            shadowElevation = 0.dp,
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth().heightIn(min = 190.dp, max = 520.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            LazyColumn(
-                modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp),
-                contentPadding = PaddingValues(vertical = 6.dp),
-            ) {
-                itemsIndexed(groups, key = { _, group -> group.id }) { index, group ->
-                    Column {
-                        if (index > 0) {
-                            HorizontalDivider(
-                                modifier = Modifier.padding(start = 54.dp),
-                                thickness = 0.5.dp,
-                                color = appearance.mobileText.copy(alpha = 0.07f),
-                            )
-                        }
-                        PresetToolCard(
-                            group = group,
-                            enabled = group.id in enabledGroupIds,
-                            appearance = appearance,
-                            compact = true,
-                            onOpen = { onOpen(group.id) },
-                            onEnabledChange = { onEnabledChange(group.id, it) },
-                        )
-                    }
-                }
+            items(groups, key = AgentToolGroupSnapshot::id) { group ->
+                PresetToolCard(
+                    group = group,
+                    enabled = group.id in enabledGroupIds,
+                    interactionEnabled = interactionEnabled,
+                    appearance = appearance,
+                    compact = true,
+                    onOpen = { onOpen(group.id) },
+                    onEnabledChange = { onEnabledChange(group.id, it) },
+                )
             }
         }
     }
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(end = 10.dp, bottom = 6.dp),
-        horizontalArrangement = Arrangement.End,
-    ) {
-        TextButton(
-            onClick = onManage,
-            modifier = Modifier.heightIn(min = 48.dp),
-            colors = ButtonDefaults.textButtonColors(contentColor = appearance.mobileBlue),
+    if (onManage != null) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(end = 10.dp, bottom = 6.dp),
+            horizontalArrangement = Arrangement.End,
         ) {
-            Text("管理预设工具")
-            Spacer(Modifier.width(4.dp))
-            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null)
+            TextButton(
+                onClick = onManage,
+                modifier = Modifier.heightIn(min = 48.dp),
+                colors = ButtonDefaults.textButtonColors(contentColor = appearance.mobileBlue),
+            ) {
+                Text("管理预设工具")
+                Spacer(Modifier.width(4.dp))
+                Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null)
+            }
         }
     }
 }
@@ -329,6 +361,7 @@ private fun QuickToolListContent(
 internal fun PresetToolCard(
     group: AgentToolGroupSnapshot,
     enabled: Boolean,
+    interactionEnabled: Boolean = true,
     appearance: AppearanceTheme,
     compact: Boolean = false,
     onOpen: () -> Unit,
@@ -336,23 +369,23 @@ internal fun PresetToolCard(
 ) {
     Surface(
         color = appearance.mobileSurface,
-        shape = RoundedCornerShape(if (compact) 0.dp else 18.dp),
-        shadowElevation = 0.dp,
+        shape = RoundedCornerShape(18.dp),
+        shadowElevation = if (enabled) 1.dp else 0.dp,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().heightIn(min = if (compact) 54.dp else 78.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = if (compact) 68.dp else 78.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(
                 modifier = Modifier
                     .weight(1f)
                     .clickable(onClick = onOpen)
-                    .padding(start = 13.dp, top = if (compact) 5.dp else 10.dp, bottom = if (compact) 5.dp else 10.dp),
+                    .padding(start = 12.dp, top = 10.dp, bottom = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                ToolGroupIcon(group.id, enabled, appearance, compact)
-                Column(modifier = Modifier.weight(1f).padding(start = 11.dp, end = 6.dp)) {
+                ToolGroupIcon(group.id, enabled, appearance, compact = false)
+                Column(modifier = Modifier.weight(1f).padding(start = 12.dp, end = 6.dp)) {
                     Text(
                         group.name,
                         color = appearance.mobileText,
@@ -377,13 +410,14 @@ internal fun PresetToolCard(
                     Icons.AutoMirrored.Rounded.KeyboardArrowRight,
                     contentDescription = "配置${group.name}",
                     tint = appearance.mobileMuted.copy(alpha = 0.62f),
-                    modifier = Modifier.size(if (compact) 19.dp else 22.dp),
+                    modifier = Modifier.size(22.dp),
                 )
             }
             AppSwitch(
                 checked = enabled,
                 onCheckedChange = onEnabledChange,
                 appearance = appearance,
+                enabled = interactionEnabled,
                 modifier = Modifier.padding(start = 6.dp, end = 12.dp).semantics {
                     contentDescription = "${group.name}工具开关"
                 },

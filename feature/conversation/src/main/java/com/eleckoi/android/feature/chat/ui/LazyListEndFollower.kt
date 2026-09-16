@@ -153,7 +153,7 @@ fun BindLazyListEndFollow(
                     gestureActive &&
                     userScrollObserved
                 ) {
-                    // During an active turn the footer can start moving as soon as Typing hands off
+                    // During an active turn the footer can start moving as soon as waiting hands off
                     // to a process row or final answer. Latch a deliberately small near-end visit
                     // so that hand-off can resume following without requiring the user to catch a
                     // continuously moving exact pixel.

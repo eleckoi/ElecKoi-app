@@ -296,6 +296,23 @@ class UiPreferencesRepository(context: Context) {
         return read()
     }
 
+    suspend fun setCreatorAssistantEnabledToolGroupIds(groupIds: Set<String>): UiPreferences {
+        dataStore.edit { preferences ->
+            preferences[CreatorAssistantEnabledToolGroupIds] = groupIds
+                .map(String::trim)
+                .filter(String::isNotBlank)
+                .toSet()
+        }
+        return read()
+    }
+
+    suspend fun setCreatorAssistantImageModelConfigId(configId: String): UiPreferences {
+        dataStore.edit { preferences ->
+            preferences[CreatorAssistantImageModelConfigId] = configId.trim()
+        }
+        return read()
+    }
+
     suspend fun setHistorySaveMode(mode: String): UiPreferences {
         dataStore.edit { preferences ->
             preferences[HistorySaveMode] = normalizeHistoryMode(mode)
@@ -368,7 +385,6 @@ class UiPreferencesRepository(context: Context) {
             preferences.remove(profileKey(ChatLineHeightMultiplierAgent, ChatLineHeightMultiplierSocial, ChatLineHeightMultiplierRoleplay, mode))
             preferences.remove(profileKey(ChatLetterSpacingAgent, ChatLetterSpacingSocial, ChatLetterSpacingRoleplay, mode))
             preferences.remove(profileKey(ChatParagraphSpacingAgent, ChatParagraphSpacingSocial, ChatParagraphSpacingRoleplay, mode))
-            preferences.remove(profileKey(ChatWaitingAnimationAgent, ChatWaitingAnimationSocial, ChatWaitingAnimationRoleplay, mode))
             preferences.remove(
                 profileKey(
                     ChatTimelineThinkingAnimationAgent,
@@ -380,21 +396,6 @@ class UiPreferencesRepository(context: Context) {
             if (mode == ChatLayoutMode.Roleplay) {
                 preferences.remove(ChatRoleplayCardPanel)
             }
-        }
-        return read()
-    }
-
-    suspend fun setChatWaitingAnimation(animation: ChatWaitingAnimation): UiPreferences {
-        dataStore.edit { preferences ->
-            val mode = currentLayoutMode(preferences)
-            preferences[
-                profileKey(
-                    ChatWaitingAnimationAgent,
-                    ChatWaitingAnimationSocial,
-                    ChatWaitingAnimationRoleplay,
-                    mode,
-                ),
-            ] = animation.storageKey
         }
         return read()
     }

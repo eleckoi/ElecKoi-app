@@ -78,9 +78,10 @@ internal fun mobileStoryRouteEntry(
                     appearance = pageAppearance,
                     viewModel = aiCreationAssistantViewModel,
                     chatGateway = chatViewModel,
+                    onOpenWebSearchSettings = {
+                        navigateTo(MobileRoute.WebSearchSettings)
+                    },
                     onBack = goBackInsideApp,
-                    // The assistant's own switch set; blank means the shared scope.
-                    onOpenTools = onOpenPresetToolsDialog,
                 )
         }
         is MobileRoute.SettingLibrary -> NavEntry(currentRoute) {

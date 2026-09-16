@@ -33,7 +33,7 @@ private fun displayName(name: String): String = when (name) {
     "write" -> "写入文件"
     "write_stdin" -> "继续输入命令"
     "apply_patch" -> "修改文件"
-    "view_image" -> "查看图片"
+    "read_image" -> "读取图片"
     "update_plan" -> "更新任务计划"
     "todo_write" -> "更新任务清单"
     AgentUpdateRoleplayPlanTool -> "更新角色扮演计划"

@@ -50,9 +50,8 @@ import com.eleckoi.android.feature.chat.ui.layout.LocalChatBackdrop
 import com.eleckoi.android.feature.chat.ui.layout.positionOnScreenOf
 import com.eleckoi.android.feature.chat.ui.layout.asRoleplayReadingTheme
 import com.eleckoi.android.feature.chat.ui.message.dismissRoleplayToolbarOnOutsidePress
+import com.eleckoi.android.feature.chat.ui.trajectory.trajectoryRuntimeThreadId
 import com.eleckoi.android.feature.chat.model.MessageRole
-import com.eleckoi.android.engine.agent.diagnostics.AgentRequestDiagnostics
-import com.eleckoi.android.feature.chat.data.roleConversationId
 import com.eleckoi.android.feature.chat.data.MaxChatInputImages
 import com.eleckoi.android.foundation.design.components.FocusDismissRegistry
 import com.eleckoi.android.foundation.design.components.LocalFocusDismissRegistry
@@ -126,15 +125,8 @@ fun ChatScreen(
     val roleplay = timeline.roleplay
     val roleplayWebActive = timeline.roleplayWebActive
     val userBrowsedAwayFromBottom = timeline.userBrowsedAwayFromBottom
-    val capturedTurns by AgentRequestDiagnostics.turns.collectAsStateWithLifecycle()
-    val requestCaptureEnabled by AgentRequestDiagnostics.captureEnabled.collectAsStateWithLifecycle()
-    val sessionRequestCaptures = remember(capturedTurns, sessionId) {
-        val conversationId = sessionId.takeIf(String::isNotBlank)
-            ?.let(::roleConversationId)
-            .orEmpty()
-        capturedTurns.filter { it.conversationId == conversationId }
-    }
-    var showRequestCaptures by rememberSaveable(sessionId) { mutableStateOf(false) }
+    val trajectoryRuntimeThreadId = draft.trajectoryRuntimeThreadId()
+    var showTrajectory by rememberSaveable(sessionId) { mutableStateOf(false) }
     val markdownCacheScopeKey = "chat:$sessionId"
     var showLoadingStatus by remember { mutableStateOf(false) }
     val documentActions = rememberChatHistoryDocumentActions(viewModel)
@@ -163,7 +155,7 @@ fun ChatScreen(
         state.historyOpen ||
         state.modelPickerOpen ||
         state.errorMessage.isNotBlank() ||
-        showRequestCaptures ||
+        showTrajectory ||
         roleplayProcessMessageId != null ||
         roleplayOpeningJumpOpen
     val modalBackdropBlur by animateDpAsState(
@@ -308,7 +300,7 @@ fun ChatScreen(
             onStop = timeline.stop,
             onOpenTools = onOpenTools,
             onOpenPresets = onOpenPresets,
-            onOpenRequestViewer = { showRequestCaptures = true },
+            onOpenTrajectory = { showTrajectory = true },
             onOpenVariableViewer = { variableViewerOpen = true },
             onOpenDynamicSettings = {
                 draft?.let { current ->
@@ -492,11 +484,13 @@ fun ChatScreen(
             onRefreshModels = viewModel::refreshModels,
             selectedUserMessageText = selectedUserMessageText,
             onDismissSelectedText = { selectedUserMessageText = null },
-            showRequestCaptures = showRequestCaptures,
-            requestCaptures = sessionRequestCaptures,
-            requestCaptureEnabled = requestCaptureEnabled,
-            onRequestCaptureEnabledChange = AgentRequestDiagnostics::setCaptureEnabled,
-            onDismissRequestCaptures = { showRequestCaptures = false },
+            showTrajectory = showTrajectory,
+            trajectoryRuntimeThreadId = trajectoryRuntimeThreadId,
+            trajectoryIsSending = timeline.replyPresentationActive,
+            loadTrajectory = { options ->
+                viewModel.loadDshTrajectory(trajectoryRuntimeThreadId, options)
+            },
+            onDismissTrajectory = { showTrajectory = false },
             onImportHistory = documentActions.importHistory,
             onResumeToEnd = timeline.resumeToEnd,
         )

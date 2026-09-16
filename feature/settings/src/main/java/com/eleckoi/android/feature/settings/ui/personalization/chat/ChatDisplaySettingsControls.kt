@@ -223,21 +223,6 @@ internal fun ChatDisplaySettingsControls(
 
         ChatDisplaySection.WaitingAnimation -> {
             ChatSection(
-                label = "等待动画",
-                appearance = appearance,
-                resetEnabled = draft.waitingAnimation != defaults.waitingAnimation,
-                onReset = {
-                    onDraftChange(draft.copy(waitingAnimation = defaults.waitingAnimation))
-                },
-            ) {
-                WaitingAnimationPicker(
-                    selected = draft.waitingAnimation,
-                    appearance = appearance,
-                    onSelect = { onDraftChange(draft.copy(waitingAnimation = it)) },
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-            ChatSection(
                 label = "思考动画",
                 appearance = appearance,
                 resetEnabled = draft.timelineThinkingAnimation !=

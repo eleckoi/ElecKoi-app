@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.eleckoi.android.sdk.author.AuthorChatGateway
 import com.eleckoi.android.sdk.author.AuthorSendImageAttachment
 import com.eleckoi.android.feature.chat.api.ChatService
+import com.eleckoi.android.engine.agent.deepseek.trajectory.DshTrajectoryPage
+import com.eleckoi.android.engine.agent.deepseek.trajectory.DshTrajectoryReadOptions
 import com.eleckoi.android.engine.immersive.api.FrontendProjectService
 import com.eleckoi.android.engine.immersive.model.FrontendWorkspace
 import com.eleckoi.android.foundation.design.AppearanceTheme
@@ -42,6 +44,8 @@ class ChatViewModel(
     initialAppearance: AppearanceTheme = AppearanceTheme(),
     private val isSettingLibraryToolEnabled: (characterId: String) -> Boolean = { true },
     private val enableSettingLibraryTool: suspend (characterId: String) -> Unit = {},
+    private val readDshTrajectory: (String, DshTrajectoryReadOptions) -> DshTrajectoryPage =
+        { runtimeThreadId, _ -> DshTrajectoryPage.empty(runtimeThreadId) },
 ) : ViewModel(), AuthorChatGateway {
     private val _uiState = MutableStateFlow(
         ChatUiState(
@@ -208,7 +212,6 @@ class ChatViewModel(
                         chatLineHeightMultiplier = preferences.chatLineHeightMultiplier,
                         chatLetterSpacing = preferences.chatLetterSpacing,
                         chatParagraphSpacing = preferences.chatParagraphSpacing,
-                        chatWaitingAnimation = preferences.chatWaitingAnimation,
                         chatGenerationStatsEnabled = preferences.chatGenerationStatsEnabled,
                         historySaveMode = preferences.historySaveMode,
                     )
@@ -621,6 +624,13 @@ class ChatViewModel(
 
     fun importHistoryChats(json: String) = historyTransferController.import(json)
 
+    suspend fun loadDshTrajectory(
+        runtimeThreadId: String,
+        options: DshTrajectoryReadOptions = DshTrajectoryReadOptions(),
+    ): DshTrajectoryPage = withContext(Dispatchers.IO) {
+        readDshTrajectory(runtimeThreadId, options)
+    }
+
     companion object {
         fun factory(
             chatService: ChatService,
@@ -628,6 +638,8 @@ class ChatViewModel(
             initialAppearance: AppearanceTheme = AppearanceTheme(),
             isSettingLibraryToolEnabled: (characterId: String) -> Boolean = { true },
             enableSettingLibraryTool: suspend (characterId: String) -> Unit = {},
+            readDshTrajectory: (String, DshTrajectoryReadOptions) -> DshTrajectoryPage =
+                { runtimeThreadId, _ -> DshTrajectoryPage.empty(runtimeThreadId) },
         ): ViewModelProvider.Factory {
             return object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
@@ -639,6 +651,7 @@ class ChatViewModel(
                             initialAppearance,
                             isSettingLibraryToolEnabled,
                             enableSettingLibraryTool,
+                            readDshTrajectory,
                         ) as T
                     }
                     throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")

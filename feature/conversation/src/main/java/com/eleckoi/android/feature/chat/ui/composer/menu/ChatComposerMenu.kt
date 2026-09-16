@@ -8,7 +8,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Route
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -47,7 +50,7 @@ internal fun ChatComposerMenu(
     onOpenPresets: () -> Unit,
     onPermissionModeChange: (AgentPermissionMode) -> Unit,
     onOpenTools: () -> Unit,
-    onOpenRequestViewer: () -> Unit,
+    onOpenTrajectory: () -> Unit,
     onOpenVariableViewer: () -> Unit,
     onOpenDynamicSettings: (() -> Unit)?,
     onDeleteMessages: () -> Unit,
@@ -108,11 +111,18 @@ internal fun ChatComposerMenu(
                     onClick = onOpenTools,
                 )
                 RoleplayMenuAction(
-                    label = "请求",
-                    paths = AppIconPaths.Export,
+                    label = "轨迹",
                     appearance = appearance,
                     onDismiss = onDismiss,
-                    onClick = onOpenRequestViewer,
+                    leadingContent = { color ->
+                        Icon(
+                            imageVector = Icons.Outlined.Route,
+                            contentDescription = null,
+                            tint = color,
+                            modifier = Modifier.width(17.dp).height(17.dp),
+                        )
+                    },
+                    onClick = onOpenTrajectory,
                 )
                 RoleplayMenuAction(
                     label = "变量查看器",

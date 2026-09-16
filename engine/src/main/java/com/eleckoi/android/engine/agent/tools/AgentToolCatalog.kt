@@ -108,7 +108,6 @@ object AgentToolRequestPolicy {
     )
 
     const val BuiltInWorkspace = "builtin:workspace"
-    const val BuiltInVisual = "builtin:visual"
     const val BuiltInWorkflow = "builtin:workflow"
     const val BuiltInRoleplayWorkflow = "builtin:roleplay-workflow"
     const val BuiltInAutoIllustration = "builtin:auto-illustration"

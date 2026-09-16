@@ -7,6 +7,7 @@ import com.eleckoi.android.engine.agent.api.AgentFileChange
 import com.eleckoi.android.engine.agent.api.AgentMessagePhase
 import com.eleckoi.android.engine.agent.api.AgentPermissionMode
 import com.eleckoi.android.engine.agent.api.AgentWorkItemType
+import com.eleckoi.android.engine.agent.tools.AgentToolGroupSnapshot
 import com.eleckoi.android.engine.workspace.model.CreatorConversation
 import com.eleckoi.android.engine.workspace.model.CreatorWorkspace
 import com.eleckoi.android.engine.workspace.model.CreatorWorkspaceCheckpoint
@@ -76,6 +77,9 @@ data class AiCreationAssistantUiState(
     val selectedModelId: String = "",
     val modelChoices: List<CreationModelChoice> = emptyList(),
     val modelConfigs: List<ModelConfig> = emptyList(),
+    val creatorImageModelConfigId: String = "",
+    val toolGroups: List<AgentToolGroupSnapshot> = CreationAssistantToolPolicy.defaultGroups,
+    val enabledToolGroupIds: Set<String> = CreationAssistantToolPolicy.defaultEnabledGroupIds,
     val characterDirectory: List<CharacterSlot> = emptyList(),
     val creatorRootCharacters: List<CharacterSlot> = emptyList(),
     val characterDirectoryQuery: String = "",
@@ -155,6 +159,11 @@ sealed interface AiCreationAssistantIntent {
     data class DeleteWorkspace(val workspaceId: String) : AiCreationAssistantIntent
     data class ChangePermissionMode(val value: AgentPermissionMode) : AiCreationAssistantIntent
     data class ChangeModel(val configId: String, val modelId: String) : AiCreationAssistantIntent
+    data class ChangeCreatorImageModelConfig(val configId: String) : AiCreationAssistantIntent
+    data class ChangeToolGroupEnabled(
+        val groupId: String,
+        val enabled: Boolean,
+    ) : AiCreationAssistantIntent
     data class ChangeInput(val value: String) : AiCreationAssistantIntent
     data class AddInputImages(val uriValues: List<String>) : AiCreationAssistantIntent
     data class RemoveInputImage(val imageId: String) : AiCreationAssistantIntent

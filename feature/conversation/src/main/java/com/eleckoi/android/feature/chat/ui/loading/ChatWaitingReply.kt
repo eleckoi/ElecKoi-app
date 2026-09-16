@@ -1,115 +1,130 @@
 package com.eleckoi.android.feature.chat.ui.loading
 
+import android.os.SystemClock
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.StartOffset
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.eleckoi.android.foundation.design.AppearanceTheme
-import com.eleckoi.android.feature.preferences.ChatWaitingAnimation
-import kotlin.math.PI
-import kotlin.math.sin
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 
-/**
- * A presentation-only status for the interval before the first renderable assistant event.
- *
- * It deliberately has no message model, avatar, name or surface. Every chat layout places it in a
- * fixed-height status slot directly above the composer, so fading it in never moves the timeline.
- */
+/** PC-compatible status shown before the first renderable assistant event arrives. */
 @Composable
 fun ChatWaitingReply(
     appearance: AppearanceTheme,
-    animation: ChatWaitingAnimation,
     modifier: Modifier = Modifier,
 ) {
+    val startedAt = remember { SystemClock.elapsedRealtime() }
+    var elapsedMs by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(startedAt) {
+        while (isActive) {
+            elapsedMs = (SystemClock.elapsedRealtime() - startedAt).coerceAtLeast(0L)
+            delay(1_000L - elapsedMs % 1_000L)
+        }
+    }
+
     Row(
-        modifier = modifier,
+        modifier = modifier.height(DeepDivingRowHeight),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(TypingDotsGap),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(
-            text = "Typing",
-            color = appearance.mobileMuted,
-            fontSize = 13.sp,
-            fontStyle = FontStyle.Italic,
-            letterSpacing = 0.35.sp,
-        )
-        when (animation) {
-            ChatWaitingAnimation.Dots -> DotsThinkingIndicator(appearance = appearance)
-            ChatWaitingAnimation.Cat -> CatThinkingIndicator(appearance = appearance)
+        DeepDivingShimmer()
+        if (elapsedMs >= DeepDivingClockDelayMillis) {
+            Text(
+                text = formatDeepDivingDuration(elapsedMs),
+                color = appearance.mobileMuted,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Normal,
+                modifier = Modifier.clearAndSetSemantics { },
+            )
         }
     }
 }
 
 @Composable
-fun DotsThinkingIndicator(
-    appearance: AppearanceTheme,
-    modifier: Modifier = Modifier,
-) {
-    val transition = rememberInfiniteTransition(label = "dots-thinking")
-    Row(
-        modifier = modifier.height(DotsRowHeight),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(DotGap),
-    ) {
-        repeat(DotCount) { index ->
-            val phase by transition.animateFloat(
-                initialValue = 0f,
-                targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(
-                        durationMillis = DotsCycleMillis,
-                        easing = LinearEasing,
+private fun DeepDivingShimmer(modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "deep-diving-shimmer")
+    val phase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1_800, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "deep-diving-shimmer-phase",
+    )
+    Text(
+        text = "Deep diving...",
+        color = DeepDivingBlue,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.SemiBold,
+        maxLines = 1,
+        modifier = modifier
+            .semantics { liveRegion = LiveRegionMode.Polite }
+            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+            .drawWithContent {
+                drawContent()
+                val gradientWidth = size.width * 2.5f
+                val gradientStart = -size.width * 1.5f * (1f - phase)
+                drawRect(
+                    brush = Brush.linearGradient(
+                        colorStops = arrayOf(
+                            0f to DeepDivingBlue,
+                            0.4f to DeepDivingBlue,
+                            0.5f to DeepDivingHighlight,
+                            0.6f to DeepDivingBlue,
+                            1f to DeepDivingBlue,
+                        ),
+                        start = Offset(gradientStart, 0f),
+                        end = Offset(gradientStart + gradientWidth, 0f),
                     ),
-                    repeatMode = RepeatMode.Restart,
-                    initialStartOffset = StartOffset(index * DotStaggerMillis),
-                ),
-                label = "dots-thinking-phase-$index",
-            )
-            val lift = if (phase < DotActiveFraction) {
-                sin(phase / DotActiveFraction * PI.toFloat())
-            } else {
-                0f
-            }
-            Box(
-                modifier = Modifier
-                    .size(DotSize)
-                    .graphicsLayer {
-                        translationY = -DotLift.toPx() * lift
-                        alpha = DotRestAlpha + (DotPeakAlpha - DotRestAlpha) * lift
-                    }
-                    .background(color = appearance.mobileMuted, shape = CircleShape),
-            )
-        }
+                    blendMode = BlendMode.SrcIn,
+                )
+            },
+    )
+}
+
+internal fun formatDeepDivingDuration(elapsedMs: Long): String {
+    val totalSeconds = elapsedMs.coerceAtLeast(0L) / 1_000L
+    val minutes = totalSeconds / 60L
+    val seconds = totalSeconds % 60L
+    return if (minutes > 0L) {
+        "${minutes}分${seconds.toString().padStart(2, '0')}秒"
+    } else {
+        "${seconds}秒"
     }
 }
 
-private const val DotCount = 3
-private const val DotsCycleMillis = 1_250
-private const val DotStaggerMillis = 160
-private const val DotActiveFraction = 0.3f
-private const val DotRestAlpha = 0.35f
-private const val DotPeakAlpha = 0.9f
-private val DotSize = 6.dp
-private val DotGap = 5.dp
-private val DotLift = 4.dp
-private val DotsRowHeight = 20.dp
-private val TypingDotsGap = 7.dp
+private const val DeepDivingClockDelayMillis = 15_000L
+private val DeepDivingRowHeight = 28.dp
+private val DeepDivingBlue = Color(0xFF4176E6)
+private val DeepDivingHighlight = Color(0xFFD3E2FF)

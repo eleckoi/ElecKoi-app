@@ -268,6 +268,7 @@ internal class CreationAgentSessionCoordinator(
                         workspaceId = workspaceId,
                         conversationId = conversationId,
                         permissionMode = state.permissionMode,
+                        enabledToolGroupIds = state.enabledToolGroupIds,
                         modelConfigId = state.selectedModelConfigId,
                         model = state.selectedModelId,
                         excludeTrailingHistoryUser = excludeTrailingHistoryUser,
@@ -377,6 +378,12 @@ internal class CreationAgentSessionCoordinator(
         permissionModeCoordinator.update(value)
     }
 
+    fun toolConfigurationChanged() {
+        if (!uiState.value.isRunning) {
+            scheduleSessionShutdown(detachActiveSession())
+        }
+    }
+
     fun cancelTurn() {
         val runId = activeRunId
         if (runId != null && agentRuns.isActive(runId)) {
@@ -403,6 +410,7 @@ internal class CreationAgentSessionCoordinator(
         workspaceId: String,
         conversationId: String,
         permissionMode: AgentPermissionMode,
+        enabledToolGroupIds: Set<String>,
         modelConfigId: String,
         model: String,
         excludeTrailingHistoryUser: Boolean,
@@ -434,6 +442,7 @@ internal class CreationAgentSessionCoordinator(
                 modelConfigId = modelConfigId,
                 model = model,
                 permissionMode = permissionMode,
+                enabledToolGroupIds = enabledToolGroupIds,
                 regenerating = excludeTrailingHistoryUser,
                 runtimeThreadId = runtimeThreadId,
                 obsoleteRuntimeThreadIds = obsoleteRuntimeThreadIds,

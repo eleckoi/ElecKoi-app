@@ -15,14 +15,14 @@ fun AiCreationAssistantPage(
     appearance: AppearanceTheme,
     viewModel: AiCreationAssistantViewModel,
     chatGateway: AuthorChatGateway,
+    onOpenWebSearchSettings: () -> Unit,
     onBack: () -> Unit,
-    onOpenTools: () -> Unit,
 ) {
     AiCreationAssistantScreen(
         appearance = appearance,
         viewModel = viewModel,
         chatGateway = chatGateway,
+        onOpenWebSearchSettings = onOpenWebSearchSettings,
         onBack = onBack,
-        onOpenTools = onOpenTools,
     )
 }

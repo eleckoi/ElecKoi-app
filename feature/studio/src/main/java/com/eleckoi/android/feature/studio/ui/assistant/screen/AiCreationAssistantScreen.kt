@@ -8,6 +8,8 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
@@ -61,6 +64,7 @@ import com.eleckoi.android.feature.studio.ui.assistant.screen.content.CreationAs
 import com.eleckoi.android.feature.studio.ui.assistant.screen.content.CreationAssistantWorkspaceDrawer
 import com.eleckoi.android.feature.studio.ui.assistant.screen.conversation.CreationConversation
 import com.eleckoi.android.feature.studio.ui.assistant.screen.overlay.CreationAssistantOverlays
+import com.eleckoi.android.feature.studio.ui.assistant.tools.CreationAssistantToolsDialog
 import com.eleckoi.android.feature.studio.ui.assistant.workspace.drawer.CreationWorkspaceDrawerLayout
 import com.eleckoi.android.feature.studio.ui.assistant.workspace.FileEditor
 import com.eleckoi.android.feature.studio.ui.assistant.workspace.WorkspaceFiles
@@ -73,8 +77,8 @@ internal fun AiCreationAssistantScreen(
     appearance: AppearanceTheme,
     viewModel: AiCreationAssistantViewModel,
     chatGateway: AuthorChatGateway,
+    onOpenWebSearchSettings: () -> Unit,
     onBack: () -> Unit,
-    onOpenTools: () -> Unit,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val imagePicker = rememberLauncherForActivityResult(
@@ -90,6 +94,7 @@ internal fun AiCreationAssistantScreen(
     var showPreview by rememberSaveable { mutableStateOf(false) }
     var showModelPicker by rememberSaveable { mutableStateOf(false) }
     var showCharacterRoots by rememberSaveable { mutableStateOf(false) }
+    var showTools by rememberSaveable { mutableStateOf(false) }
     var drawerOpen by rememberSaveable { mutableStateOf(false) }
     var composerOverlayHeightPx by remember { mutableStateOf(0) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -201,7 +206,12 @@ internal fun AiCreationAssistantScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    val toolBackdropBlur by animateDpAsState(
+        targetValue = if (showTools) 12.dp else 0.dp,
+        animationSpec = tween(durationMillis = 180),
+        label = "creationToolBackdropBlur",
+    )
+    Box(modifier = Modifier.fillMaxSize().blur(toolBackdropBlur)) {
         CreationWorkspaceDrawerLayout(
             drawerOpen = drawerOpen,
             appearance = appearance,
@@ -382,7 +392,7 @@ internal fun AiCreationAssistantScreen(
                                             viewModel.onIntent(AiCreationAssistantIntent.LoadCharacterDirectory)
                                             showCharacterRoots = true
                                         },
-                                        onOpenTools = onOpenTools,
+                                        onOpenTools = { showTools = true },
                                         onOpenCommand = {
                                             showSnackbar("命令入口将在后续版本继续设计")
                                         },
@@ -444,6 +454,33 @@ internal fun AiCreationAssistantScreen(
             onDismissModelPicker = { showModelPicker = false },
             showCharacterRoots = showCharacterRoots,
             onDismissCharacterRoots = { showCharacterRoots = false },
+        )
+    }
+
+    if (showTools) {
+        CreationAssistantToolsDialog(
+            groups = state.toolGroups,
+            enabledGroupIds = state.enabledToolGroupIds,
+            imageModelConfigId = state.creatorImageModelConfigId,
+            modelConfigs = state.modelConfigs,
+            enabled = !state.isRunning,
+            appearance = appearance,
+            onEnabledChange = { groupId, enabled ->
+                viewModel.onIntent(
+                    AiCreationAssistantIntent.ChangeToolGroupEnabled(groupId, enabled),
+                )
+            },
+            onImageModelConfigChange = { configId ->
+                viewModel.onIntent(
+                    AiCreationAssistantIntent.ChangeCreatorImageModelConfig(configId),
+                )
+            },
+            onOpenWebSearchSettings = {
+                showTools = false
+                onOpenWebSearchSettings()
+            },
+            onSaveModelConfig = viewModel::saveModelConfig,
+            onDismiss = { showTools = false },
         )
     }
 }

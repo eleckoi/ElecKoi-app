@@ -25,7 +25,6 @@ internal class CreationModelController(
                     modelService.defaultConversationModelSelection()
                 }
                 updateState { current ->
-                    val chatConfigs = collection.chatConfigs
                     val selectedConfig = collection.resolveCreationChatConfig(
                         currentConfigId = current.selectedModelConfigId,
                         defaultConfigId = defaultSelection.configId,
@@ -43,9 +42,10 @@ internal class CreationModelController(
                         candidate.isNotBlank() && choices.any { it.id == candidate }
                     } ?: selectedConfig.model.trim()
                     current.copy(
-                        // Image providers are configured by the assistant's image-generation
-                        // tool. They must never become a language model in the chat composer.
-                        modelConfigs = chatConfigs,
+                        // The picker filters chat and image providers by surface. Keep the full
+                        // collection here so the independent creator tool can select its image
+                        // provider without borrowing the active role preset.
+                        modelConfigs = collection.configs,
                         selectedModelConfigId = selectedConfig.id,
                         selectedModelId = selectedModel,
                         modelChoices = choices,

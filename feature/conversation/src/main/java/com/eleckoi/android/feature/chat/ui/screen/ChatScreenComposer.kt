@@ -52,7 +52,7 @@ internal fun ChatScreenComposer(
     onStop: () -> Unit,
     onOpenTools: () -> Unit,
     onOpenPresets: () -> Unit,
-    onOpenRequestViewer: () -> Unit,
+    onOpenTrajectory: () -> Unit,
     onOpenVariableViewer: () -> Unit,
     onOpenDynamicSettings: () -> Unit,
     onDeleteMessages: () -> Unit,
@@ -81,7 +81,6 @@ internal fun ChatScreenComposer(
                 if (waitingIndicatorVisible) {
                     ChatWaitingReply(
                         appearance = appearance,
-                        animation = state.chatWaitingAnimation,
                     )
                 }
             }
@@ -96,7 +95,6 @@ internal fun ChatScreenComposer(
                 if (waitingIndicatorVisible) {
                     ChatWaitingReply(
                         appearance = appearance,
-                        animation = state.chatWaitingAnimation,
                     )
                 }
             }
@@ -139,7 +137,7 @@ internal fun ChatScreenComposer(
             onOpenPresets = onOpenPresets,
             onPermissionModeChange = { onIntent(ChatIntent.ChangePermissionMode(it)) },
             onOpenTools = onOpenTools,
-            onOpenRequestViewer = onOpenRequestViewer,
+            onOpenTrajectory = onOpenTrajectory,
             onOpenVariableViewer = onOpenVariableViewer,
             onOpenDynamicSettings = onOpenDynamicSettings.takeIf { dynamicSettingsAvailable },
             canDeleteMessages = canDeleteMessages,

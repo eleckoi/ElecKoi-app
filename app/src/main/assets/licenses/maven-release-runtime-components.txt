@@ -106,6 +106,7 @@ com.caverock:androidsvg-aar:1.4	androidsvg-aar:aar:-	202395	02a5b08a2b35d2d58eb2
 com.github.mwiede:jsch:2.28.0	jsch:jar:-	600365	916f950708937fa1e7813f1e0b6879854e456c10770033dee54fa4df1de73974
 com.github.skydoves:cloudy-android:1.0.0-alpha01	cloudy-android:aar:-	541356	ae8eee4e678f39330becbf1935759753912631d2e6e864f67f00d004056d674e
 com.github.skydoves:cloudy-native:1.0.0-alpha01	cloudy-native:aar:-	532500	2cf2a77720efd5164d90ab4bad7278e6b96cd66eda6f998f57d4149cf04b7c78
+com.github.luben:zstd-jni:1.5.7-16	zstd-jni:aar:-	947274	c333b50b4bbea6eb93e172fbc0581d2736e4b7c5f527819c347dca52d8dafe67
 com.google.accompanist:accompanist-drawablepainter:0.37.3	accompanist-drawablepainter:aar:-	11349	0453c4c54ec3ef13ae18b83300f1d2a078b1ca92d3a3781437516630e3b850df
 com.google.code.findbugs:jsr305:3.0.2	jsr305:jar:-	19936	766ad2a0783f2687962c8ad74ceecc38a28b9f72a2d085ee438b7813e928d0c7
 com.google.errorprone:error_prone_annotations:2.18.0	error_prone_annotations:jar:-	16017	9e6814cb71816988a4fd1b07a993a8f21bb7058d522c162b1de849e19bea54ae

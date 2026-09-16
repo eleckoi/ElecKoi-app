@@ -154,6 +154,20 @@ class ElecKoiAppContainer(context: Context) : AutoCloseable {
     internal fun agentToolGroups(enabledGroupIds: Set<String>): List<AgentToolGroupSnapshot> =
         agentToolCatalogStore.groups(enabledGroupIds)
 
+    internal suspend fun creatorAssistantEnabledToolGroupIds(): Set<String>? =
+        repository.uiPreferencesRepository.read().creatorAssistantEnabledToolGroupIds
+
+    internal suspend fun setCreatorAssistantEnabledToolGroupIds(groupIds: Set<String>) {
+        repository.uiPreferencesRepository.setCreatorAssistantEnabledToolGroupIds(groupIds)
+    }
+
+    internal suspend fun creatorAssistantImageModelConfigId(): String =
+        repository.uiPreferencesRepository.read().creatorAssistantImageModelConfigId
+
+    internal suspend fun setCreatorAssistantImageModelConfigId(configId: String) {
+        repository.uiPreferencesRepository.setCreatorAssistantImageModelConfigId(configId)
+    }
+
     internal fun isCharacterSettingLibraryToolEnabled(characterId: String): Boolean =
         runBlocking {
             AgentToolRequestPolicy.BuiltInSettingLibrary in

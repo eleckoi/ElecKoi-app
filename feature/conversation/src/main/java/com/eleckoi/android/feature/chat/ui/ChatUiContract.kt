@@ -8,7 +8,6 @@ import com.eleckoi.android.feature.chat.model.ChatMessage
 import com.eleckoi.android.feature.chat.model.ChatUserImageAttachment
 import com.eleckoi.android.feature.preferences.ChatAvatarShape
 import com.eleckoi.android.feature.preferences.ChatLayoutMode
-import com.eleckoi.android.feature.preferences.ChatWaitingAnimation
 import com.eleckoi.android.feature.preferences.RoleplayLayoutDefaults
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import java.io.File
@@ -49,7 +48,6 @@ data class ChatUiState(
     val chatLineHeightMultiplier: Float = RoleplayLayoutDefaults.LineHeightMultiplier,
     val chatLetterSpacing: Float = RoleplayLayoutDefaults.LetterSpacing,
     val chatParagraphSpacing: Float = RoleplayLayoutDefaults.ParagraphSpacing,
-    val chatWaitingAnimation: ChatWaitingAnimation = RoleplayLayoutDefaults.WaitingAnimation,
     val chatGenerationStatsEnabled: Boolean = true,
     val moreToolsOpen: Boolean = false,
     val historyOpen: Boolean = false,

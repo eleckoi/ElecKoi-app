@@ -56,6 +56,7 @@ internal fun ToolModelPickerContent(
     configs: List<ModelConfig>,
     selectedConfigId: String,
     selectedModel: String,
+    imageParamsMode: ImageModelParamsMode = ImageModelParamsMode.AutomaticIllustration,
     appearance: AppearanceTheme,
     onBack: () -> Unit,
     onDismiss: () -> Unit,
@@ -80,7 +81,7 @@ internal fun ToolModelPickerContent(
             modifier = Modifier.fillMaxWidth().heightIn(min = 320.dp, max = 610.dp),
             onSaveConfig = onSaveConfig,
             onCharacterImagePromptChange = { _, callback -> callback(Result.success("")) },
-            mode = ImageModelParamsMode.AutomaticIllustration,
+            mode = imageParamsMode,
             showCharacterImagePrompt = false,
         )
         return

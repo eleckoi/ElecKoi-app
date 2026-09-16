@@ -54,7 +54,6 @@ import com.eleckoi.android.feature.preferences.ChatLayoutMode
 import com.eleckoi.android.feature.preferences.ChatReasoningDisplayMode
 import com.eleckoi.android.feature.preferences.ChatTimelineThinkingAnimation
 import com.eleckoi.android.feature.preferences.ChatToolTimelineStyle
-import com.eleckoi.android.feature.preferences.ChatWaitingAnimation
 import com.eleckoi.android.feature.preferences.UiPreferences
 import com.eleckoi.android.feature.preferences.layoutDefaults
 import kotlinx.coroutines.delay
@@ -80,7 +79,6 @@ internal data class ChatLayoutDraft(
     val lineHeight: Float,
     val letterSpacing: Float,
     val paragraphSpacing: Float,
-    val waitingAnimation: ChatWaitingAnimation,
     val timelineThinkingAnimation: ChatTimelineThinkingAnimation,
     val reasoningDisplayMode: ChatReasoningDisplayMode,
     val toolTimelineStyle: ChatToolTimelineStyle,
@@ -104,7 +102,6 @@ internal data class ChatLayoutDraft(
         lineHeight = preferences.chatLineHeightMultiplier,
         letterSpacing = preferences.chatLetterSpacing,
         paragraphSpacing = preferences.chatParagraphSpacing,
-        waitingAnimation = preferences.chatWaitingAnimation,
         timelineThinkingAnimation = preferences.chatTimelineThinkingAnimation,
         reasoningDisplayMode = preferences.chatReasoningDisplayMode,
         toolTimelineStyle = preferences.chatToolTimelineStyle,
@@ -256,7 +253,6 @@ fun ChatDisplaySettingsPage(
                             modifier = Modifier.fillMaxSize(),
                         )
                         ChatDisplaySection.WaitingAnimation -> TimelineAnimationPreview(
-                            waitingAnimation = draft.waitingAnimation,
                             thinkingAnimation = draft.timelineThinkingAnimation,
                             appearance = appearance,
                             modifier = Modifier.fillMaxSize(),

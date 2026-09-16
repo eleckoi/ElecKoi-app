@@ -25,6 +25,7 @@ Exceptions and additional licenses:
 - AndroidX DataStore's repackaged Protocol Buffers runtime is BSD-3-Clause; see `androidx-datastore-protobuf.BSD-3-Clause.txt`.
 - Checker Framework qualifiers 3.33.0 are MIT; see `checker-framework.MIT.txt`.
 - Kotlin Multiplatform LaTeX Renderer 1.4.7 is MIT; see `latex-renderer.MIT.txt`.
+- zstd-jni 1.5.7-16 is BSD-2-Clause; see `zstd-jni.BSD-2-Clause.txt`.
 - MaterialKolor Material Color Utilities 2.0.2 (`com.materialkolor:material-color-utilities:*`) is published under MIT and is a Kotlin Multiplatform port of Google's Apache-2.0 Material Color Utilities source. ElecKoi packages `materialkolor-2.0.2.MIT.txt` and the common `Apache-2.0.txt` terms for both layers.
 - JSch 2.28.0 is BSD-3-Clause, and its bundled JZlib and jBCrypt portions are BSD-3-Clause and ISC respectively; see `jsch-2.28.0.LICENSES.txt`.
 - Bouncy Castle Provider 1.83 is licensed under the Bouncy Castle MIT-style license; see `bouncycastle-1.83.LICENSE.txt`.

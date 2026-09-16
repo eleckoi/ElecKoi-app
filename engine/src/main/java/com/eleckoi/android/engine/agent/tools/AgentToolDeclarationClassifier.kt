@@ -113,12 +113,6 @@ internal fun classifyAgentToolDeclaration(element: JsonElement): AgentToolGroupS
             "执行命令并修改角色或创作工作区中的文件",
             listOf(member),
         )
-        in VisualTools -> builtInToolGroup(
-            AgentToolRequestPolicy.BuiltInVisual,
-            "DSH 本地图片检查",
-            "由 DSH 声明时才显示，用于让 Agent 检查工作区图片文件；与聊天模型看图、自动配图和图片生成无关。",
-            listOf(member),
-        )
         in WorkflowTools -> builtInToolGroup(
             AgentToolRequestPolicy.BuiltInWorkflow,
             "任务与交互",
@@ -253,6 +247,7 @@ private val WorkspaceTools = setOf(
     "shell_command",
     "bash",
     "read",
+    "read_image",
     "edit",
     "write",
     "exec_command",
@@ -260,7 +255,6 @@ private val WorkspaceTools = setOf(
     "apply_patch",
     "request_permissions",
 )
-private val VisualTools = setOf("view_image")
 private val WorkflowTools = setOf(
     "update_plan",
     "todo_write",

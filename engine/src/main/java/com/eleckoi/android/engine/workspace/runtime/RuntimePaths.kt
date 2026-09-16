@@ -4,6 +4,7 @@ import android.content.Context
 import java.io.File
 import java.nio.file.FileVisitResult
 import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.SimpleFileVisitor
 import java.nio.file.attribute.BasicFileAttributes
 
@@ -90,15 +91,25 @@ class RuntimePaths(context: Context) {
     /** True when the packaged DSH JSONL backend already owns this app-level session id. */
     fun persistentDeepSeekSessionExists(sessionId: String): Boolean {
         require(DeepSeekSessionId.matches(sessionId)) { "DSH session 编号无效" }
+        return persistentDeepSeekSessionLog(sessionId) != null
+    }
+
+    /** Returns DSH's logical event log only when its resolved file remains in the session. */
+    fun persistentDeepSeekSessionLog(sessionId: String): File? {
+        require(DeepSeekSessionId.matches(sessionId)) { "DSH session 编号无效" }
         val sessions = File(workspaceDeepSeekHome(persistentDeepSeekWorkspaceId), "sessions").canonicalFile
-        if (!sessions.isDirectory) return false
-        return sessions.listFiles().orEmpty().any { projectEntry ->
+        if (!sessions.isDirectory || Files.isSymbolicLink(sessions.toPath())) return null
+        projectLoop@ for (projectEntry in sessions.listFiles().orEmpty()) {
+            if (!projectEntry.isDirectory || Files.isSymbolicLink(projectEntry.toPath())) continue
             val project = projectEntry.canonicalFile
-            if (!projectEntry.isDirectory || project.parentFile != sessions) return@any false
-            val session = File(project, sessionId).canonicalFile
-            if (!session.toPath().startsWith(project.toPath()) || session == project) return@any false
-            File(session, "session.jsonl.zstd").isFile || File(session, "session.jsonl").isFile
+            if (project.parentFile != sessions) continue
+            val unresolvedSession = File(project, sessionId)
+            if (!unresolvedSession.isDirectory || Files.isSymbolicLink(unresolvedSession.toPath())) continue
+            val session = unresolvedSession.canonicalFile
+            if (session.parentFile != project) continue
+            resolvePersistentDshSessionLog(session)?.let { return it }
         }
+        return null
     }
 
     /** Deletes exact, product-declared obsolete DSH sessions without following filesystem links. */
@@ -199,6 +210,26 @@ class RuntimePaths(context: Context) {
         private val NativeHostName = Regex("^lib[A-Za-z0-9_-]+\\.so$")
         private val CommandId = Regex("^[A-Za-z0-9_-]{1,100}$")
         private val DeepSeekSessionId = Regex("^[A-Za-z0-9._:-]{1,160}$")
+    }
+}
+
+/**
+ * DSH's log2sqlite backend atomically rotates the logical session log through one or more
+ * symlinks. Preserve the logical filename so readers can identify the compression format,
+ * but accept it only when the fully resolved regular file stays inside this exact session.
+ */
+internal fun resolvePersistentDshSessionLog(sessionDirectory: File): File? {
+    val session = runCatching { sessionDirectory.toPath().toRealPath() }.getOrNull() ?: return null
+    if (!Files.isDirectory(session, LinkOption.NOFOLLOW_LINKS)) return null
+    return listOf("session.jsonl.zstd", "session.jsonl").firstNotNullOfOrNull { name ->
+        val logicalLog = session.resolve(name)
+        val resolvedLog = runCatching { logicalLog.toRealPath() }.getOrNull()
+            ?: return@firstNotNullOfOrNull null
+        if (Files.isRegularFile(resolvedLog, LinkOption.NOFOLLOW_LINKS) && resolvedLog.parent == session) {
+            logicalLog.toFile().absoluteFile
+        } else {
+            null
+        }
     }
 }
 

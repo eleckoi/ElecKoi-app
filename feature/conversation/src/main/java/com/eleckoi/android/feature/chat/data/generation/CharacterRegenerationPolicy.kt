@@ -81,7 +81,11 @@ internal fun truncateForRegeneration(
         .map(ChatMessage::runtimeThreadId)
         .filter(String::isNotBlank)
         .toSet()
-    val retainedMessages = truncated.take(branchUserIndex + 1)
+    val retainedMessages = truncated.take(branchUserIndex + 1).map { message ->
+        // A DSH thread represents the whole branch. Regeneration invalidates that thread even
+        // when some earlier messages remain, so the UI must not reopen its now-obsolete trace.
+        message.copy(runtimeThreadId = "", runtimeTurnId = "")
+    }
     return RegenerationTimeline(
         messages = retainedMessages,
         prompt = userText,

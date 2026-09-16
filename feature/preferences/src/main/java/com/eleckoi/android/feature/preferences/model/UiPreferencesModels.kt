@@ -6,7 +6,6 @@ object SocialLayoutDefaults {
     // Social layout always renders a conversation bubble. Only Agent exposes an on/off choice.
     const val AssistantBubbleEnabled = true
     val AvatarShape = ChatAvatarShape.Circle
-    val WaitingAnimation = ChatWaitingAnimation.Dots
     val TimelineThinkingAnimation = ChatTimelineThinkingAnimation.Default
     const val BubbleCornerRadius = 10f
     const val AvatarSize = 40f
@@ -24,7 +23,6 @@ object SocialLayoutDefaults {
 object AgentLayoutDefaults {
     const val AssistantBubbleEnabled = false
     val AvatarShape = ChatAvatarShape.Circle
-    val WaitingAnimation = ChatWaitingAnimation.Dots
     val TimelineThinkingAnimation = ChatTimelineThinkingAnimation.Default
     const val BubbleCornerRadius = 12f
     const val AvatarSize = 34.5f
@@ -43,7 +41,6 @@ object AgentLayoutDefaults {
 object RoleplayLayoutDefaults {
     const val AssistantBubbleEnabled = false
     val AvatarShape = ChatAvatarShape.Portrait
-    val WaitingAnimation = ChatWaitingAnimation.Dots
     val TimelineThinkingAnimation = ChatTimelineThinkingAnimation.Default
     const val BubbleCornerRadius = 10f
     const val AvatarSize = 55f
@@ -90,7 +87,6 @@ data class ChatLayoutProfileDefaults(
     val lineHeightMultiplier: Float,
     val letterSpacing: Float,
     val paragraphSpacing: Float,
-    val waitingAnimation: ChatWaitingAnimation,
     val timelineThinkingAnimation: ChatTimelineThinkingAnimation,
 )
 
@@ -108,7 +104,6 @@ private val SocialProfileDefaults = ChatLayoutProfileDefaults(
     lineHeightMultiplier = SocialLayoutDefaults.LineHeightMultiplier,
     letterSpacing = SocialLayoutDefaults.LetterSpacing,
     paragraphSpacing = SocialLayoutDefaults.ParagraphSpacing,
-    waitingAnimation = SocialLayoutDefaults.WaitingAnimation,
     timelineThinkingAnimation = SocialLayoutDefaults.TimelineThinkingAnimation,
 )
 
@@ -126,7 +121,6 @@ private val AgentProfileDefaults = ChatLayoutProfileDefaults(
     lineHeightMultiplier = AgentLayoutDefaults.LineHeightMultiplier,
     letterSpacing = AgentLayoutDefaults.LetterSpacing,
     paragraphSpacing = AgentLayoutDefaults.ParagraphSpacing,
-    waitingAnimation = AgentLayoutDefaults.WaitingAnimation,
     timelineThinkingAnimation = AgentLayoutDefaults.TimelineThinkingAnimation,
 )
 
@@ -144,7 +138,6 @@ private val RoleplayProfileDefaults = ChatLayoutProfileDefaults(
     lineHeightMultiplier = RoleplayLayoutDefaults.LineHeightMultiplier,
     letterSpacing = RoleplayLayoutDefaults.LetterSpacing,
     paragraphSpacing = RoleplayLayoutDefaults.ParagraphSpacing,
-    waitingAnimation = RoleplayLayoutDefaults.WaitingAnimation,
     timelineThinkingAnimation = RoleplayLayoutDefaults.TimelineThinkingAnimation,
 )
 
@@ -174,6 +167,8 @@ data class UiPreferences(
     val pinnedCreatorWorkspaceIds: List<String> = emptyList(),
     val creatorWorkspaceExpansionOverrides: Map<String, Boolean> = emptyMap(),
     val lastCreatorWorkspaceId: String = "",
+    val creatorAssistantEnabledToolGroupIds: Set<String>? = null,
+    val creatorAssistantImageModelConfigId: String = "",
     val historySaveMode: String = "all",
     val appearanceMode: AppearanceMode = AppearanceMode.Default,
     val newCharacterBackground: NewCharacterBackground = NewCharacterBackground.Default,
@@ -203,7 +198,6 @@ data class UiPreferences(
     val chatLineHeightMultiplier: Float = RoleplayLayoutDefaults.LineHeightMultiplier,
     val chatLetterSpacing: Float = RoleplayLayoutDefaults.LetterSpacing,
     val chatParagraphSpacing: Float = RoleplayLayoutDefaults.ParagraphSpacing,
-    val chatWaitingAnimation: ChatWaitingAnimation = RoleplayLayoutDefaults.WaitingAnimation,
     val chatTimelineThinkingAnimation: ChatTimelineThinkingAnimation =
         RoleplayLayoutDefaults.TimelineThinkingAnimation,
     val appearanceTheme: AppearanceTheme = AppearanceTheme(),

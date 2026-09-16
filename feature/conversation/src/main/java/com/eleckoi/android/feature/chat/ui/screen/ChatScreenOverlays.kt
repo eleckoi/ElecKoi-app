@@ -6,12 +6,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
-import com.eleckoi.android.engine.agent.diagnostics.AgentTurnRequestCapture
+import com.eleckoi.android.engine.agent.deepseek.trajectory.DshTrajectoryPage
+import com.eleckoi.android.engine.agent.deepseek.trajectory.DshTrajectoryReadOptions
 import com.eleckoi.android.engine.generation.model.ModelConfig
 import com.eleckoi.android.feature.chat.model.ChatDraft
 import com.eleckoi.android.feature.chat.model.ChatMessage
 import com.eleckoi.android.feature.chat.model.MessageRole
-import com.eleckoi.android.feature.chat.ui.diagnostics.AgentRequestCaptureDialog
+import com.eleckoi.android.feature.chat.ui.trajectory.DshTrajectoryDialog
 import com.eleckoi.android.feature.chat.ui.sheets.ChatHistorySheet
 import com.eleckoi.android.feature.chat.ui.sheets.EditMessageSheet
 import com.eleckoi.android.feature.modelconfig.ui.modelpicker.ModelPickerSheet
@@ -39,11 +40,11 @@ internal fun ChatScreenOverlays(
     onRefreshModels: (ModelConfig, (Result<ModelConfig>) -> Unit) -> Unit,
     selectedUserMessageText: String?,
     onDismissSelectedText: () -> Unit,
-    showRequestCaptures: Boolean,
-    requestCaptures: List<AgentTurnRequestCapture>,
-    requestCaptureEnabled: Boolean,
-    onRequestCaptureEnabledChange: (Boolean) -> Unit,
-    onDismissRequestCaptures: () -> Unit,
+    showTrajectory: Boolean,
+    trajectoryRuntimeThreadId: String,
+    trajectoryIsSending: Boolean,
+    loadTrajectory: suspend (DshTrajectoryReadOptions) -> DshTrajectoryPage,
+    onDismissTrajectory: () -> Unit,
     onImportHistory: () -> Unit,
     onResumeToEnd: () -> Unit,
 ) {
@@ -185,13 +186,13 @@ internal fun ChatScreenOverlays(
         )
     }
 
-    if (showRequestCaptures) {
-        AgentRequestCaptureDialog(
-            turns = requestCaptures,
-            captureEnabled = requestCaptureEnabled,
+    if (showTrajectory) {
+        DshTrajectoryDialog(
+            runtimeThreadId = trajectoryRuntimeThreadId,
+            isSending = trajectoryIsSending,
             appearance = state.appearance,
-            onCaptureEnabledChange = onRequestCaptureEnabledChange,
-            onDismiss = onDismissRequestCaptures,
+            load = loadTrajectory,
+            onDismiss = onDismissTrajectory,
         )
     }
 

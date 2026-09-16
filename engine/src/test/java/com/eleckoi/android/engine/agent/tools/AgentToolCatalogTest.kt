@@ -148,6 +148,7 @@ class AgentToolCatalogTest {
               "tools":[
                 {"type":"function","name":"bash","parameters":{"type":"object"}},
                 {"type":"function","name":"read","parameters":{"type":"object"}},
+                {"type":"function","name":"read_image","parameters":{"type":"object"}},
                 {"type":"function","name":"edit","parameters":{"type":"object"}},
                 {"type":"function","name":"write","parameters":{"type":"object"}},
                 {"type":"function","name":"todo_write","parameters":{"type":"object"}},
@@ -160,7 +161,8 @@ class AgentToolCatalogTest {
         val enabled = AgentToolRequestPolicy.filter(request) { true }
         assertEquals(
             mapOf(
-                AgentToolRequestPolicy.BuiltInWorkspace to listOf("bash", "read", "edit", "write"),
+                AgentToolRequestPolicy.BuiltInWorkspace to
+                    listOf("bash", "read", "read_image", "edit", "write"),
                 AgentToolRequestPolicy.BuiltInWorkflow to listOf("todo_write"),
                 AgentToolRequestPolicy.BuiltInCollaboration to listOf("subagent"),
             ),
@@ -198,8 +200,8 @@ class AgentToolCatalogTest {
             """
             {
               "input":[{"type":"message","role":"user","content":"hi"}],
-              "tools":[{"type":"function","name":"view_image","parameters":{"type":"object"}}],
-              "tool_choice":{"type":"function","name":"view_image"}
+              "tools":[{"type":"function","name":"read_image","parameters":{"type":"object"}}],
+              "tool_choice":{"type":"function","name":"read_image"}
             }
             """.trimIndent(),
         )

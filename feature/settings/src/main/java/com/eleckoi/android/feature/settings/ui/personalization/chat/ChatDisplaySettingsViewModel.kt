@@ -61,9 +61,6 @@ class ChatDisplaySettingsViewModel(
         if (draft.paragraphSpacing != stored.paragraphSpacing) {
             repository.setChatParagraphSpacing(draft.paragraphSpacing)
         }
-        if (draft.waitingAnimation != stored.waitingAnimation) {
-            repository.setChatWaitingAnimation(draft.waitingAnimation)
-        }
         if (draft.timelineThinkingAnimation != stored.timelineThinkingAnimation) {
             repository.setChatTimelineThinkingAnimation(draft.timelineThinkingAnimation)
         }

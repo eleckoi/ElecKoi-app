@@ -39,8 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.feature.chat.ui.blocks.reasoning.ReasoningIdeaCat
-import com.eleckoi.android.feature.chat.ui.loading.CatThinkingIndicator
-import com.eleckoi.android.feature.chat.ui.loading.DotsThinkingIndicator
+import com.eleckoi.android.feature.chat.ui.loading.ChatWaitingReply
 import com.eleckoi.android.engine.agent.api.AgentWorkItemType
 import com.eleckoi.android.feature.conversation.timeline.model.CreationTimelineItem
 import com.eleckoi.android.feature.conversation.timeline.model.CreationTimelineKind
@@ -50,7 +49,6 @@ import com.eleckoi.android.feature.conversation.timeline.CreationTurnUi
 import com.eleckoi.android.feature.preferences.ChatTimelineThinkingAnimation
 import com.eleckoi.android.feature.preferences.ChatCodeBlockStyle
 import com.eleckoi.android.feature.preferences.ChatToolTimelineStyle
-import com.eleckoi.android.feature.preferences.ChatWaitingAnimation
 
 // Same two-card control as the bubble shapes, except the drawing is the animation itself, running.
 // A still frame of a loading animation tells you nothing about the thing you are choosing.
@@ -130,7 +128,6 @@ internal fun AiAssistantTimelinePreview(
 
 @Composable
 internal fun TimelineAnimationPreview(
-    waitingAnimation: ChatWaitingAnimation,
     thinkingAnimation: ChatTimelineThinkingAnimation,
     appearance: AppearanceTheme,
     modifier: Modifier = Modifier,
@@ -151,20 +148,7 @@ internal fun TimelineAnimationPreview(
             modifier = Modifier.height(42.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
-                modifier = Modifier.size(width = 48.dp, height = 34.dp),
-                contentAlignment = Alignment.CenterStart,
-            ) {
-                when (waitingAnimation) {
-                    ChatWaitingAnimation.Dots -> DotsThinkingIndicator(appearance = appearance)
-                    ChatWaitingAnimation.Cat -> CatThinkingIndicator(appearance = appearance)
-                }
-            }
-            Text(
-                text = "正在回复",
-                color = appearance.mobileMuted,
-                fontSize = 13.sp,
-            )
+            ChatWaitingReply(appearance = appearance)
         }
         HorizontalDivider(
             modifier = Modifier.padding(vertical = 12.dp),
@@ -190,37 +174,6 @@ internal fun TimelineAnimationPreview(
                 color = appearance.mobileMuted,
                 fontSize = 13.sp,
             )
-        }
-    }
-}
-
-@Composable
-internal fun WaitingAnimationPicker(
-    selected: ChatWaitingAnimation,
-    appearance: AppearanceTheme,
-    onSelect: (ChatWaitingAnimation) -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        BubbleShapeOption(
-            label = "三点",
-            selected = selected == ChatWaitingAnimation.Dots,
-            appearance = appearance,
-            modifier = Modifier.weight(1f),
-            onClick = { onSelect(ChatWaitingAnimation.Dots) },
-        ) {
-            DotsThinkingIndicator(appearance = appearance)
-        }
-        BubbleShapeOption(
-            label = "鲸鱼娘",
-            selected = selected == ChatWaitingAnimation.Cat,
-            appearance = appearance,
-            modifier = Modifier.weight(1f),
-            onClick = { onSelect(ChatWaitingAnimation.Cat) },
-        ) {
-            CatThinkingIndicator(appearance = appearance)
         }
     }
 }

@@ -45,7 +45,6 @@ import com.eleckoi.android.feature.preferences.ChatLayoutMode
 import com.eleckoi.android.feature.preferences.ChatReasoningDisplayMode
 import com.eleckoi.android.feature.preferences.ChatTimelineThinkingAnimation
 import com.eleckoi.android.feature.preferences.ChatToolTimelineStyle
-import com.eleckoi.android.feature.preferences.ChatWaitingAnimation
 import com.eleckoi.android.feature.preferences.RoleplayLayoutDefaults
 
 // Label plus a card, so each group reads as one block instead of loose rows on the page.
@@ -198,7 +197,7 @@ internal fun ChatDisplayHub(
             title = ChatDisplaySection.WaitingAnimation.title,
             icon = ChatDisplaySection.WaitingAnimation.icon,
             value = buildString {
-                append(if (draft.waitingAnimation == ChatWaitingAnimation.Cat) "鲸鱼娘" else "三点")
+                append("Deep diving")
                 append(" · ")
                 append(
                     when (draft.timelineThinkingAnimation) {

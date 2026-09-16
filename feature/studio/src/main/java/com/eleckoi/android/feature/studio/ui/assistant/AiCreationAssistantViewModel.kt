@@ -5,7 +5,10 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.eleckoi.android.engine.agent.api.AgentSessionFactory
 import com.eleckoi.android.engine.agent.background.AgentRunManager
+import com.eleckoi.android.engine.agent.tools.AgentToolGroupSnapshot
+import com.eleckoi.android.engine.agent.tools.AgentToolRequestPolicy
 import com.eleckoi.android.engine.generation.model.ModelConfig
+import com.eleckoi.android.engine.generation.model.isImageGenerationConfig
 import com.eleckoi.android.engine.generation.model.supportsImageInput
 import com.eleckoi.android.engine.immersive.api.FrontendProjectService
 import com.eleckoi.android.engine.workspace.model.CreatorWorkspaceRootAccess
@@ -21,6 +24,7 @@ import com.eleckoi.android.feature.studio.api.CreatorAssistantService
 import com.eleckoi.android.feature.studio.api.creatorConversationAttachmentAssetId
 import com.eleckoi.android.feature.studio.ui.assistant.runtime.CreationRuntimeController
 import com.eleckoi.android.feature.studio.ui.assistant.session.CreationAgentSessionCoordinator
+import com.eleckoi.android.feature.studio.ui.assistant.session.creationAssistantMessage
 import com.eleckoi.android.feature.studio.ui.assistant.timeline.CreationHistoryController
 import com.eleckoi.android.feature.studio.ui.assistant.timeline.replaceWorkspace
 import com.eleckoi.android.feature.studio.ui.assistant.timeline.toStoredTimeline
@@ -43,6 +47,15 @@ class AiCreationAssistantViewModel(
     agentSessionFactory: AgentSessionFactory,
     agentRuns: AgentRunManager,
     localRuntime: LocalRuntimeGateway,
+    private val toolGroupsProvider: (Set<String>) -> List<AgentToolGroupSnapshot> = { enabledIds ->
+        AgentToolRequestPolicy.builtInGroups().map { group ->
+            group.copy(enabled = group.id in enabledIds)
+        }
+    },
+    private val loadEnabledToolGroupIds: suspend () -> Set<String>? = { null },
+    private val saveEnabledToolGroupIds: suspend (Set<String>) -> Unit = {},
+    private val loadImageModelConfigId: suspend () -> String = { "" },
+    private val saveImageModelConfigId: suspend (String) -> Unit = {},
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(AiCreationAssistantUiState())
     val uiState: StateFlow<AiCreationAssistantUiState> = _uiState.asStateFlow()
@@ -119,6 +132,7 @@ class AiCreationAssistantViewModel(
         when (intent) {
             AiCreationAssistantIntent.Load -> {
                 runtimeController.connect()
+                loadToolGroups()
                 workspaceController.load(_uiState.value.workspace?.id)
             }
             is AiCreationAssistantIntent.CreateWorkspace ->
@@ -147,6 +161,10 @@ class AiCreationAssistantViewModel(
                 sessionCoordinator.updatePermissionMode(intent.value)
             is AiCreationAssistantIntent.ChangeModel ->
                 modelController.change(intent.configId, intent.modelId)
+            is AiCreationAssistantIntent.ChangeCreatorImageModelConfig ->
+                changeCreatorImageModelConfig(intent.configId)
+            is AiCreationAssistantIntent.ChangeToolGroupEnabled ->
+                changeToolGroupEnabled(intent.groupId, intent.enabled)
             is AiCreationAssistantIntent.ChangeInput -> _uiState.update {
                 it.copy(input = intent.value.take(InputLimit))
             }
@@ -330,6 +348,85 @@ class AiCreationAssistantViewModel(
         }
     }
 
+    private fun loadToolGroups() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val persistedEnabledIds = loadEnabledToolGroupIds()
+            val persistedImageModelConfigId = loadImageModelConfigId().trim()
+            val selectable = CreationAssistantToolPolicy.selectable(toolGroupsProvider(emptySet()))
+            val selectableIds = selectable.mapTo(linkedSetOf()) { it.id }
+            val enabledIds = (persistedEnabledIds ?: CreationAssistantToolPolicy.defaultEnabledGroupIds)
+                .filterTo(linkedSetOf()) { it in selectableIds }
+            val presented = CreationAssistantToolPolicy
+                .selectable(toolGroupsProvider(enabledIds))
+                .map { group -> group.copy(enabled = group.id in enabledIds) }
+            _uiState.update {
+                it.copy(
+                    toolGroups = presented,
+                    enabledToolGroupIds = enabledIds,
+                    creatorImageModelConfigId = persistedImageModelConfigId,
+                )
+            }
+        }
+    }
+
+    private fun changeCreatorImageModelConfig(configId: String) {
+        val snapshot = _uiState.value
+        val normalized = configId.trim()
+        if (snapshot.isRunning) {
+            _uiState.update { it.copy(errorMessage = "请先停止当前任务，再切换图片生成模型") }
+            return
+        }
+        if (
+            normalized.isNotBlank() &&
+            snapshot.modelConfigs.none { it.id == normalized && it.isImageGenerationConfig() }
+        ) {
+            _uiState.update { it.copy(errorMessage = "所选图片生成模型已经不可用") }
+            return
+        }
+        if (snapshot.creatorImageModelConfigId == normalized) return
+        val previous = snapshot.creatorImageModelConfigId
+        _uiState.update { it.copy(creatorImageModelConfigId = normalized) }
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { saveImageModelConfigId(normalized) }
+                .onFailure { error ->
+                    _uiState.update { current ->
+                        if (current.creatorImageModelConfigId == normalized) {
+                            current.copy(
+                                creatorImageModelConfigId = previous,
+                                errorMessage = error.creationAssistantMessage("图片生成模型保存失败"),
+                            )
+                        } else {
+                            current.copy(
+                                errorMessage = error.creationAssistantMessage("图片生成模型保存失败"),
+                            )
+                        }
+                    }
+                }
+        }
+    }
+
+    private fun changeToolGroupEnabled(groupId: String, enabled: Boolean) {
+        val snapshot = _uiState.value
+        if (snapshot.isRunning || snapshot.toolGroups.none { it.id == groupId }) return
+        val nextEnabledIds = if (enabled) {
+            snapshot.enabledToolGroupIds + groupId
+        } else {
+            snapshot.enabledToolGroupIds - groupId
+        }
+        _uiState.update { state ->
+            state.copy(
+                enabledToolGroupIds = nextEnabledIds,
+                toolGroups = state.toolGroups.map { group ->
+                    group.copy(enabled = group.id in nextEnabledIds)
+                },
+            )
+        }
+        sessionCoordinator.toolConfigurationChanged()
+        viewModelScope.launch(Dispatchers.IO) {
+            saveEnabledToolGroupIds(nextEnabledIds)
+        }
+    }
+
     private fun removeInputImage(imageId: String) {
         val image = _uiState.value.inputImages.firstOrNull { it.id == imageId } ?: return
         _uiState.update {
@@ -407,6 +504,15 @@ class AiCreationAssistantViewModel(
             agentSessionFactory: AgentSessionFactory,
             agentRuns: AgentRunManager,
             localRuntime: LocalRuntimeGateway,
+            toolGroupsProvider: (Set<String>) -> List<AgentToolGroupSnapshot> = { enabledIds ->
+                AgentToolRequestPolicy.builtInGroups().map { group ->
+                    group.copy(enabled = group.id in enabledIds)
+                }
+            },
+            loadEnabledToolGroupIds: suspend () -> Set<String>? = { null },
+            saveEnabledToolGroupIds: suspend (Set<String>) -> Unit = {},
+            loadImageModelConfigId: suspend () -> String = { "" },
+            saveImageModelConfigId: suspend (String) -> Unit = {},
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -417,6 +523,11 @@ class AiCreationAssistantViewModel(
                     agentSessionFactory = agentSessionFactory,
                     agentRuns = agentRuns,
                     localRuntime = localRuntime,
+                    toolGroupsProvider = toolGroupsProvider,
+                    loadEnabledToolGroupIds = loadEnabledToolGroupIds,
+                    saveEnabledToolGroupIds = saveEnabledToolGroupIds,
+                    loadImageModelConfigId = loadImageModelConfigId,
+                    saveImageModelConfigId = saveImageModelConfigId,
                 ) as T
             }
         }

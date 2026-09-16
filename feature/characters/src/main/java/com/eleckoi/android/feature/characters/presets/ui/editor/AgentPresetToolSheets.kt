@@ -1,5 +1,6 @@
 package com.eleckoi.android.feature.characters.presets.ui.editor
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -14,7 +15,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -35,7 +35,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
@@ -43,21 +42,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
-import androidx.compose.ui.window.DialogWindowProvider
 import com.eleckoi.android.engine.agent.tools.AgentToolGroupSnapshot
 import com.eleckoi.android.engine.agent.tools.AgentToolGroupSource
 import com.eleckoi.android.engine.agent.tools.AgentToolRequestPolicy
 import com.eleckoi.android.engine.generation.model.ModelConfig
 import com.eleckoi.android.feature.characters.presets.model.AgentPresetToolConfiguration
 import com.eleckoi.android.feature.characters.presets.model.AgentPresetRoleplayPlan
+import com.eleckoi.android.feature.modelconfig.ui.modelpicker.ImageModelParamsMode
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.foundation.design.ElecKoiDanger
 import com.eleckoi.android.foundation.design.components.AppIconPaths
@@ -163,6 +159,8 @@ internal fun ToolDetailSheetContent(
     modelConfigs: List<ModelConfig>,
     allowRemove: Boolean,
     showBack: Boolean,
+    interactionEnabled: Boolean = true,
+    showPresetSpecificConfiguration: Boolean = true,
     appearance: AppearanceTheme,
     onBack: () -> Unit,
     onDismiss: () -> Unit,
@@ -184,6 +182,11 @@ internal fun ToolDetailSheetContent(
                 ToolModelPickerKind.Image -> configuration.toolModelConfigIds[group.id].orEmpty()
             },
             selectedModel = configuration.subagentModel,
+            imageParamsMode = if (group.id == AgentToolRequestPolicy.BuiltInCreator) {
+                ImageModelParamsMode.OnDemand
+            } else {
+                ImageModelParamsMode.AutomaticIllustration
+            },
             appearance = appearance,
             onBack = { modelPickerKind = null },
             onDismiss = onDismiss,
@@ -236,6 +239,7 @@ internal fun ToolDetailSheetContent(
                         checked = enabled,
                         onCheckedChange = onEnabledChange,
                         appearance = appearance,
+                        enabled = interactionEnabled,
                         modifier = Modifier.padding(start = 12.dp),
                     )
                 }
@@ -288,7 +292,10 @@ internal fun ToolDetailSheetContent(
                 }
             }
         }
-        if (group.id == AgentToolRequestPolicy.BuiltInCollaboration) {
+        if (
+            showPresetSpecificConfiguration &&
+            group.id == AgentToolRequestPolicy.BuiltInCollaboration
+        ) {
             item("subagent-model-title") { SectionLabel("子 Agent 模型", appearance) }
             item("subagent-model") {
                 ToolConfigurationSelector(
@@ -321,7 +328,10 @@ internal fun ToolDetailSheetContent(
                 )
             }
         }
-        if (group.id == AgentToolRequestPolicy.BuiltInRoleplayWorkflow) {
+        if (
+            showPresetSpecificConfiguration &&
+            group.id == AgentToolRequestPolicy.BuiltInRoleplayWorkflow
+        ) {
             item("roleplay-plan-title") { SectionLabel("固定任务计划", appearance) }
             item("roleplay-plan") {
                 AgentPresetRoleplayPlanEditor(
@@ -485,26 +495,19 @@ internal fun PresetBottomSheetDialog(
     onDismiss: () -> Unit,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
-    ) {
-        val window = (LocalView.current.parent as? DialogWindowProvider)?.window
-        SideEffect {
-            window?.setDimAmount(0f)
-            window?.setWindowAnimations(0)
-        }
-        var visible by remember { mutableStateOf(false) }
-        LaunchedEffect(Unit) { visible = true }
-        CompositionLocalProvider(LocalContentColor provides appearance.mobileText) {
-            MobileBottomSheetOverlay(
-                visible = visible,
-                appearance = appearance,
-                onDismiss = onDismiss,
-                showHandle = true,
-                sheetModifier = Modifier.statusBarsPadding().imePadding(),
-                content = content,
-            )
-        }
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { visible = true }
+    BackHandler(onBack = onDismiss)
+    CompositionLocalProvider(LocalContentColor provides appearance.mobileText) {
+        // Use the same host-level overlay as chat history. Besides keeping modal behavior
+        // consistent, this lets the explicit scrim cover the status bar on every supported OEM.
+        MobileBottomSheetOverlay(
+            visible = visible,
+            appearance = appearance,
+            onDismiss = onDismiss,
+            showHandle = true,
+            sheetModifier = Modifier.imePadding(),
+            content = content,
+        )
     }
 }

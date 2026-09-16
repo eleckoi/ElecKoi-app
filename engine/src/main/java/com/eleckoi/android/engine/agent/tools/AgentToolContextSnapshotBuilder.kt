@@ -21,8 +21,6 @@ internal fun buildAgentToolContextSnapshot(
     val enabledGroups = orderedGroups.filter(AgentToolGroupSnapshot::enabled)
     val workspaceOrder = orderById[AgentToolRequestPolicy.BuiltInWorkspace]
         ?: ToolContextFallbackOrder
-    val visualOrder = orderById[AgentToolRequestPolicy.BuiltInVisual]
-        ?: ToolContextFallbackOrder
     val collaborationOrder = orderById[AgentToolRequestPolicy.BuiltInCollaboration]
         ?: ToolContextFallbackOrder
     val extensionGroups = enabledGroups.filter { group ->
@@ -32,7 +30,6 @@ internal fun buildAgentToolContextSnapshot(
         orderById[group.id] ?: ToolContextFallbackOrder
     } ?: ToolContextFallbackOrder
     val workspaceEnabled = enabledGroups.any { it.id == AgentToolRequestPolicy.BuiltInWorkspace }
-    val visualEnabled = enabledGroups.any { it.id == AgentToolRequestPolicy.BuiltInVisual }
     val collaborationEnabled = enabledGroups.any {
         it.id == AgentToolRequestPolicy.BuiltInCollaboration
     }
@@ -61,11 +58,8 @@ internal fun buildAgentToolContextSnapshot(
             ),
             AgentToolContextBlock(
                 id = AgentToolContextBlockIds.Environment,
-                enabled = workspaceEnabled || visualEnabled,
-                order = minOf(
-                    workspaceOrder.takeIf { workspaceEnabled } ?: ToolContextFallbackOrder,
-                    visualOrder.takeIf { visualEnabled } ?: ToolContextFallbackOrder,
-                ) + 30,
+                enabled = workspaceEnabled,
+                order = workspaceOrder + 30,
             ),
         ),
     )

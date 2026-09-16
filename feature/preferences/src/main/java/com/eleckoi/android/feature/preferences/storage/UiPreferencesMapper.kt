@@ -27,6 +27,10 @@ internal fun Preferences.toUiPreferences(): UiPreferences {
             ?.let(::decodeBooleanMap)
             ?: emptyMap(),
         lastCreatorWorkspaceId = preferences[LastCreatorWorkspaceId].orEmpty(),
+        creatorAssistantEnabledToolGroupIds =
+            preferences[CreatorAssistantEnabledToolGroupIds],
+        creatorAssistantImageModelConfigId =
+            preferences[CreatorAssistantImageModelConfigId].orEmpty(),
         historySaveMode = normalizeHistoryMode(
             preferences[HistorySaveMode].orEmpty(),
         ),
@@ -160,14 +164,6 @@ internal fun Preferences.toUiPreferences(): UiPreferences {
                 resolvedMode,
             ),
         ] ?: defaults.paragraphSpacing).coerceIn(0f, 24f),
-        chatWaitingAnimation = preferences[
-            profileKey(
-                ChatWaitingAnimationAgent,
-                ChatWaitingAnimationSocial,
-                ChatWaitingAnimationRoleplay,
-                resolvedMode,
-            ),
-        ]?.let(ChatWaitingAnimation::fromStorageKey) ?: defaults.waitingAnimation,
         chatTimelineThinkingAnimation = preferences[
             profileKey(
                 ChatTimelineThinkingAnimationAgent,

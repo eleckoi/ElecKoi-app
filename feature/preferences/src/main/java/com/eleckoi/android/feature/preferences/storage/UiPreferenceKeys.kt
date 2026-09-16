@@ -4,6 +4,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 
 internal val PinnedChatIdsJson = stringPreferencesKey("pinned_chat_ids_json")
 internal val HiddenChatIdsJson = stringPreferencesKey("hidden_chat_ids_json")
@@ -14,6 +15,10 @@ internal val PinnedCreatorWorkspaceIdsJson = stringPreferencesKey("pinned_creato
 internal val CreatorWorkspaceExpansionOverridesJson =
     stringPreferencesKey("creator_workspace_expansion_overrides_json")
 internal val LastCreatorWorkspaceId = stringPreferencesKey("last_creator_workspace_id")
+internal val CreatorAssistantEnabledToolGroupIds =
+    stringSetPreferencesKey("creator_assistant_enabled_tool_group_ids")
+internal val CreatorAssistantImageModelConfigId =
+    stringPreferencesKey("creator_assistant_image_model_config_id")
 internal val HistorySaveMode = stringPreferencesKey("history_save_mode")
 internal val AppearanceModeKey = stringPreferencesKey("appearance_mode")
 internal val NewCharacterBackgroundKey = stringPreferencesKey("new_character_background")
@@ -70,9 +75,6 @@ internal val ChatLetterSpacingRoleplay = floatPreferencesKey("chat_letter_spacin
 internal val ChatParagraphSpacingSocial = floatPreferencesKey("chat_paragraph_spacing_social")
 internal val ChatParagraphSpacingAgent = floatPreferencesKey("chat_paragraph_spacing_agent")
 internal val ChatParagraphSpacingRoleplay = floatPreferencesKey("chat_paragraph_spacing_roleplay")
-internal val ChatWaitingAnimationSocial = stringPreferencesKey("chat_waiting_animation_social")
-internal val ChatWaitingAnimationAgent = stringPreferencesKey("chat_waiting_animation_agent")
-internal val ChatWaitingAnimationRoleplay = stringPreferencesKey("chat_waiting_animation_roleplay")
 internal val ChatTimelineThinkingAnimationSocial =
     stringPreferencesKey("chat_timeline_thinking_animation_social")
 internal val ChatTimelineThinkingAnimationAgent =

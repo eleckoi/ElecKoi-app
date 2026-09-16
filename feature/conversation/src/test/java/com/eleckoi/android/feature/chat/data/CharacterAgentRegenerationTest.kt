@@ -115,6 +115,37 @@ class CharacterAgentRegenerationTest {
     }
 
     @Test
+    fun `regeneration clears stale trajectory bindings from retained messages`() {
+        val result = truncateForRegeneration(
+            messages = listOf(
+                message("user-1", MessageRole.User, "第一问"),
+                message(
+                    id = "assistant-1",
+                    role = MessageRole.Assistant,
+                    content = "第一答",
+                    runtimeThreadId = "runtime-whole-branch",
+                ),
+                message("user-2", MessageRole.User, "第二问"),
+                message(
+                    id = "assistant-2",
+                    role = MessageRole.Assistant,
+                    content = "第二答",
+                    runtimeThreadId = "runtime-whole-branch",
+                ),
+            ),
+            targetMessageId = "assistant-2",
+            replacementMessage = null,
+            provider = "provider",
+            model = "model",
+        )
+
+        assertEquals(setOf("runtime-whole-branch"), result.obsoleteRuntimeThreadIds)
+        assertEquals(listOf("user-1", "assistant-1", "user-2"), result.messages.map { it.id })
+        assertEquals(listOf("", "", ""), result.messages.map { it.runtimeThreadId })
+        assertEquals(listOf("", "", ""), result.messages.map { it.runtimeTurnId })
+    }
+
+    @Test
     fun `regeneration restores the retained pre-reply variable snapshot`() {
         val messages = listOf(
             message(

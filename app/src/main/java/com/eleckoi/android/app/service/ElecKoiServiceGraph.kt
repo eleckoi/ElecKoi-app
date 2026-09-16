@@ -7,7 +7,6 @@ import com.eleckoi.android.engine.agent.api.AgentSessionFactory
 import com.eleckoi.android.engine.agent.api.AgentInputImage
 import com.eleckoi.android.engine.agent.api.AgentVirtualFileSearch
 import com.eleckoi.android.engine.agent.tools.AgentToolContextSnapshot
-import com.eleckoi.android.engine.agent.tools.AgentToolRequestPolicy
 import com.eleckoi.android.engine.agent.background.AgentRunManager
 import com.eleckoi.android.engine.agent.diagnostics.AgentRequestDiagnostics
 import com.eleckoi.android.engine.generation.config.AndroidKeystoreModelSecretCodec
@@ -218,9 +217,7 @@ internal class ElecKoiServiceGraph(
         regexRules = regexRules,
         mediaCacheDirectory = File(context.cacheDir, "creator-media-bindings"),
         imageModelConfigId = {
-            agentPresets.activePreset().toolConfiguration.toolModelConfigIds[
-                AgentToolRequestPolicy.BuiltInCreator
-            ].orEmpty()
+            uiPreferences.read().creatorAssistantImageModelConfigId
         },
     )
     val chatService: ChatServiceImpl = ChatServiceImpl(
