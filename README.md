@@ -119,6 +119,12 @@
 
 如果你对这一方向有疑问，请先通过 Issue 或 Discussion 沟通。我不希望任何人在付出劳动后，才发现项目的发展方向与自己的价值判断不同。
 
+## 贡献者
+
+感谢每一位帮助 ElecKoi 变得更好的人。
+
+[![ElecKoi 贡献者](https://contrib.rocks/image?repo=eleckoi/ElecKoi-app)](https://github.com/eleckoi/ElecKoi-app/graphs/contributors)
+
 ## 构建
 
 ```powershell

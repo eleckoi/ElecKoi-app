@@ -119,6 +119,12 @@ Contributors retain copyright in their contributions, while the code continues t
 
 If you have questions about this direction, please discuss them through an Issue or Discussion before contributing. I do not want anyone to discover only after contributing their work that the project's direction conflicts with their values.
 
+## Contributors
+
+Thank you to everyone who helps make ElecKoi better.
+
+[![ElecKoi contributors](https://contrib.rocks/image?repo=eleckoi/ElecKoi-app)](https://github.com/eleckoi/ElecKoi-app/graphs/contributors)
+
 ## Building
 
 ```powershell
