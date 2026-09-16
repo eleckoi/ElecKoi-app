@@ -6,6 +6,7 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.S
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryInsertRole
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPosition
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPromptPosition
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPromptPositionSide
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isOpeningEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isPinnedEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.settingLibraryOpeningEntry
@@ -56,7 +57,7 @@ internal fun changeOperationSchema() = creatorObjectSchema(required = listOf("op
     put("icon_id", creatorStringSchema("普通条目图标 id。"))
     put("content", creatorStringSchema("条目完整正文；patch 开场白时更新默认开场，patch 角色扮演计划时更新任务项。"))
     put("enabled", creatorBooleanSchema("条目是否启用。"))
-    put("trigger_mode", creatorStringSchema("触发模式。", listOf("always", "agent_tool")))
+    put("trigger_mode", creatorStringSchema("触发模式。", listOf("always", "agent_tool", "cache")))
     put("agent_read_strategy", creatorStringSchema("Agent 读取策略。", listOf("required", "keyword", "normal", "variable_condition")))
     put("agent_selection_hint", creatorStringSchema("帮助 Agent 判断是否读取的简短提示。"))
     put("agent_read_condition", creatorStringSchema("变量条件表达式。"))
@@ -73,6 +74,7 @@ internal fun changeOperationSchema() = creatorObjectSchema(required = listOf("op
     put("prompt_position_id", creatorStringSchema("自定义插入位置 id。"))
     put("insert_role", creatorStringSchema("插入消息角色。", SettingLibraryInsertRole.entries.map { it.storageValue }))
     put("anchor", creatorStringSchema("自定义提示词位置对应的运行时锚点。", SettingLibraryPosition.entries.map { it.storageValue }))
+    put("side", creatorStringSchema("自定义提示词位置位于设定插入点之前或之后。", SettingLibraryPromptPositionSide.entries.map { it.storageValue }))
     put("order", integerSchema("同一提示词位置内的注入顺序，或自定义位置顺序。", minimum = 1))
     put("tree_view_order", integerSchema("分组/条目在 AI 目录树中的顺序。", minimum = 1))
     put("opening_messages", creatorArraySchema(
@@ -145,6 +147,7 @@ internal fun SettingLibraryPromptPosition.summaryJson() = buildJsonObject {
     put("id", id)
     put("name", name)
     put("anchor", anchor.storageValue)
+    put("side", side.storageValue)
     put("order", order)
 }
 
@@ -214,6 +217,7 @@ internal fun authoringGuideJson() = buildJsonObject {
     put("triggerModes", buildJsonObject {
         put("agent_tool", "Agent 读取：启用条目进入 AI 可见目录，由读取策略决定必读、关键词提升、按需选择或变量条件提升；不使用插入位置。")
         put("always", "提示词常驻：启用条目每轮自动注入；必须配置 position，或用 prompt_position_id 选择 inspect 返回的自定义位置，并由 insert_role 和 order 控制角色与顺序。")
+        put("cache", "缓存设定：启用条目每轮固定写入设定插入点 1 与设定插入点 2 之间的缓存设定区；只用 order 控制缓存设定之间的顺序，不参与 Agent 搜索、关键词或变量晋升。")
     })
     put("agentReadStrategies", buildJsonObject {
         put("required", "必读：条目作为本轮 required entry 暴露，Agent 必须读取。")
@@ -237,7 +241,7 @@ internal fun authoringGuideJson() = buildJsonObject {
                 })
             }
         })
-        put("custom", "自定义位置由 create/patch/delete_prompt_position 管理；inspect 的 promptPositions 返回 id、名称、运行时 anchor 与顺序。")
+        put("custom", "自定义位置由 create/patch/delete_prompt_position 管理；inspect 的 promptPositions 返回 side，指定在设定插入点之前或之后，order 控制同侧顺序。")
         put("roles", buildJsonArray {
             SettingLibraryInsertRole.entries.forEach { role ->
                 add(buildJsonObject {

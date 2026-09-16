@@ -242,6 +242,7 @@ class SettingLibraryRepository internal constructor(
             characterLibrary.copy(
                 entries = characterLibrary.entries + additional.entries,
                 groups = characterLibrary.groups + additional.groups,
+                promptPositions = characterLibrary.promptPositions + additional.promptPositions,
             )
         } ?: characterLibrary
         return SettingLibraryAgentContextProjector.project(characterId, library)

@@ -73,7 +73,7 @@ data class CharacterCard(
     val imagePrompt: String = "",
     val opening: String = "",
     val showOpening: Boolean = false,
-    val chatBackground: String = "",
+    val chatBackground: String = AppDefaultChatBackground,
     val chatBackgroundOpacity: Float = 0.72f,
     val chatBackgroundBlur: Float = 0f,
     val chatBackgroundScrim: Float = 0.22f,
@@ -85,11 +85,7 @@ data class CharacterCard(
     val assistantAvatars: AvatarSet
         get() = AvatarSet(assistantAvatar, assistantSquare, assistantCover)
 
-    /**
-     * A chat without a custom wallpaper starts from the character card art. Portrait is the
-     * intended full-screen source; the other slots keep older/imported cards useful when that slot
-     * is missing.
-     */
+    /** Resolves the best available artwork whenever character-card background mode is selected. */
     val defaultChatBackground: String
         get() = assistantCover.ifBlank { assistantSquare }.ifBlank { assistantAvatar }
 

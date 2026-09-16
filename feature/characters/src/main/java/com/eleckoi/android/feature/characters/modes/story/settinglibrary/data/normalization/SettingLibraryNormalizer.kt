@@ -113,17 +113,28 @@ internal object SettingLibraryNormalizer {
             }
         requireUniqueLogicalNames(normalizedUserEntries, groups)
         val duplicateOrderKeys = normalizedUserEntries
-            .filter { it.triggerMode == SettingLibraryTriggerMode.Always && it.position != null }
+            .filter {
+                (it.triggerMode == SettingLibraryTriggerMode.Always && it.position != null) ||
+                    it.triggerMode == SettingLibraryTriggerMode.Cache
+            }
             .groupingBy { entry ->
-                (entry.promptPositionId.ifBlank { entry.position?.storageValue.orEmpty() }) to entry.order
+                Triple(
+                    entry.triggerMode,
+                    entry.promptPositionId.ifBlank { entry.position?.storageValue.orEmpty() },
+                    entry.order,
+                )
             }
             .eachCount()
             .filterValues { count -> count > 1 }
             .keys
         val entries = listOf(opening) + normalizedUserEntries.map { entry ->
-            val key = (entry.promptPositionId.ifBlank { entry.position?.storageValue.orEmpty() }) to entry.order
+            val key = Triple(
+                entry.triggerMode,
+                entry.promptPositionId.ifBlank { entry.position?.storageValue.orEmpty() },
+                entry.order,
+            )
             if (
-                entry.triggerMode == SettingLibraryTriggerMode.Always &&
+                entry.triggerMode in setOf(SettingLibraryTriggerMode.Always, SettingLibraryTriggerMode.Cache) &&
                 key in duplicateOrderKeys
             ) {
                 entry.copy(enabled = false)
@@ -150,12 +161,16 @@ internal object SettingLibraryNormalizer {
         now: String,
         touchUpdatedAt: Boolean,
     ): SettingLibraryEntry {
+        val cacheEntry = entry.triggerMode == SettingLibraryTriggerMode.Cache
         return entry.copy(
             id = entry.id.ifBlank { "setting-${newId(12)}" },
             title = entry.title.trim().take(120),
             groupId = entry.groupId.trim(),
-            promptPositionId = entry.promptPositionId.trim(),
-            insertRole = if (entry.position == SettingLibraryPosition.Instructions) {
+            position = if (cacheEntry) SettingLibraryPosition.InsertPoint1 else entry.position,
+            promptPositionId = if (cacheEntry) "" else entry.promptPositionId.trim(),
+            insertRole = if (cacheEntry) {
+                SettingLibraryInsertRole.User
+            } else if (entry.position == SettingLibraryPosition.Instructions) {
                 SettingLibraryInsertRole.System
             } else {
                 entry.insertRole.takeUnless { it == SettingLibraryInsertRole.System }
@@ -169,6 +184,7 @@ internal object SettingLibraryNormalizer {
             enabled = entry.enabled && when (entry.triggerMode) {
                 SettingLibraryTriggerMode.AgentTool -> true
                 SettingLibraryTriggerMode.Always -> entry.position != null
+                SettingLibraryTriggerMode.Cache -> true
                 null -> false
             },
             keywords = entry.keywords.map(String::trim).filter(String::isNotBlank).distinct(),
@@ -186,19 +202,27 @@ internal object SettingLibraryNormalizer {
         touchUpdatedAt: Boolean,
     ): List<SettingLibraryPromptPosition> {
         val seenIds = mutableSetOf<String>()
-        return source.mapIndexedNotNull { index, position ->
+        return source.mapIndexedNotNull { _, position ->
             val id = position.id.trim().ifBlank { "prompt-position-${newId(10)}" }
             if (!seenIds.add(id)) return@mapIndexedNotNull null
             position.copy(
                 id = id,
                 name = position.name.trim().take(60).ifBlank { "未命名提示词位置" },
                 anchor = position.anchor.takeUnless { it == SettingLibraryPosition.Instructions }
-                    ?: SettingLibraryPosition.AfterInstructions,
-                order = index + 1,
+                    ?: SettingLibraryPosition.InsertPoint1,
+                order = position.order.coerceAtLeast(1),
                 createdAt = position.createdAt.ifBlank { now },
                 updatedAt = if (touchUpdatedAt) now else position.updatedAt.ifBlank { now },
             )
-        }
+        }.sortedWith(
+            compareBy<SettingLibraryPromptPosition> { it.anchor.ordinal }
+                .thenBy { it.side.ordinal }
+                .thenBy(SettingLibraryPromptPosition::order)
+                .thenBy(SettingLibraryPromptPosition::id),
+        ).groupBy { it.anchor to it.side }
+            .flatMap { (_, positions) ->
+                positions.mapIndexed { index, position -> position.copy(order = index + 1) }
+            }
     }
 
     fun requireUniqueLogicalNames(

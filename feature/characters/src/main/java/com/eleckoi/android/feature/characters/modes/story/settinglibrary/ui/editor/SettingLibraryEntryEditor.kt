@@ -118,6 +118,12 @@ internal fun EntryEditorPage(
     val fixedOpening = entry.isOpeningEntry()
     val fixedHistoryCompaction = entry.isHistoryCompactionEntry()
     val fixedEntry = entry.isFixedEntry()
+    val cacheEntry = entry.triggerMode == SettingLibraryTriggerMode.Cache
+    val editorSections = if (cacheEntry) {
+        listOf(EntryEditorSection.Base, EntryEditorSection.Content, EntryEditorSection.Insert)
+    } else {
+        EntryEditorSection.entries
+    }
 
     if (entry.dynamicMode == SettingLibraryDynamicMode.EjsReference) {
         EjsReferenceEditorPage(
@@ -170,6 +176,7 @@ internal fun EntryEditorPage(
             title = when {
                 fixedOpening -> "AI角色开场白"
                 fixedHistoryCompaction -> "自动压缩摘要模板"
+                cacheEntry -> "缓存设定"
                 else -> genericPageTitle
             },
             appearance = appearance,
@@ -199,6 +206,7 @@ internal fun EntryEditorPage(
             if (!fixedEntry) {
                 EntryEditorSectionTabs(
                     selected = selectedSection,
+                    sections = editorSections,
                     contentLabel = if (entry.dynamicMode == SettingLibraryDynamicMode.EjsController) {
                         "EJS 代码"
                     } else {
@@ -358,7 +366,7 @@ internal fun EntryEditorPage(
                     imeBottomPx = imeBottomPx,
                     minHeight = contentEditorHeight,
                     placeholder = when (entry.dynamicMode) {
-                        SettingLibraryDynamicMode.EjsController -> "使用 <% … %> 编写判断；可通过 getvar 读取变量、getwi 读取已开启的引用条目"
+                        SettingLibraryDynamicMode.EjsController -> "使用 <% … %> 编写判断；可通过 getvar 读取变量、getwi 读取已开启的EJS引用设定"
                         SettingLibraryDynamicMode.EjsReference -> "填写供 EJS 控制器读取的引用内容"
                         SettingLibraryDynamicMode.SingleCondition -> "写入世界观、人物背景、地点规则、隐藏信息等"
                     },
@@ -379,7 +387,20 @@ internal fun EntryEditorPage(
                 }
                 }
                     EntryEditorSection.Insert -> Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp)) {
-                    if (entry.triggerMode == SettingLibraryTriggerMode.AgentTool) {
+                    if (cacheEntry) {
+                        CachedEntryInsertSettingsGroup(appearance = appearance)
+                        EntryPositionOrderGroup(
+                            entry = entry,
+                            entries = entries,
+                            appearance = appearance,
+                            scrollState = scrollState,
+                            imeBottomPx = imeBottomPx,
+                            previewExpanded = orderPreviewExpanded,
+                            onTogglePreview = ::toggleOrderPreview,
+                            onOrderConflict = { conflictingOrder = it },
+                            onEntryChange = onEntryChange,
+                        )
+                    } else if (entry.triggerMode == SettingLibraryTriggerMode.AgentTool) {
                         Text(
                             "AI 读取这条设定时，正文会直接作为工具结果返回，并在当前 Agent 回合的后续推理中继续保留；无需配置插入位置。",
                             color = appearance.mobileMuted,
@@ -430,7 +451,7 @@ internal fun EntryEditorPage(
                 "删除这条设定？"
             },
             message = if (entry.dynamicMode == SettingLibraryDynamicMode.EjsController) {
-                "将移除“$title”；它读取的引用条目会保留。此操作会自动保存。"
+                "将移除“$title”；它读取的EJS引用设定会保留。此操作会自动保存。"
             } else {
                 "将从设定库移除“$title”，此操作会自动保存。"
             },

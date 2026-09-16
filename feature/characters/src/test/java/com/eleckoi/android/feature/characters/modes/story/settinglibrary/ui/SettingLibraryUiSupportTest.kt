@@ -24,7 +24,7 @@ class SettingLibraryUiSupportTest {
     @Test
     fun `custom insertion displays its own name instead of the fixed anchor`() {
         val entry = SettingLibraryEntry(
-            position = SettingLibraryPosition.AfterHistory,
+            position = SettingLibraryPosition.InsertPoint2,
             promptPositionId = "hidden-tools",
         )
 
@@ -35,7 +35,7 @@ class SettingLibraryUiSupportTest {
                     SettingLibraryPromptPosition(
                         id = "hidden-tools",
                         name = "隐藏工具时间线",
-                        anchor = SettingLibraryPosition.AfterHistory,
+                        anchor = SettingLibraryPosition.InsertPoint2,
                     ),
                 ),
             ),
@@ -44,9 +44,9 @@ class SettingLibraryUiSupportTest {
 
     @Test
     fun `fixed insertion displays the fixed slot`() {
-        val entry = SettingLibraryEntry(position = SettingLibraryPosition.BeforeToolFlow)
+        val entry = SettingLibraryEntry(position = SettingLibraryPosition.InsertPoint3)
 
-        assertEquals("工具调用流程之前", entry.insertionPositionLabel(emptyList()))
+        assertEquals("设定插入点 3", entry.insertionPositionLabel(emptyList()))
     }
 
     @Test
@@ -111,7 +111,7 @@ class SettingLibraryUiSupportTest {
         id = id,
         triggerMode = triggerMode,
         enabled = enabled,
-        position = SettingLibraryPosition.AfterInstructions,
+        position = SettingLibraryPosition.InsertPoint1,
         order = 7,
     )
 }

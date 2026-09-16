@@ -133,7 +133,7 @@ internal fun SettingLibraryPageOverlays(
                     entries.firstOrNull { fileNodeId(it.id) == selectedTreeNodeId }
                         ?.dynamicMode == SettingLibraryDynamicMode.EjsController
                 ) {
-                    "会删除这个控制器；它读取的引用条目不会被删除。"
+                    "会删除这个控制器；它读取的EJS引用设定不会被删除。"
                 } else {
                     "会删除这个设定条目。"
                 },

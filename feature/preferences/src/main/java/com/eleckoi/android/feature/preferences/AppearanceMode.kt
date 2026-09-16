@@ -28,8 +28,8 @@ enum class NewCharacterBackground(val storageKey: String) {
     ;
 
     companion object {
-        // PC baseline: characters use their artwork until the user selects the app-colour default.
-        val Default = Character
+        // Fresh installs create characters with the app's image-free background by default.
+        val Default = App
 
         fun fromStorageKey(value: String?): NewCharacterBackground =
             entries.firstOrNull { it.storageKey == value } ?: Default

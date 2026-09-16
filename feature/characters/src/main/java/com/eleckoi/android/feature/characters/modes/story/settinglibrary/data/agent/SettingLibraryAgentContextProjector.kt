@@ -17,7 +17,8 @@ internal object SettingLibraryAgentContextProjector {
         val automaticEntries = library.entries.filter { entry ->
             !entry.isFixedEntry() &&
                 entry.enabled &&
-                entry.triggerMode == SettingLibraryTriggerMode.Always
+                (entry.triggerMode == SettingLibraryTriggerMode.Always ||
+                    entry.triggerMode == SettingLibraryTriggerMode.Cache)
         }
         fun SettingLibraryEntry.toAgentEntry(): SettingLibraryAgentEntry {
             val groupPath = settingLibraryGroupPath(groupsById[groupId], groupsById)
@@ -63,6 +64,7 @@ internal object SettingLibraryAgentContextProjector {
                 name = library.name,
                 entries = automaticEntries,
                 groups = library.groups,
+                promptPositions = library.promptPositions,
                 activeVersionId = library.activeVersionId,
             ),
             readableEntries = readableEntries,

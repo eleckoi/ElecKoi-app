@@ -2,13 +2,16 @@ package com.eleckoi.android.feature.characters.modes.story.settinglibrary.model
 
 enum class SettingLibraryPosition(val storageValue: String, val label: String) {
     Instructions("instructions", "系统指令"),
-    AfterInstructions("after_instructions", "系统指令之后"),
-    BeforeHistory("before_history", "聊天记录之前"),
-    AfterHistory("after_history", "聊天记录之后"),
-    BeforeLatestUserInput("before_latest_user_input", "用户最新输入之前"),
-    AfterLatestUserInput("after_latest_user_input", "用户最新输入之后"),
-    BeforeToolFlow("before_tool_flow", "工具调用流程之前"),
-    AfterToolFlow("after_tool_flow", "工具调用流程之后");
+    InsertPoint1("insert_point_1", "设定插入点 1"),
+    InsertPoint2("insert_point_2", "设定插入点 2"),
+    InsertPoint3("insert_point_3", "设定插入点 3"),
+    InsertPoint4("insert_point_4", "设定插入点 4"),
+    InsertPoint5("insert_point_5", "设定插入点 5");
+}
+
+enum class SettingLibraryPromptPositionSide(val storageValue: String) {
+    BeforeSettingPosition("before_setting_position"),
+    AfterSettingPosition("after_setting_position"),
 }
 
 enum class SettingLibraryInsertRole(val storageValue: String, val label: String, val apiRole: String) {
@@ -19,7 +22,8 @@ enum class SettingLibraryInsertRole(val storageValue: String, val label: String,
 
 enum class SettingLibraryTriggerMode(val storageValue: String, val label: String) {
     Always("always", "提示词常驻"),
-    AgentTool("agent_tool", "Agent 读取");
+    AgentTool("agent_tool", "Agent 读取"),
+    Cache("cache", "缓存设定");
 }
 
 enum class SettingLibraryAgentReadStrategy(val storageValue: String, val label: String) {
@@ -32,7 +36,7 @@ enum class SettingLibraryAgentReadStrategy(val storageValue: String, val label: 
 enum class SettingLibraryDynamicMode(val storageValue: String, val label: String) {
     SingleCondition("single_condition", "单条条件"),
     EjsController("ejs_controller", "EJS 控制器"),
-    EjsReference("ejs_reference", "引用条目");
+    EjsReference("ejs_reference", "EJS引用设定");
 }
 
 enum class SettingLibraryKeywordCondition(val storageValue: String, val label: String) {
@@ -120,7 +124,8 @@ data class SettingLibraryEntry(
 data class SettingLibraryPromptPosition(
     val id: String = "",
     val name: String = "",
-    val anchor: SettingLibraryPosition = SettingLibraryPosition.AfterInstructions,
+    val anchor: SettingLibraryPosition = SettingLibraryPosition.InsertPoint1,
+    val side: SettingLibraryPromptPositionSide = SettingLibraryPromptPositionSide.BeforeSettingPosition,
     val order: Int = 1,
     val createdAt: String = "",
     val updatedAt: String = "",
@@ -247,7 +252,7 @@ fun settingLibraryHiddenToolTimelineEntry(existing: SettingLibraryEntry? = null)
         content = DefaultHiddenToolTimelineContent,
         kind = SettingLibraryEntryKind.HiddenToolTimeline,
         triggerMode = SettingLibraryTriggerMode.Always,
-        position = SettingLibraryPosition.AfterToolFlow,
+        position = SettingLibraryPosition.InsertPoint5,
         insertRole = SettingLibraryInsertRole.User,
         order = 1,
     )

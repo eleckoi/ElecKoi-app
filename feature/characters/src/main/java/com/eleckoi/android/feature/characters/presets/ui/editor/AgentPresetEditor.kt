@@ -37,8 +37,6 @@ import com.eleckoi.android.feature.characters.presets.ui.AgentPresetOverviewPage
 import com.eleckoi.android.feature.characters.model.AvatarSlot
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibrary
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryEntry
-import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryInsertRole
-import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPosition
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryTriggerMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isHiddenToolTimelineEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.ui.EntryEditorPage
@@ -387,10 +385,10 @@ internal fun AgentPresetEditor(
                         editorState.updateEntry(created.id) {
                             it.copy(
                                 title = "新提示词",
-                                enabled = true,
+                                enabled = false,
                                 triggerMode = SettingLibraryTriggerMode.Always,
-                                position = SettingLibraryPosition.AfterInstructions,
-                                insertRole = SettingLibraryInsertRole.User,
+                                position = null,
+                                promptPositionId = "",
                             )
                         }
                         editorState.focusTreeNode(fileNodeId(created.id))

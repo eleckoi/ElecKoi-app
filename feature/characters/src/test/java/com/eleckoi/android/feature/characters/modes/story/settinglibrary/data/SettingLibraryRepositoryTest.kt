@@ -53,7 +53,7 @@ class SettingLibraryRepositoryTest {
                     SettingLibraryPromptPosition(
                         id = "creator-context",
                         name = "创作上下文",
-                        anchor = SettingLibraryPosition.BeforeHistory,
+                        anchor = SettingLibraryPosition.InsertPoint1,
                     ),
                 ),
             ),
@@ -82,7 +82,7 @@ class SettingLibraryRepositoryTest {
         val metadata = repository.rowMetadata(character.id)
         assertTrue(metadata.entryCount >= 55)
         assertEquals("creator-context", metadata.promptPositions.single().id)
-        assertEquals(SettingLibraryPosition.BeforeHistory, metadata.promptPositions.single().anchor)
+        assertEquals(SettingLibraryPosition.InsertPoint1, metadata.promptPositions.single().anchor)
         assertEquals("正文-54", repository.entryRow(character.id, "paged-54")?.content)
     }
 
@@ -170,32 +170,32 @@ class SettingLibraryRepositoryTest {
         repository.save(
             character.id,
             initial.copy(
-                name = "示例世界",
+                name = "鸣潮世界",
                 groups = listOf(
                     SettingLibraryGroup(id = "world", name = "世界观"),
                 ),
                 entries = initial.entries + SettingLibraryEntry(
                     id = "tacet",
-                    title = "禁入区",
+                    title = "无音区",
                     groupId = "world",
-                    content = "禁入区会残留异常频率。",
+                    content = "无音区会残留异常频率。",
                     agentReadStrategy = SettingLibraryAgentReadStrategy.Required,
                     triggerMode = SettingLibraryTriggerMode.AgentTool,
-                    position = SettingLibraryPosition.BeforeHistory,
+                    position = SettingLibraryPosition.InsertPoint1,
                 ),
             ),
         )
 
         val loaded = repository.load(character.id)
-        assertEquals("示例世界", loaded.name)
-        assertEquals("禁入区会残留异常频率。", loaded.entries.single { it.id == "tacet" }.content)
+        assertEquals("鸣潮世界", loaded.name)
+        assertEquals("无音区会残留异常频率。", loaded.entries.single { it.id == "tacet" }.content)
         assertEquals(
             SettingLibraryAgentReadStrategy.Required,
             loaded.entries.single { it.id == "tacet" }.agentReadStrategy,
         )
         assertEquals("世界观", loaded.groups.single().name)
         val persistedEntry = dao.library(character.id)?.entries?.single { it.entryId == "tacet" }
-        assertTrue(persistedEntry?.payloadJson?.contains("禁入区") == true)
+        assertTrue(persistedEntry?.payloadJson?.contains("无音区") == true)
         assertFalse(persistedEntry?.payloadJson?.contains("insertion_timing") == true)
     }
 
@@ -279,7 +279,13 @@ class SettingLibraryRepositoryTest {
                         title = "核心规则",
                         content = "固定规则",
                         triggerMode = SettingLibraryTriggerMode.Always,
-                        position = SettingLibraryPosition.BeforeHistory,
+                        position = SettingLibraryPosition.InsertPoint1,
+                    ),
+                    SettingLibraryEntry(
+                        id = "cache",
+                        title = "缓存规则",
+                        content = "稳定前缀",
+                        triggerMode = SettingLibraryTriggerMode.Cache,
                     ),
                     SettingLibraryEntry(
                         id = "agent-entry",
@@ -298,21 +304,34 @@ class SettingLibraryRepositoryTest {
             characterId = character.id,
             additionalLibrary = SettingLibrary(
                 characterId = "agent-preset",
+                promptPositions = listOf(
+                    SettingLibraryPromptPosition(
+                        id = "preset-position",
+                        name = "预设位置",
+                        anchor = SettingLibraryPosition.InsertPoint2,
+                    ),
+                ),
                 entries = listOf(
                     SettingLibraryEntry(
                         id = "preset-always",
                         content = "预设规则",
                         triggerMode = SettingLibraryTriggerMode.Always,
-                        position = SettingLibraryPosition.Instructions,
+                        position = SettingLibraryPosition.InsertPoint2,
+                        promptPositionId = "preset-position",
                     ),
                 ),
             ),
         )
 
         assertEquals(
-            listOf("always", "preset-always"),
+            listOf("always", "cache", "preset-always"),
             context.automaticLibrary.entries.map { it.id },
         )
+        assertEquals(
+            SettingLibraryPosition.InsertPoint1,
+            context.automaticLibrary.entries.single { it.id == "cache" }.position,
+        )
+        assertEquals("preset-position", context.automaticLibrary.promptPositions.single().id)
         assertEquals("agent-entry", context.readableEntries.single().id)
         assertEquals("世界观", context.readableEntries.single().groupPath)
         assertEquals("世界观/潮汐之门", context.readableEntries.single().path)
@@ -764,11 +783,11 @@ class SettingLibraryRepositoryTest {
 
     private fun testCharacter() = CharacterSlot(
         id = "character-1",
-        name = "测试角色",
+        name = "守岸人",
         avatar = "",
         group = "",
         folder = "character-1",
-        persona = CharacterCard(characterId = "character-1", characterName = "测试角色"),
+        persona = CharacterCard(characterId = "character-1", characterName = "守岸人"),
     )
 }
 

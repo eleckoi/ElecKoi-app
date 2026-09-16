@@ -31,7 +31,7 @@ internal fun selectedSettingLibraryTreeKindLabel(
         entries.firstOrNull { fileNodeId(it.id) == nodeId }?.dynamicMode
     ) {
         SettingLibraryDynamicMode.EjsController -> "EJS 控制器"
-        SettingLibraryDynamicMode.EjsReference -> "引用条目"
+        SettingLibraryDynamicMode.EjsReference -> "EJS引用设定"
         else -> "设定"
     }
     else -> "文件夹"

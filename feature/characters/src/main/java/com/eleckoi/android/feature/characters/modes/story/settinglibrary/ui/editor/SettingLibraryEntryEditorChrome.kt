@@ -226,6 +226,7 @@ internal fun EntryTriggerModePicker(
                             when (mode) {
                                 SettingLibraryTriggerMode.AgentTool -> "Agent 读取"
                                 SettingLibraryTriggerMode.Always -> "提示词常驻"
+                                SettingLibraryTriggerMode.Cache -> "缓存设定"
                             },
                             color = if (active) appearance.mobileText else appearance.mobileMuted,
                             fontSize = 13.5.sp,
@@ -243,6 +244,7 @@ internal fun EntryTriggerModePicker(
 @Composable
 internal fun EntryEditorSectionTabs(
     selected: EntryEditorSection,
+    sections: List<EntryEditorSection> = EntryEditorSection.entries,
     contentLabel: String,
     appearance: AppearanceTheme,
     onSelect: (EntryEditorSection) -> Unit,
@@ -255,7 +257,7 @@ internal fun EntryEditorSectionTabs(
             .padding(start = 26.dp, end = 26.dp, top = 2.dp, bottom = 14.dp),
     ) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-            EntryEditorSection.entries.forEachIndexed { index, section ->
+            sections.forEachIndexed { index, section ->
                 // The node is exactly as wide as its disc, so the connector between two nodes runs
                 // edge to edge and meets them. At 44dp the disc had 10dp of empty column on each
                 // side and the rule stopped short of it at both ends — four dashes, not a rail.
@@ -263,18 +265,20 @@ internal fun EntryEditorSectionTabs(
                     section = section,
                     label = if (section == EntryEditorSection.Content) contentLabel else section.label,
                     selected = selected,
+                    stepNumber = index + 1,
+                    completed = index < sections.indexOf(selected),
                     appearance = appearance,
                     modifier = Modifier.width(24.dp),
                     onClick = { onSelect(section) },
                 )
-                if (index < EntryEditorSection.entries.lastIndex) {
+                if (index < sections.lastIndex) {
                     Box(
                         modifier = Modifier
                             .weight(1f)
                             .padding(top = 11.dp)
                             .height(2.dp)
                             .background(
-                                if (section.ordinal < selected.ordinal) {
+                                if (index < sections.indexOf(selected)) {
                                     appearance.mobileBlue.copy(alpha = 0.34f)
                                 } else {
                                     appearance.mobileSoft.copy(alpha = 0.34f)
@@ -292,12 +296,13 @@ private fun EntryEditorStepNode(
     section: EntryEditorSection,
     label: String,
     selected: EntryEditorSection,
+    stepNumber: Int,
+    completed: Boolean,
     appearance: AppearanceTheme,
     modifier: Modifier,
     onClick: () -> Unit,
 ) {
     val active = section == selected
-    val completed = section.ordinal < selected.ordinal
     Column(
         modifier = modifier.noRippleClickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -319,7 +324,7 @@ private fun EntryEditorStepNode(
                 StrokeSvgIcon(AppIconPaths.Check, appearance.mobileBlue, iconSize = 13.dp, strokeWidth = 2.6f)
             } else {
                 Text(
-                    (section.ordinal + 1).toString(),
+                    stepNumber.toString(),
                     color = if (active) appearance.mobileAccentFg else appearance.mobileMuted,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium,

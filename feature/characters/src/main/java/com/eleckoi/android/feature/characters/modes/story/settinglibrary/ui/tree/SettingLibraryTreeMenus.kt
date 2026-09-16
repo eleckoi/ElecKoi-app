@@ -109,6 +109,7 @@ internal fun SettingLibraryTreeCreateMenuPopup(
     createStaticLabel: String,
     onCreateFolder: () -> Unit,
     onCreateStatic: () -> Unit,
+    onCreateCache: (() -> Unit)?,
     onCreateReference: (() -> Unit)?,
     onDismiss: () -> Unit,
 ) {
@@ -126,6 +127,7 @@ internal fun SettingLibraryTreeCreateMenuPopup(
             createStaticLabel = createStaticLabel,
             onCreateFolder = onCreateFolder,
             onCreateStatic = onCreateStatic,
+            onCreateCache = onCreateCache,
             onCreateReference = onCreateReference,
             onDismiss = onDismiss,
         )
@@ -177,6 +179,7 @@ private fun SettingLibraryTreeCreateMenu(
     createStaticLabel: String,
     onCreateFolder: () -> Unit,
     onCreateStatic: () -> Unit,
+    onCreateCache: (() -> Unit)?,
     onCreateReference: (() -> Unit)?,
     onDismiss: () -> Unit,
 ) {
@@ -195,8 +198,14 @@ private fun SettingLibraryTreeCreateMenu(
             onDismiss()
             onCreateStatic()
         }
+        if (onCreateCache != null) {
+            SettingLibraryTreeCreateButton("缓存设定", SettingLibraryIcons.Cache, appearance) {
+                onDismiss()
+                onCreateCache()
+            }
+        }
         if (onCreateReference != null) {
-            SettingLibraryTreeCreateButton("引用条目", Icons.Rounded.Link, appearance) {
+            SettingLibraryTreeCreateButton("EJS引用设定", Icons.Rounded.Link, appearance) {
                 onDismiss()
                 onCreateReference()
             }

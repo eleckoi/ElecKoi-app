@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -19,7 +18,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -27,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPosition
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPromptPosition
 import com.eleckoi.android.foundation.design.AppearanceTheme
@@ -42,6 +41,7 @@ private val PlacementRowHeight = 42.dp
 @Composable
 internal fun InstructionsPlacementRow(
     selected: Boolean,
+    selectable: Boolean = true,
     topConnected: Boolean,
     bottomConnected: Boolean,
     appearance: AppearanceTheme,
@@ -51,13 +51,17 @@ internal fun InstructionsPlacementRow(
         Modifier.fillMaxWidth().height(48.dp)
             .placementGuideLine(appearance, topConnected, bottomConnected)
             .semantics {
-                contentDescription = "选择${SettingLibraryPosition.Instructions.label}"
+                contentDescription = if (selectable) {
+                    "选择${SettingLibraryPosition.Instructions.label}"
+                } else {
+                    "固定位置${SettingLibraryPosition.Instructions.label}"
+                }
                 this.selected = selected
             }
-            .noRippleClickable(onClick = onClick),
+            .noRippleClickable(enabled = selectable, onClick = onClick),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        PlacementRailMarker(selected = selected, fixed = false, visible = true, appearance)
+        PlacementRailMarker(selected = selected, fixed = !selectable, visible = true, appearance)
         Row(
             Modifier.weight(1f).height(42.dp).clip(RoundedCornerShape(10.dp))
                 .background(appearance.mobileSurface)
@@ -88,72 +92,58 @@ internal fun InstructionsPlacementRow(
 
 
 @Composable
-internal fun FixedContextGroup(
-    node: FixedPlacementNode,
-    selectedPosition: SettingLibraryPosition?,
-    topConnected: Boolean,
-    bottomConnected: Boolean,
-    appearance: AppearanceTheme,
-    onPositionClick: (SettingLibraryPosition) -> Unit,
-) {
-    Column(Modifier.fillMaxWidth()) {
-        PlacementAnchorRow(
-            position = node.before,
-            selected = selectedPosition == node.before,
-            topConnected = topConnected,
-            bottomConnected = true,
-            appearance = appearance,
-            onClick = { onPositionClick(node.before) },
-        )
-        FixedContextNode(
-            node = node,
-            topConnected = true,
-            bottomConnected = true,
-            appearance = appearance,
-        )
-        PlacementAnchorRow(
-            position = node.after,
-            selected = selectedPosition == node.after,
-            topConnected = true,
-            bottomConnected = bottomConnected,
-            appearance = appearance,
-            onClick = { onPositionClick(node.after) },
-        )
-    }
-}
-
-@Composable
 internal fun PlacementAnchorRow(
     position: SettingLibraryPosition,
+    label: String = position.label,
     selected: Boolean,
+    selectable: Boolean = true,
     topConnected: Boolean,
     bottomConnected: Boolean,
     appearance: AppearanceTheme,
     onClick: () -> Unit,
 ) {
     Row(
-        Modifier.fillMaxWidth().height(PlacementRowHeight)
+        Modifier.fillMaxWidth().height(if (selectable) PlacementRowHeight else 48.dp)
             .placementGuideLine(appearance, topConnected, bottomConnected)
             .semantics {
-                contentDescription = "选择${position.label}"
+                contentDescription = if (selectable) "选择$label" else "固定位置$label"
                 this.selected = selected
             }
-            .noRippleClickable(onClick = onClick),
+            .noRippleClickable(enabled = selectable, onClick = onClick),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        PlacementRailMarker(selected, fixed = false, visible = true, appearance)
-        Text(
-            position.label,
-            color = if (selected) appearance.mobileBlue else appearance.mobileMuted,
-            fontSize = 13.sp,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-            modifier = Modifier.padding(start = 5.dp),
-        )
+        PlacementRailMarker(selected, fixed = !selectable, visible = true, appearance)
+        if (selectable) {
+            Text(
+                label,
+                color = if (selected) appearance.mobileBlue else appearance.mobileMuted,
+                fontSize = 13.sp,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                modifier = Modifier.padding(start = 5.dp),
+            )
+        } else {
+            Row(
+                Modifier.weight(1f).height(42.dp).clip(RoundedCornerShape(10.dp))
+                    .background(appearance.mobileSurface)
+                    .border(0.8.dp, appearance.mobileLine, RoundedCornerShape(10.dp))
+                    .padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                FilledSvgIcon(
+                    paths = AppIconPaths.PromptMarkerThumbTack,
+                    color = appearance.mobileMuted,
+                    iconSize = 15.dp,
+                    viewportSize = 512f,
+                )
+                Text(label, color = appearance.mobileText, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
     }
 }
 
 @Composable
-private fun FixedContextNode(
+internal fun FixedContextNode(
     node: FixedPlacementNode,
     topConnected: Boolean,
     bottomConnected: Boolean,
@@ -174,12 +164,21 @@ private fun FixedContextNode(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            FilledSvgIcon(
-                paths = AppIconPaths.PromptMarkerThumbTack,
-                color = appearance.mobileMuted,
-                iconSize = 15.dp,
-                viewportSize = 512f,
-            )
+            if (node == FixedPlacementNode.Cache) {
+                StrokeSvgIcon(
+                    paths = SettingLibraryIcons.Cache,
+                    color = appearance.mobileMuted,
+                    iconSize = 17.dp,
+                    strokeWidth = 1.7f,
+                )
+            } else {
+                FilledSvgIcon(
+                    paths = AppIconPaths.PromptMarkerThumbTack,
+                    color = appearance.mobileMuted,
+                    iconSize = 15.dp,
+                    viewportSize = 512f,
+                )
+            }
             Text(node.label, color = appearance.mobileText, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         }
     }
@@ -200,6 +199,7 @@ internal fun CustomPositionRow(
     val shape = RoundedCornerShape(10.dp)
     Row(
         Modifier.fillMaxWidth().height(48.dp)
+            .zIndex(if (isDragging) 1f else 0f)
             .placementGuideLine(appearance, topConnected, bottomConnected, visible = !isDragging)
             .semantics {
                 contentDescription = "选择${position.name.ifBlank { "未命名提示词位置" }}"
@@ -210,12 +210,8 @@ internal fun CustomPositionRow(
     ) {
         PlacementRailMarker(selected, fixed = false, visible = !isDragging, appearance)
         Row(
-            Modifier.weight(1f).graphicsLayer {
-                shadowElevation = if (isDragging) 9.dp.toPx() else 0f
-                this.shape = shape
-                clip = false
-            }.height(42.dp).clip(shape)
-                .background(if (selected) appearance.mobilePinnedBg else appearance.mobileSurface)
+            Modifier.weight(1f).height(42.dp).clip(shape)
+                .background(appearance.mobileSurface)
                 .border(
                     if (selected) 1.dp else 0.8.dp,
                     if (selected) appearance.mobileBlue.copy(alpha = 0.5f) else appearance.mobileLine,

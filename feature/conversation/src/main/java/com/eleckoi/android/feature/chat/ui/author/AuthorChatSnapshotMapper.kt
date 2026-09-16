@@ -150,6 +150,7 @@ private fun SettingLibrary.toAuthorSnapshot(): AuthorSettingLibrarySnapshot {
                     put("id", position.id)
                     put("name", position.name)
                     put("anchor", position.anchor.storageValue)
+                    put("side", position.side.storageValue)
                     put("order", position.order)
                     put("createdAt", position.createdAt)
                     put("updatedAt", position.updatedAt)

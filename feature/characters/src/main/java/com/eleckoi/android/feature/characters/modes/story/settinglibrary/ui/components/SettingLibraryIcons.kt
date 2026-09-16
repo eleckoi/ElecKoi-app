@@ -52,6 +52,13 @@ internal object SettingLibraryIcons {
         "M9 17h6",
     )
 
+    /** A small database stack for content kept in the stable cached-prefix section. */
+    val Cache = listOf(
+        "M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3Z",
+        "M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6",
+        "M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6",
+    )
+
     val Rename = listOf("M4 20h4L18.5 9.5a2.83 2.83 0 1 0-4-4L4 16z", "M13.5 6.5l4 4")
 
     val Dots = listOf("M12 5.6h.01", "M12 12h.01", "M12 18.4h.01")

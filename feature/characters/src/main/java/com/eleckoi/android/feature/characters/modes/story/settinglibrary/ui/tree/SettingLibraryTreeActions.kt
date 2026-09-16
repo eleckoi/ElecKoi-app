@@ -50,6 +50,7 @@ internal fun SettingTreeBottomPanel(
     onDismissCreateMenu: () -> Unit,
     onCreateFolder: () -> Unit,
     onCreateStatic: () -> Unit,
+    onCreateCache: (() -> Unit)? = null,
     onEdit: () -> Unit,
     onCopyOrPaste: () -> Unit,
     onCutOrCancel: () -> Unit,
@@ -137,6 +138,7 @@ internal fun SettingTreeBottomPanel(
                 createStaticLabel = createStaticLabel,
                 onCreateFolder = onCreateFolder,
                 onCreateStatic = onCreateStatic,
+                onCreateCache = onCreateCache,
                 onCreateReference = onCreateReference,
                 onDismiss = onDismissCreateMenu,
             )

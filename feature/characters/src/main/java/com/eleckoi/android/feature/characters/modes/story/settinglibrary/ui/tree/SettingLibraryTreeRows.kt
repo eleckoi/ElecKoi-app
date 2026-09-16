@@ -48,9 +48,11 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.i
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isPinnedEntry
 import com.eleckoi.android.foundation.design.components.DshFolderGlyph
 import com.eleckoi.android.foundation.design.components.DshTreeDisclosureGlyph
+import com.eleckoi.android.foundation.design.components.StrokeSvgIcon
 import com.eleckoi.android.foundation.design.components.dshTreeRowEntrance
 import com.eleckoi.android.foundation.design.components.noRippleClickable
 import com.eleckoi.android.foundation.design.components.themedListRowClickable
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryTriggerMode
 
 @Composable
 internal fun SettingTreeNodeRow(
@@ -175,6 +177,7 @@ internal fun SettingTreeNodeRow(
                         dynamic = false,
                         enabled = node.entry.enabled,
                         opening = node.entry.isOpeningEntry(),
+                        cache = node.entry.triggerMode == SettingLibraryTriggerMode.Cache,
                         externalPresetSource = externalPresetSource,
                         appearance = appearance,
                         modifier = Modifier.alpha(contentAlpha),
@@ -255,6 +258,7 @@ private fun SettingFileGlyph(
     dynamic: Boolean,
     enabled: Boolean,
     opening: Boolean,
+    cache: Boolean,
     externalPresetSource: Boolean,
     appearance: AppearanceTheme,
     modifier: Modifier = Modifier,
@@ -266,6 +270,13 @@ private fun SettingFileGlyph(
         else -> appearance.mobileBlue.copy(alpha = 0.56f)
     }
     when {
+        cache -> StrokeSvgIcon(
+            paths = SettingLibraryIcons.Cache,
+            color = tint,
+            modifier = modifier,
+            iconSize = 19.dp,
+            strokeWidth = 1.7f,
+        )
         opening -> Icon(
             imageVector = Icons.Rounded.ChatBubble,
             contentDescription = null,

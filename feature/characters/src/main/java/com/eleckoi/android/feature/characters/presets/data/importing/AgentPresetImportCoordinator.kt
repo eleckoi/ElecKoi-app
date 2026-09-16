@@ -163,10 +163,9 @@ internal class AgentPresetImportCoordinator(
                     updatedAt = "",
                 )
             },
-            promptPositions = sourcePositions.mapIndexed { index, position ->
+            promptPositions = sourcePositions.map { position ->
                 position.copy(
                     id = promptPositionIds.getValue(position.id),
-                    order = index + 1,
                     createdAt = "",
                     updatedAt = "",
                 )

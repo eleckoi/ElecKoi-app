@@ -6,6 +6,9 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.D
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.DefaultHistoryCompactionContent
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryInsertRole
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPosition
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPromptPosition
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPromptPositionSide
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryTriggerMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isHiddenToolTimelineEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isHistoryCompactionEntry
 import org.junit.Assert.assertEquals
@@ -37,7 +40,7 @@ class AgentPresetModelsTest {
         val hiddenTimeline = preset.entries.first { it.isHiddenToolTimelineEntry() }
         assertEquals(DefaultHiddenToolTimelineContent, hiddenTimeline.content)
         assertEquals(SettingLibraryInsertRole.User, hiddenTimeline.insertRole)
-        assertEquals(SettingLibraryPosition.AfterToolFlow, hiddenTimeline.position)
+        assertEquals(SettingLibraryPosition.InsertPoint5, hiddenTimeline.position)
         assertEquals("", hiddenTimeline.promptPositionId)
         assertEquals(1, hiddenTimeline.order)
         assertTrue(preset.promptPositions.isEmpty())
@@ -50,7 +53,7 @@ class AgentPresetModelsTest {
                 entries = preset.entries.map { entry ->
                     if (entry.isHiddenToolTimelineEntry()) {
                         entry.copy(
-                            position = SettingLibraryPosition.BeforeHistory,
+                            position = SettingLibraryPosition.InsertPoint1,
                             insertRole = SettingLibraryInsertRole.Assistant,
                             order = 4,
                         )
@@ -62,7 +65,7 @@ class AgentPresetModelsTest {
         }.withRequiredBuiltIns()
 
         val hiddenTimeline = customized.entries.single { it.isHiddenToolTimelineEntry() }
-        assertEquals(SettingLibraryPosition.BeforeHistory, hiddenTimeline.position)
+        assertEquals(SettingLibraryPosition.InsertPoint1, hiddenTimeline.position)
         assertEquals(SettingLibraryInsertRole.Assistant, hiddenTimeline.insertRole)
         assertEquals(4, hiddenTimeline.order)
     }
@@ -124,5 +127,76 @@ class AgentPresetModelsTest {
             runtime.entries.first { it.id.endsWith(":root-note") }.groupId,
         )
         assertEquals(false, runtime.entries.first { it.id.endsWith(":voice") }.enabled)
+    }
+
+    @Test
+    fun `runtime library preserves custom position side and local order`() {
+        val preset = AgentPreset(
+            id = "positioned",
+            name = "位置测试",
+            promptPositions = listOf(
+                SettingLibraryPromptPosition(
+                    id = "before-setting",
+                    name = "设定前",
+                    anchor = SettingLibraryPosition.InsertPoint3,
+                    side = SettingLibraryPromptPositionSide.BeforeSettingPosition,
+                    order = 4,
+                ),
+            ),
+        )
+
+        val position = preset.asRuntimeSettingLibrary().promptPositions.single()
+
+        assertEquals(SettingLibraryPromptPositionSide.BeforeSettingPosition, position.side)
+        assertEquals(4, position.order)
+        assertTrue(position.id.startsWith("agent-preset:positioned:"))
+    }
+
+    @Test
+    fun `ordinary preset prompts require a preset owned custom position`() {
+        val position = SettingLibraryPromptPosition(
+            id = "preset-position",
+            name = "预设位置",
+            anchor = SettingLibraryPosition.InsertPoint2,
+        )
+        val normalized = AgentPreset(
+            id = "placement",
+            name = "位置测试",
+            promptPositions = listOf(position),
+            entries = listOf(
+                SettingLibraryEntry(
+                    id = "direct-setting-slot",
+                    title = "错误直连",
+                    triggerMode = SettingLibraryTriggerMode.Always,
+                    position = SettingLibraryPosition.InsertPoint1,
+                    enabled = true,
+                ),
+                SettingLibraryEntry(
+                    id = "custom-position",
+                    title = "自定义位置",
+                    triggerMode = SettingLibraryTriggerMode.Always,
+                    position = SettingLibraryPosition.InsertPoint1,
+                    promptPositionId = position.id,
+                    enabled = true,
+                ),
+                SettingLibraryEntry(
+                    id = "system-instructions",
+                    title = "系统指令",
+                    triggerMode = SettingLibraryTriggerMode.Always,
+                    position = SettingLibraryPosition.Instructions,
+                    enabled = true,
+                ),
+            ),
+        ).withRequiredBuiltIns()
+
+        val direct = normalized.entries.single { it.id == "direct-setting-slot" }
+        val custom = normalized.entries.single { it.id == "custom-position" }
+        val system = normalized.entries.single { it.id == "system-instructions" }
+        assertEquals(false, direct.enabled)
+        assertEquals(null, direct.position)
+        assertEquals(true, custom.enabled)
+        assertEquals(SettingLibraryPosition.InsertPoint2, custom.position)
+        assertEquals(true, system.enabled)
+        assertEquals(SettingLibraryPosition.Instructions, system.position)
     }
 }

@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.sp
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPosition
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPromptPosition
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPromptPositionSide
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.foundation.design.ElecKoiDanger
 import com.eleckoi.android.foundation.design.components.AppIconPaths
@@ -96,6 +97,7 @@ internal fun SettingLibraryPositionPickerPage(
     val rows = remember(workingPositions, allowCustomPromptPositions) {
         placementGuideRows(workingPositions, includeCustomPositions = allowCustomPromptPositions)
     }
+    val settingPositionsSelectable = !allowCustomPromptPositions
     val managedPositionCanDelete = managedPositionId.isNotBlank()
 
     LaunchedEffect(promptPositions) {
@@ -163,7 +165,9 @@ internal fun SettingLibraryPositionPickerPage(
                     val bottomConnected = index < rows.lastIndex
                     when (row) {
                         PlacementGuideRow.Instructions -> InstructionsPlacementRow(
-                            selected = entry.position == SettingLibraryPosition.Instructions && entry.promptPositionId.isBlank(),
+                            selected = entry.position == SettingLibraryPosition.Instructions &&
+                                entry.promptPositionId.isBlank(),
+                            selectable = true,
                             topConnected = topConnected,
                             bottomConnected = bottomConnected,
                             appearance = appearance,
@@ -180,46 +184,37 @@ internal fun SettingLibraryPositionPickerPage(
                             },
                         )
 
-                        PlacementGuideRow.AfterInstructions -> PlacementAnchorRow(
-                            position = SettingLibraryPosition.AfterInstructions,
-                            selected = entry.position == SettingLibraryPosition.AfterInstructions &&
+                        is PlacementGuideRow.Slot -> PlacementAnchorRow(
+                            position = row.slot.position,
+                            label = row.slot.label,
+                            selected = settingPositionsSelectable &&
+                                entry.position == row.slot.position &&
                                 entry.promptPositionId.isBlank(),
+                            selectable = settingPositionsSelectable,
                             topConnected = topConnected,
                             bottomConnected = bottomConnected,
                             appearance = appearance,
                             onClick = {
                                 if (
-                                    entry.position != SettingLibraryPosition.AfterInstructions ||
+                                    entry.position != row.slot.position ||
                                     entry.promptPositionId.isNotBlank()
                                 ) {
                                     onEntriesChange(
                                         movePositionEntry(
                                             entries = entries,
                                             entryId = entry.id,
-                                            targetPosition = SettingLibraryPosition.AfterInstructions,
+                                            targetPosition = row.slot.position,
                                         ),
                                     )
                                 }
                             },
                         )
 
-                        is PlacementGuideRow.FixedGroup -> FixedContextGroup(
+                        is PlacementGuideRow.FixedNode -> FixedContextNode(
                             node = row.node,
-                            selectedPosition = entry.position.takeIf { entry.promptPositionId.isBlank() },
                             topConnected = topConnected,
                             bottomConnected = bottomConnected,
                             appearance = appearance,
-                            onPositionClick = { position ->
-                                if (entry.position != position || entry.promptPositionId.isNotBlank()) {
-                                    onEntriesChange(
-                                        movePositionEntry(
-                                            entries = entries,
-                                            entryId = entry.id,
-                                            targetPosition = position,
-                                        ),
-                                    )
-                                }
-                            },
                         )
 
                         is PlacementGuideRow.Custom -> CustomPositionRow(
@@ -274,13 +269,16 @@ internal fun SettingLibraryPositionPickerPage(
                     PositionNameDialog.Create -> {
                         val now = Instant.now().toString()
                         val anchor = workingPositions.firstOrNull { it.id == entry.promptPositionId }?.anchor
-                            ?: entry.position
-                            ?: SettingLibraryPosition.AfterInstructions
+                            ?: entry.position?.takeUnless { it == SettingLibraryPosition.Instructions }
+                            ?: SettingLibraryPosition.InsertPoint1
+                        val side = workingPositions.firstOrNull { it.id == entry.promptPositionId }?.side
+                            ?: SettingLibraryPromptPositionSide.BeforeSettingPosition
                         val created = SettingLibraryPromptPosition(
                             id = "prompt-position-${UUID.randomUUID()}",
                             name = name,
                             anchor = anchor,
-                            order = workingPositions.count { it.anchor == anchor } + 1,
+                            side = side,
+                            order = workingPositions.count { it.anchor == anchor && it.side == side } + 1,
                             createdAt = now,
                             updatedAt = now,
                         )
@@ -329,7 +327,7 @@ internal fun SettingLibraryPositionPickerPage(
                 managedPositionId = next.firstOrNull()?.id.orEmpty()
                 onPromptPositionsChange(next)
                 if (entry.promptPositionId == selected.id) {
-                    onEntryChange { it.copy(position = selected.anchor, promptPositionId = "") }
+                    onEntryChange { it.copy(position = null, promptPositionId = "", enabled = false) }
                 }
                 confirmDelete = false
             },

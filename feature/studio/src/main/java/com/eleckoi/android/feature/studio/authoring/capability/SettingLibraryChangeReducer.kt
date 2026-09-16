@@ -10,6 +10,7 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.S
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryOpeningMessage
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPosition
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPromptPosition
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPromptPositionSide
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryTriggerMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isOpeningEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isPinnedEntry
@@ -106,11 +107,16 @@ internal fun applyOperations(source: SettingLibrary, operations: List<JsonObject
                 val id = operation.creatorString("id").ifBlank { "creator-position-${UUID.randomUUID()}" }
                 if (promptPositions.containsKey(id)) invalid(index, "提示词位置 id 已存在：$id")
                 val name = operation.requiredText("name", index, 60)
-                val anchor = operation.positionValue("anchor", index, SettingLibraryPosition.AfterInstructions)
+                val anchor = operation.positionValue("anchor", index, SettingLibraryPosition.InsertPoint1)
                 promptPositions[id] = SettingLibraryPromptPosition(
                     id = id,
                     name = name,
                     anchor = anchor,
+                    side = operation.promptPositionSideValue(
+                        "side",
+                        index,
+                        SettingLibraryPromptPositionSide.BeforeSettingPosition,
+                    ),
                     order = operation.creatorInt("order", promptPositions.size + 1).coerceAtLeast(1),
                 )
                 createdPromptPositions++
@@ -123,9 +129,13 @@ internal fun applyOperations(source: SettingLibrary, operations: List<JsonObject
                 val anchor = if (operation.containsKey("anchor")) {
                     operation.positionValue("anchor", index, current.anchor)
                 } else current.anchor
+                val side = if (operation.containsKey("side")) {
+                    operation.promptPositionSideValue("side", index, current.side)
+                } else current.side
                 promptPositions[id] = current.copy(
                     name = name,
                     anchor = anchor,
+                    side = side,
                     order = if (operation.containsKey("order")) operation.creatorInt("order", current.order).coerceAtLeast(1) else current.order,
                 )
                 entries.keys.toList().forEach { entryId ->
@@ -143,7 +153,7 @@ internal fun applyOperations(source: SettingLibrary, operations: List<JsonObject
                     if (entry.promptPositionId == id) entries[entryId] = entry.copy(promptPositionId = "")
                 }
                 deletedPromptPositions++
-                descriptions += "删除提示词位置：${current.name}（引用条目回退到对应内置锚点）"
+                descriptions += "删除提示词位置：${current.name}（EJS引用设定回退到对应内置锚点）"
             }
             "create_entry" -> {
                 val id = operation.creatorString("id").ifBlank { "creator-entry-${UUID.randomUUID()}" }
@@ -299,6 +309,11 @@ private fun JsonObject.patchEntry(current: SettingLibraryEntry, index: Int): Set
                 ),
             )
         }
+        updated.triggerMode == SettingLibraryTriggerMode.Cache -> updated.copy(
+            position = SettingLibraryPosition.InsertPoint1,
+            promptPositionId = "",
+            insertRole = SettingLibraryInsertRole.User,
+        )
         else -> updated
     }
 }
@@ -333,6 +348,17 @@ private fun JsonObject.positionValue(
     val raw = creatorString(name)
     if (raw.isBlank()) return default
     return SettingLibraryPosition.entries.firstOrNull { it.storageValue == raw }
+        ?: invalid(operationIndex, "$name 无效：$raw")
+}
+
+private fun JsonObject.promptPositionSideValue(
+    name: String,
+    operationIndex: Int,
+    default: SettingLibraryPromptPositionSide,
+): SettingLibraryPromptPositionSide {
+    val raw = creatorString(name)
+    if (raw.isBlank()) return default
+    return SettingLibraryPromptPositionSide.entries.firstOrNull { it.storageValue == raw }
         ?: invalid(operationIndex, "$name 无效：$raw")
 }
 

@@ -76,14 +76,12 @@ private fun createCharacterSettingLibraryReadTool(
                 success = false,
             )
         }
-        val budget = SettingLibraryReadBudget(MaxReadPayloadCharacters)
         AgentDynamicToolResult(
             content = buildJsonObject {
                 put("status", "ok")
                 put("files", buildJsonArray {
                     requestedPaths.forEach { path ->
                         val entry = requireNotNull(byPath[path])
-                        val content = budget.take(entry.content, MaxEntryCharacters)
                         add(buildJsonObject {
                             put("path", path)
                             put("title", entry.title)
@@ -99,8 +97,8 @@ private fun createCharacterSettingLibraryReadTool(
                                     })
                                 }
                             })
-                            put("content", content.text)
-                            put("truncated", content.truncated)
+                            put("content", entry.content)
+                            put("truncated", false)
                         })
                     }
                 })
@@ -108,19 +106,3 @@ private fun createCharacterSettingLibraryReadTool(
         )
     },
 )
-
-private class SettingLibraryReadBudget(private var remaining: Int) {
-    fun take(value: String, perItemLimit: Int): BudgetedSettingLibraryText {
-        val text = value.take(minOf(perItemLimit, remaining.coerceAtLeast(0)))
-        remaining -= text.length
-        return BudgetedSettingLibraryText(text, text.length < value.length)
-    }
-}
-
-private data class BudgetedSettingLibraryText(
-    val text: String,
-    val truncated: Boolean,
-)
-
-private const val MaxEntryCharacters = 40_000
-private const val MaxReadPayloadCharacters = 120_000

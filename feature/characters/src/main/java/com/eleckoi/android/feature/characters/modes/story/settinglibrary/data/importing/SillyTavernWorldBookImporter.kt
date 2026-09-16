@@ -134,7 +134,7 @@ internal object SillyTavernWorldBookImporter {
         title = title,
         groupId = SillyTavernWorldBookGroupId,
         content = content,
-        agentSelectionHint = "供 EJS 控制器通过 getwi 读取的引用条目",
+        agentSelectionHint = "供 EJS 控制器通过 getwi 读取的EJS引用设定",
         agentReadStrategy = SettingLibraryAgentReadStrategy.VariableCondition,
         dynamicMode = SettingLibraryDynamicMode.EjsReference,
         triggerMode = SettingLibraryTriggerMode.AgentTool,

@@ -63,7 +63,7 @@ internal fun EjsReferenceEditorPage(
         backgroundColor = appearance.storyEditorPalette().pageBg,
     ) {
         EntryEditorTopBar(
-            title = "引用条目",
+            title = "EJS引用设定",
             appearance = appearance,
             onBack = onBack,
             menuVisible = true,
@@ -104,8 +104,8 @@ internal fun EjsReferenceEditorPage(
 
     if (confirmDelete) {
         ConfirmDialog(
-            title = "删除这条引用条目？",
-            message = "使用它的控制器将无法再通过 getwi 读取“${entry.title.ifBlank { "未命名引用条目" }}”。",
+            title = "删除这条EJS引用设定？",
+            message = "使用它的控制器将无法再通过 getwi 读取“${entry.title.ifBlank { "未命名EJS引用设定" }}”。",
             appearance = appearance,
             onDismiss = { confirmDelete = false },
             onConfirm = {
@@ -144,7 +144,7 @@ internal fun EjsControllerReferencesPanel(
                 modifier = Modifier.size(20.dp),
             )
             Text(
-                "引用条目（${references.size}）",
+                "EJS引用设定（${references.size}）",
                 modifier = Modifier.weight(1f).padding(start = 9.dp),
                 color = appearance.mobileText,
                 fontSize = 13.5.sp,
@@ -176,7 +176,7 @@ internal fun EjsControllerReferencesPanel(
                         modifier = Modifier.size(18.dp),
                     )
                     Text(
-                        reference.title.ifBlank { "未命名引用条目" },
+                        reference.title.ifBlank { "未命名EJS引用设定" },
                         modifier = Modifier.weight(1f).padding(horizontal = 9.dp),
                         color = if (reference.enabled) appearance.mobileText else appearance.mobileMuted,
                         fontSize = 13.sp,

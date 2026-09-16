@@ -234,9 +234,6 @@ class AgentPresetRepository(
             name = normalized.name.trim().take(60).ifBlank { "未命名预设" },
             modelTags = normalized.modelTags.distinctBy { it.id.trim().lowercase() }.take(8),
             expandedGroupIds = normalized.expandedGroupIds.distinct(),
-            promptPositions = normalized.promptPositions
-                .distinctBy { it.id }
-                .mapIndexed { index, position -> position.copy(order = index + 1) },
             regexRules = normalized.regexRules.normalizedRegexRules(),
         )
     }
@@ -287,7 +284,6 @@ class AgentPresetRepository(
             promptPositions = source.promptPositions.mapIndexed { index, position ->
                 position.copy(
                     id = "$copyId-position-$index",
-                    order = index + 1,
                     createdAt = "",
                     updatedAt = "",
                 )

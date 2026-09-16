@@ -11,11 +11,12 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.i
 
 internal fun SettingLibraryEntry.triggerPreviewLabel(): String {
     if (isFixedEntry()) return "固定"
-    if (dynamicMode == SettingLibraryDynamicMode.EjsReference) return "引用条目"
+    if (dynamicMode == SettingLibraryDynamicMode.EjsReference) return "EJS引用设定"
     if (dynamicMode == SettingLibraryDynamicMode.EjsController) return "EJS 控制器"
     return when (triggerMode) {
         SettingLibraryTriggerMode.Always -> "常驻"
         SettingLibraryTriggerMode.AgentTool -> "Agent 读取"
+        SettingLibraryTriggerMode.Cache -> "缓存设定"
         null -> "需选触发"
     }
 }
@@ -26,7 +27,8 @@ internal fun SettingLibraryEntry.hasRequiredActivationFields(): Boolean {
             (agentReadStrategy != SettingLibraryAgentReadStrategy.VariableCondition ||
                 dynamicMode != SettingLibraryDynamicMode.SingleCondition ||
                 agentReadCondition.isNotBlank())) ||
-        (triggerMode == SettingLibraryTriggerMode.Always && position != null)
+        (triggerMode == SettingLibraryTriggerMode.Always && position != null) ||
+        triggerMode == SettingLibraryTriggerMode.Cache
 }
 
 internal fun List<SettingLibraryEntry>.sortedForSettingLibraryDisplay(): List<SettingLibraryEntry> {
@@ -48,35 +50,51 @@ internal fun List<SettingLibraryEntry>.sortedForPositionPreview(position: Settin
 }
 
 internal fun SettingLibraryEntry.hasOrderConflictIn(entries: List<SettingLibraryEntry>): Boolean {
-    if (triggerMode != SettingLibraryTriggerMode.Always) return false
-    val targetPosition = position ?: return false
-    val targetScope = promptPositionId.ifBlank { targetPosition.storageValue }
+    if (triggerMode !in setOf(SettingLibraryTriggerMode.Always, SettingLibraryTriggerMode.Cache)) return false
+    val targetPosition = if (triggerMode == SettingLibraryTriggerMode.Cache) {
+        SettingLibraryPosition.InsertPoint1
+    } else {
+        position ?: return false
+    }
+    val targetScope = if (triggerMode == SettingLibraryTriggerMode.Cache) {
+        SettingLibraryTriggerMode.Cache.storageValue
+    } else {
+        promptPositionId.ifBlank { targetPosition.storageValue }
+    }
     return entries.any { entry ->
         entry.id != id &&
             entry.enabled &&
-            entry.triggerMode == SettingLibraryTriggerMode.Always &&
+            entry.triggerMode == triggerMode &&
             !entry.isFixedEntry() &&
-            entry.promptPositionId.ifBlank { entry.position?.storageValue.orEmpty() } == targetScope &&
+            (if (entry.triggerMode == SettingLibraryTriggerMode.Cache) {
+                SettingLibraryTriggerMode.Cache.storageValue
+            } else {
+                entry.promptPositionId.ifBlank { entry.position?.storageValue.orEmpty() }
+            }) == targetScope &&
             entry.order == order
     }
 }
 
 internal fun List<SettingLibraryEntry>.duplicateOrderGroupCount(position: SettingLibraryPosition): Int {
     return filter { it.position == position && !it.isFixedEntry() }
-        .groupBy { entry -> entry.promptPositionId.ifBlank { entry.position?.storageValue.orEmpty() } to entry.order }
+        .groupBy { entry ->
+            Triple(
+                entry.triggerMode,
+                entry.promptPositionId.ifBlank { entry.position?.storageValue.orEmpty() },
+                entry.order,
+            )
+        }
         .count { (_, grouped) -> grouped.size > 1 }
 }
 
 private fun SettingLibraryPosition.displayBucketIndex(): Int {
     return when (this) {
         SettingLibraryPosition.Instructions -> 0
-        SettingLibraryPosition.AfterInstructions -> 1
-        SettingLibraryPosition.BeforeHistory -> 2
-        SettingLibraryPosition.AfterHistory -> 3
-        SettingLibraryPosition.BeforeLatestUserInput -> 4
-        SettingLibraryPosition.AfterLatestUserInput -> 5
-        SettingLibraryPosition.BeforeToolFlow -> 6
-        SettingLibraryPosition.AfterToolFlow -> 7
+        SettingLibraryPosition.InsertPoint1 -> 1
+        SettingLibraryPosition.InsertPoint2 -> 2
+        SettingLibraryPosition.InsertPoint3 -> 3
+        SettingLibraryPosition.InsertPoint4 -> 4
+        SettingLibraryPosition.InsertPoint5 -> 5
     }
 }
 
@@ -100,6 +118,7 @@ internal fun triggerDescription(mode: SettingLibraryTriggerMode): String {
     return when (mode) {
         SettingLibraryTriggerMode.Always -> "每回合写入提示词"
         SettingLibraryTriggerMode.AgentTool -> "由 Agent 搜索并读取"
+        SettingLibraryTriggerMode.Cache -> "固定写入缓存设定区"
     }
 }
 

@@ -46,6 +46,11 @@ class CharacterChatBackgroundPolicyTest {
         assertEquals(0.22f, selected.persona.chatBackgroundScrim)
     }
 
+    @Test
+    fun newCharacterCardsUsePureColourByDefault() {
+        assertEquals(AppDefaultChatBackground, CharacterCard().chatBackground)
+    }
+
     private fun slot(id: String, background: String): CharacterSlot {
         return CharacterSlot(
             id = id,

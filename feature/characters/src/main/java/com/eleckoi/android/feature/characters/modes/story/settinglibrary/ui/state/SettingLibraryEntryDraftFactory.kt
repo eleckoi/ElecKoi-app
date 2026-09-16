@@ -3,6 +3,8 @@ package com.eleckoi.android.feature.characters.modes.story.settinglibrary.ui
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryAgentReadStrategy
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryDynamicMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryEntry
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryInsertRole
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPosition
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryTriggerMode
 
 internal enum class SettingLibraryEntryDraftKind {
@@ -22,10 +24,24 @@ internal fun createSettingLibraryEntryDraft(
         id = id,
         title = nextSettingLibraryEntryDraftTitle(groupId, existingEntries),
         enabled = false,
-        order = 1,
         viewOrder = (existingEntries.maxOfOrNull { it.viewOrder } ?: 0) + 1,
         groupId = groupId,
         triggerMode = triggerMode,
+        position = if (triggerMode == SettingLibraryTriggerMode.Cache) {
+            SettingLibraryPosition.InsertPoint1
+        } else {
+            null
+        },
+        insertRole = SettingLibraryInsertRole.User,
+        order = if (triggerMode == SettingLibraryTriggerMode.Cache) {
+            existingEntries
+                .filter { it.triggerMode == SettingLibraryTriggerMode.Cache }
+                .maxOfOrNull(SettingLibraryEntry::order)
+                ?.plus(1)
+                ?: 1
+        } else {
+            1
+        },
         groupViewOrder = if (groupId.isBlank()) {
             0
         } else {

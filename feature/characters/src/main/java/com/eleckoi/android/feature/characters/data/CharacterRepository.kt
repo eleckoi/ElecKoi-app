@@ -1,6 +1,7 @@
 package com.eleckoi.android.feature.characters.data
 
 import com.eleckoi.android.feature.characters.model.AvatarSlot
+import com.eleckoi.android.feature.characters.model.AppDefaultChatBackground
 import com.eleckoi.android.feature.characters.model.CharacterCard
 import com.eleckoi.android.feature.characters.model.CharacterSlot
 import com.eleckoi.android.feature.characters.model.CharactersPayload
@@ -16,7 +17,7 @@ import kotlinx.coroutines.flow.combine
 class CharacterRepository(
     store: JsonFileStore,
     private val database: ElecKoiDatabase,
-    private val defaultChatBackground: () -> String = { "" },
+    private val defaultChatBackground: () -> String = { AppDefaultChatBackground },
 ) {
     private val dao = database.characterDao()
     private val userProfileDao = database.userProfileDao()

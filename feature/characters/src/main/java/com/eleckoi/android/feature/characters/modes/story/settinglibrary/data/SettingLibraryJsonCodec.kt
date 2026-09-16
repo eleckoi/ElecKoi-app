@@ -10,6 +10,7 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.S
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryKeywordCondition
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPosition
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPromptPosition
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPromptPositionSide
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryOpeningMessage
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryTriggerMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryVersion
@@ -328,6 +329,7 @@ internal object SettingLibraryJsonCodec {
         .put("id", position.id)
         .put("name", position.name)
         .put("anchor", position.anchor.storageValue)
+        .put("side", position.side.storageValue)
         .put("order", position.order)
         .put("created_at", position.createdAt)
         .put("updated_at", position.updatedAt)
@@ -338,7 +340,10 @@ internal object SettingLibraryJsonCodec {
             name = value.optString("name"),
             anchor = SettingLibraryPosition.entries.firstOrNull {
                 it.storageValue == value.optString("anchor")
-            } ?: SettingLibraryPosition.AfterInstructions,
+            } ?: SettingLibraryPosition.InsertPoint1,
+            side = SettingLibraryPromptPositionSide.entries.firstOrNull {
+                it.storageValue == value.optString("side")
+            } ?: SettingLibraryPromptPositionSide.BeforeSettingPosition,
             order = value.optInt("order", index + 1).coerceAtLeast(1),
             createdAt = value.optString("created_at"),
             updatedAt = value.optString("updated_at"),

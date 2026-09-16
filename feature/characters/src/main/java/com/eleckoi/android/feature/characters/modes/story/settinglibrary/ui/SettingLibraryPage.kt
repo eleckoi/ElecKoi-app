@@ -47,6 +47,7 @@ import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibrary
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibrarySource
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryTriggerMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryVersion
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isFixedEntry
 import com.eleckoi.android.foundation.design.components.PinnedStatusScaffold
@@ -351,6 +352,10 @@ fun SettingLibraryPage(
                     onCreateStatic = {
                         createSettingKindDialogOpen = false
                         requestAddEntry()
+                    },
+                    onCreateCache = {
+                        createSettingKindDialogOpen = false
+                        requestAddEntry(SettingLibraryTriggerMode.Cache)
                     },
                     onCreateReference = {
                         createSettingKindDialogOpen = false

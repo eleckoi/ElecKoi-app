@@ -8,11 +8,11 @@ import org.junit.Test
 
 class AppearanceModeTest {
     @Test
-    fun storageValuesAndLightDefaultArePreserved() {
+    fun storageValuesAndImageFreeDefaultsArePreserved() {
         val defaults = mutablePreferencesOf().toUiPreferences()
 
         assertEquals(AppearanceMode.Light, defaults.appearanceMode)
-        assertEquals(NewCharacterBackground.Character, defaults.newCharacterBackground)
+        assertEquals(NewCharacterBackground.App, defaults.newCharacterBackground)
         assertEquals(AppearanceMode.Dark, AppearanceMode.fromStorageKey("dark"))
         assertEquals(AppearanceMode.System, AppearanceMode.fromStorageKey("system"))
         assertEquals(NewCharacterBackground.App, NewCharacterBackground.fromStorageKey("app"))

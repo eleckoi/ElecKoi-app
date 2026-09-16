@@ -9,6 +9,8 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.S
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryInsertRole
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryKeywordCondition
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPosition
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPromptPosition
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPromptPositionSide
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryTriggerMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isFixedEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isHiddenToolTimelineEntry
@@ -27,23 +29,26 @@ internal object CharacterSettingContextResolver {
             !entry.isFixedEntry() &&
                 entry.enabled &&
                 entry.content.isNotBlank() &&
-                entry.position != null &&
-                entry.triggerMode == SettingLibraryTriggerMode.Always
+                when (entry.triggerMode) {
+                    SettingLibraryTriggerMode.Cache -> true
+                    SettingLibraryTriggerMode.Always -> entry.position != null
+                    SettingLibraryTriggerMode.AgentTool, null -> false
+                }
         }
         if (candidates.isEmpty()) return emptyList()
 
         return candidates.asSequence()
             .sortedWith(
                 compareBy<SettingLibraryEntry> { entry ->
-                    promptPositions[entry.promptPositionId]?.anchor?.ordinal ?: entry.position!!.ordinal
+                    entry.runtimePosition(promptPositions).ordinal
                 }
-                    .thenBy { entry -> promptPositions[entry.promptPositionId]?.order ?: Int.MIN_VALUE }
+                    .thenBy { entry -> entry.placementRank(promptPositions) }
+                    .thenBy { entry -> promptPositions[entry.promptPositionId]?.order ?: 0 }
                     .thenBy(SettingLibraryEntry::order)
                     .thenBy(SettingLibraryEntry::id),
             )
-            .take(MaxInjectionCount)
             .mapIndexed { runtimeOrder, entry ->
-                val runtimePosition = promptPositions[entry.promptPositionId]?.anchor ?: entry.position!!
+                val runtimePosition = entry.runtimePosition(promptPositions)
                 AgentContextInjection(
                     id = entry.id.take(MaxIdLength),
                     anchor = runtimePosition.toAgentAnchor(),
@@ -53,7 +58,7 @@ internal object CharacterSettingContextResolver {
                         augmentRoleplayOutputProtocolForImage(entry.content)
                     } else {
                         entry.content
-                    }.take(MaxEntryCharacters),
+                    },
                     // Entry order is local to its configured position. Several product positions
                     // can share one provider boundary, so carry the fully resolved placement order
                     // into the runtime instead of sorting those local order values against each other.
@@ -61,6 +66,24 @@ internal object CharacterSettingContextResolver {
                 )
             }
             .toList()
+    }
+
+    private fun SettingLibraryEntry.runtimePosition(
+        promptPositions: Map<String, SettingLibraryPromptPosition>,
+    ): SettingLibraryPosition {
+        if (triggerMode == SettingLibraryTriggerMode.Cache) return SettingLibraryPosition.InsertPoint1
+        return promptPositions[promptPositionId]?.anchor ?: requireNotNull(position)
+    }
+
+    private fun SettingLibraryEntry.placementRank(
+        promptPositions: Map<String, SettingLibraryPromptPosition>,
+    ): Int {
+        if (triggerMode == SettingLibraryTriggerMode.Cache) return 3
+        return when (promptPositions[promptPositionId]?.side) {
+            SettingLibraryPromptPositionSide.BeforeSettingPosition -> 0
+            null -> 1
+            SettingLibraryPromptPositionSide.AfterSettingPosition -> 2
+        }
     }
 
     internal fun SettingLibraryEntry.matchesKeywords(messages: List<ChatMessage>): Boolean {
@@ -178,13 +201,11 @@ internal object CharacterSettingContextResolver {
 
     private fun SettingLibraryPosition.toAgentAnchor(): AgentContextAnchor = when (this) {
         SettingLibraryPosition.Instructions -> AgentContextAnchor.Instructions
-        SettingLibraryPosition.AfterInstructions -> AgentContextAnchor.BeforeToolContext
-        SettingLibraryPosition.BeforeHistory -> AgentContextAnchor.BeforeHistory
-        SettingLibraryPosition.AfterHistory -> AgentContextAnchor.AfterHistory
-        SettingLibraryPosition.BeforeLatestUserInput -> AgentContextAnchor.BeforeLatestUserInput
-        SettingLibraryPosition.AfterLatestUserInput -> AgentContextAnchor.AfterLatestUserInput
-        SettingLibraryPosition.BeforeToolFlow -> AgentContextAnchor.BeforeToolFlow
-        SettingLibraryPosition.AfterToolFlow -> AgentContextAnchor.AfterToolFlow
+        SettingLibraryPosition.InsertPoint1 -> AgentContextAnchor.BeforeHistory
+        SettingLibraryPosition.InsertPoint2 -> AgentContextAnchor.BeforeHistory
+        SettingLibraryPosition.InsertPoint3 -> AgentContextAnchor.BeforeLatestUserInput
+        SettingLibraryPosition.InsertPoint4 -> AgentContextAnchor.BeforeToolFlow
+        SettingLibraryPosition.InsertPoint5 -> AgentContextAnchor.AfterToolFlow
     }
 
     private fun SettingLibraryInsertRole.toAgentRole(position: SettingLibraryPosition): AgentContextRole = when {
@@ -193,7 +214,5 @@ internal object CharacterSettingContextResolver {
         else -> AgentContextRole.User
     }
 
-    private const val MaxInjectionCount = 128
     private const val MaxIdLength = 128
-    private const val MaxEntryCharacters = 40_000
 }

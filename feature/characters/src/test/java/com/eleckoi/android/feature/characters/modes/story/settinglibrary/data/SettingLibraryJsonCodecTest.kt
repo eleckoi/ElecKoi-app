@@ -10,6 +10,7 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.S
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryKeywordCondition
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPosition
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPromptPosition
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPromptPositionSide
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryTriggerMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryVersion
 import org.junit.Assert.assertEquals
@@ -19,7 +20,8 @@ class SettingLibraryJsonCodecTest {
     private val promptPosition = SettingLibraryPromptPosition(
         id = "prompt-position-one",
         name = "工具完成后的提示词",
-        anchor = SettingLibraryPosition.AfterToolFlow,
+        anchor = SettingLibraryPosition.InsertPoint5,
+        side = SettingLibraryPromptPositionSide.BeforeSettingPosition,
         order = 1,
         createdAt = "created",
         updatedAt = "updated",
@@ -52,7 +54,7 @@ class SettingLibraryJsonCodecTest {
         keywordRecursionDepth = 2,
         triggerMode = SettingLibraryTriggerMode.AgentTool,
         enabled = false,
-        position = SettingLibraryPosition.BeforeHistory,
+        position = SettingLibraryPosition.InsertPoint1,
         promptPositionId = promptPosition.id,
         insertRole = SettingLibraryInsertRole.User,
         order = 6,

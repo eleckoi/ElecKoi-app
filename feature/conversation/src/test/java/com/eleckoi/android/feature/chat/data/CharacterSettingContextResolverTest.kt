@@ -12,6 +12,7 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.S
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryInsertRole
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPosition
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPromptPosition
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPromptPositionSide
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryTriggerMode
 import com.eleckoi.android.feature.chat.model.ChatMessage
 import com.eleckoi.android.feature.chat.model.MessageRole
@@ -77,11 +78,9 @@ class CharacterSettingContextResolverTest {
         assertEquals(
             listOf(
                 AgentContextAnchor.Instructions,
-                AgentContextAnchor.BeforeToolContext,
                 AgentContextAnchor.BeforeHistory,
-                AgentContextAnchor.AfterHistory,
+                AgentContextAnchor.BeforeHistory,
                 AgentContextAnchor.BeforeLatestUserInput,
-                AgentContextAnchor.AfterLatestUserInput,
                 AgentContextAnchor.BeforeToolFlow,
                 AgentContextAnchor.AfterToolFlow,
             ),
@@ -95,8 +94,6 @@ class CharacterSettingContextResolverTest {
                 AgentContextRole.User,
                 AgentContextRole.User,
                 AgentContextRole.Assistant,
-                AgentContextRole.User,
-                AgentContextRole.User,
             ),
             resolved.map { it.role },
         )
@@ -104,6 +101,69 @@ class CharacterSettingContextResolverTest {
             List(positions.size) { AgentContextActivation.Immediate },
             resolved.map { it.activation },
         )
+    }
+
+    @Test
+    fun `cache settings form a sorted region after insertion point one`() {
+        val library = SettingLibrary(
+            characterId = "character",
+            entries = listOf(
+                SettingLibraryEntry(
+                    id = "cache-2",
+                    content = "缓存二",
+                    triggerMode = SettingLibraryTriggerMode.Cache,
+                    order = 2,
+                ),
+                SettingLibraryEntry(
+                    id = "ordinary",
+                    content = "普通常驻",
+                    triggerMode = SettingLibraryTriggerMode.Always,
+                    position = SettingLibraryPosition.InsertPoint1,
+                    order = 1,
+                ),
+                SettingLibraryEntry(
+                    id = "cache-1",
+                    content = "缓存一",
+                    triggerMode = SettingLibraryTriggerMode.Cache,
+                    order = 1,
+                ),
+                SettingLibraryEntry(
+                    id = "after-cache",
+                    content = "缓存区后的常驻",
+                    triggerMode = SettingLibraryTriggerMode.Always,
+                    position = SettingLibraryPosition.InsertPoint2,
+                    order = 1,
+                ),
+            ),
+        )
+
+        val resolved = CharacterSettingContextResolver.resolve(library, emptyList())
+
+        assertEquals(listOf("ordinary", "cache-1", "cache-2", "after-cache"), resolved.map { it.id })
+        assertTrue(resolved.all { it.anchor == AgentContextAnchor.BeforeHistory })
+        assertTrue(resolved.all { it.role == AgentContextRole.User })
+    }
+
+    @Test
+    fun `automatic settings are not silently capped or shortened`() {
+        val longContent = "设".repeat(40_001)
+        val library = SettingLibrary(
+            characterId = "character",
+            entries = List(130) { index ->
+                SettingLibraryEntry(
+                    id = "entry-$index",
+                    content = if (index == 0) longContent else "正文-$index",
+                    triggerMode = SettingLibraryTriggerMode.Always,
+                    position = SettingLibraryPosition.InsertPoint1,
+                    order = index + 1,
+                )
+            },
+        )
+
+        val resolved = CharacterSettingContextResolver.resolve(library, emptyList())
+
+        assertEquals(130, resolved.size)
+        assertEquals(longContent, resolved.first().content)
     }
 
     @Test
@@ -244,14 +304,14 @@ class CharacterSettingContextResolverTest {
                     id = "after-history",
                     content = "隐藏工具时间线",
                     triggerMode = SettingLibraryTriggerMode.Always,
-                    position = SettingLibraryPosition.AfterHistory,
+                    position = SettingLibraryPosition.InsertPoint3,
                     order = Int.MAX_VALUE,
                 ),
                 SettingLibraryEntry(
                     id = "before-tool-flow",
                     content = "测试设定",
                     triggerMode = SettingLibraryTriggerMode.Always,
-                    position = SettingLibraryPosition.BeforeToolFlow,
+                    position = SettingLibraryPosition.InsertPoint4,
                     order = 1,
                 ),
             ),
@@ -262,7 +322,7 @@ class CharacterSettingContextResolverTest {
         assertEquals(listOf("after-history", "before-tool-flow"), resolved.map { it.id })
         assertEquals(listOf(1, 2), resolved.map { it.order })
         assertEquals(
-            listOf(AgentContextAnchor.AfterHistory, AgentContextAnchor.BeforeToolFlow),
+            listOf(AgentContextAnchor.BeforeLatestUserInput, AgentContextAnchor.BeforeToolFlow),
             resolved.map { it.anchor },
         )
     }
@@ -272,7 +332,7 @@ class CharacterSettingContextResolverTest {
         val customPosition = SettingLibraryPromptPosition(
             id = "after-tools-custom",
             name = "工具完成后的约束",
-            anchor = SettingLibraryPosition.AfterToolFlow,
+            anchor = SettingLibraryPosition.InsertPoint5,
             order = 1,
         )
         val library = SettingLibrary(
@@ -283,7 +343,7 @@ class CharacterSettingContextResolverTest {
                     id = "custom-entry",
                     content = "始终插入",
                     triggerMode = SettingLibraryTriggerMode.Always,
-                    position = SettingLibraryPosition.BeforeHistory,
+                    position = SettingLibraryPosition.InsertPoint1,
                     promptPositionId = customPosition.id,
                 ),
             ),
@@ -293,5 +353,44 @@ class CharacterSettingContextResolverTest {
 
         assertEquals(AgentContextAnchor.AfterToolFlow, resolved.single().anchor)
         assertEquals("custom-entry", resolved.single().id)
+    }
+
+    @Test
+    fun `preset positions surround the reserved setting position at the same anchor`() {
+        val before = SettingLibraryPromptPosition(
+            id = "preset-before",
+            name = "预设前置",
+            anchor = SettingLibraryPosition.InsertPoint2,
+            side = SettingLibraryPromptPositionSide.BeforeSettingPosition,
+        )
+        val after = SettingLibraryPromptPosition(
+            id = "preset-after",
+            name = "预设后置",
+            anchor = SettingLibraryPosition.InsertPoint2,
+            side = SettingLibraryPromptPositionSide.AfterSettingPosition,
+        )
+        fun resident(id: String, promptPositionId: String = "") = SettingLibraryEntry(
+            id = id,
+            content = id,
+            triggerMode = SettingLibraryTriggerMode.Always,
+            position = SettingLibraryPosition.InsertPoint2,
+            promptPositionId = promptPositionId,
+        )
+        val library = SettingLibrary(
+            characterId = "character",
+            promptPositions = listOf(after, before),
+            entries = listOf(
+                resident("setting"),
+                resident("preset-after-entry", after.id),
+                resident("preset-before-entry", before.id),
+            ),
+        )
+
+        val resolved = CharacterSettingContextResolver.resolve(library, emptyList())
+
+        assertEquals(
+            listOf("preset-before-entry", "setting", "preset-after-entry"),
+            resolved.map { it.id },
+        )
     }
 }

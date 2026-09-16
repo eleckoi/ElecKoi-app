@@ -3,7 +3,9 @@ package com.eleckoi.android.feature.characters.presets.model
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibrary
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryGroup
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPosition
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPromptPosition
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryTriggerMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isHiddenToolTimelineEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isHistoryCompactionEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.settingLibraryHiddenToolTimelineEntry
@@ -167,7 +169,6 @@ data class AgentPreset(
         val runtimePromptPositions = promptPositions.mapIndexed { index, position ->
             position.copy(
                 id = promptPositionId(position.id.ifBlank { "position-$index" }),
-                order = index + 1,
             )
         }
         return SettingLibrary(
@@ -211,11 +212,33 @@ fun AgentPreset.withRequiredBuiltIns(): AgentPreset {
     val hiddenTimelineEntry = settingLibraryHiddenToolTimelineEntry(
         entries.firstOrNull(SettingLibraryEntry::isHiddenToolTimelineEntry),
     )
+    val normalizedPromptPositions = promptPositions
+        .distinctBy(SettingLibraryPromptPosition::id)
+        .sortedWith(
+            compareBy<SettingLibraryPromptPosition> { it.anchor.ordinal }
+                .thenBy { it.side.ordinal }
+                .thenBy(SettingLibraryPromptPosition::order)
+                .thenBy(SettingLibraryPromptPosition::id),
+        )
+        .groupBy { it.anchor to it.side }
+        .flatMap { (_, positions) ->
+            positions.mapIndexed { index, position -> position.copy(order = index + 1) }
+        }
+    val positionsById = normalizedPromptPositions.associateBy(SettingLibraryPromptPosition::id)
+    val ordinaryEntries = entries.filterNot { candidate ->
+        candidate.isHistoryCompactionEntry() || candidate.isHiddenToolTimelineEntry()
+    }.map { entry ->
+        if (entry.triggerMode != SettingLibraryTriggerMode.Always) return@map entry
+        val customPosition = positionsById[entry.promptPositionId]
+        when {
+            customPosition != null -> entry.copy(position = customPosition.anchor)
+            entry.position == SettingLibraryPosition.Instructions -> entry.copy(promptPositionId = "")
+            else -> entry.copy(position = null, promptPositionId = "", enabled = false)
+        }
+    }
     return copy(
-        entries = listOf(compactionEntry, hiddenTimelineEntry) + entries.filterNot { candidate ->
-                candidate.isHistoryCompactionEntry() ||
-                candidate.isHiddenToolTimelineEntry()
-        },
+        entries = listOf(compactionEntry, hiddenTimelineEntry) + ordinaryEntries,
+        promptPositions = normalizedPromptPositions,
         toolConfiguration = toolConfiguration.normalized(),
         roleplayPlan = roleplayPlan.normalized(),
     )
