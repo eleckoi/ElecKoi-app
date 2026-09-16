@@ -131,7 +131,7 @@ internal class DeepSeekRuntimeProcessSpecFactory(
             add("DSH_CORDIS_CONFIG=$guestConfig")
             add("DSH_RIPGREP_PATH=$GuestTools/$RipgrepRelativePath")
             add("DSH_LANDLOCK_PATH=${RuntimeGuestLayout.LandlockLauncherGuestPath}")
-            add("DSH_SYSTEM_PROMPT=${launchSpec.systemPrompt.ifBlank { DefaultSystemPrompt }}")
+            add("DSH_SYSTEM_PROMPT=${launchSpec.systemPrompt}")
             add("ELECKOI_PROVIDER_BASE_URL=${launchSpec.providerBaseUrl}")
             add("ELECKOI_HOST_TOOLS_URL=$hostToolsUrl")
             add("ELECKOI_HOST_TOOL_CATALOG=${launchSpec.hostToolCatalogJson}")
@@ -221,7 +221,6 @@ internal class DeepSeekRuntimeProcessSpecFactory(
         const val GuestVarTemp = "/var/tmp"
         const val InertLoopbackCredential = "eleckoi-local-route"
         const val DefaultContextWindow = 262_144
-        const val DefaultSystemPrompt = "You are a coding agent running inside ElecKoi."
         const val MaxModelChars = 512
         const val MaxSystemPromptChars = 128 * 1024
         const val MaxHostToolCatalogChars = 512 * 1024

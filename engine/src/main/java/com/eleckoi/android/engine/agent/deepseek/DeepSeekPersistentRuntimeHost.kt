@@ -13,6 +13,7 @@ import com.eleckoi.android.engine.agent.api.AgentToolContextBlockIds
 import com.eleckoi.android.engine.agent.api.AgentToolDefinition
 import com.eleckoi.android.engine.agent.deepseek.protocol.DeepSeekHarnessJsonRpcClient
 import com.eleckoi.android.engine.agent.deepseek.protocol.LocalRuntimeDeepSeekTransport
+import com.eleckoi.android.engine.agent.deepseek.trajectory.DshTrajectoryContextStore
 import com.eleckoi.android.engine.generation.model.ModelConfig
 import com.eleckoi.android.engine.generation.model.configuredAutoCompactTokenLimit
 import com.eleckoi.android.engine.generation.model.configuredContextWindowTokens
@@ -61,6 +62,7 @@ class DeepSeekPersistentRuntimeHost(
 ) : DeepSeekSessionBackendFactory, AutoCloseable {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val lifecycleMutex = Mutex()
+    private val trajectoryContextStore = DshTrajectoryContextStore(runtimePaths)
     private val toolDefinitions = linkedMapOf<String, AgentToolDefinition>()
     private var running: RunningHost? = null
 
@@ -152,6 +154,7 @@ class DeepSeekPersistentRuntimeHost(
                 scope = scope,
                 toolRequestFilter = toolRequestFilter,
                 deepSeekFileUploadIndex = runtimePaths.deepSeekFileUploadIndex,
+                recordTrajectoryContext = trajectoryContextStore::recordTurn,
             )
             val endpoint = adapter.start()
             val transport = LocalRuntimeDeepSeekTransport(
@@ -387,8 +390,7 @@ class DeepSeekPersistentRuntimeHost(
         const val ProviderRoute = "eleckoi-bridge"
         const val RuntimeWorkspace = "/workspace"
         const val UnusedRouteCredential = "unused-local-route"
-        const val SharedSystemPrompt =
-            "You are an AI agent running inside ElecKoi."
+        const val SharedSystemPrompt = ""
     }
 }
 

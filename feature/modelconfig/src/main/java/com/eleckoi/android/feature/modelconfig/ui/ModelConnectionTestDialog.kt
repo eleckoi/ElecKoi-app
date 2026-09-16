@@ -161,7 +161,7 @@ internal fun ModelConnectionTestDialog(
                         state.formatFallbackSuggested -> "当前接口格式未通过测试，请尝试其他接口格式。"
                         state.completionMessage.isNotBlank() -> state.completionMessage
                         state.toolsSupported == true -> "这个配置支持工具调用，可以用于 Agent。"
-                        state.toolsSupported == false -> "这个配置不支持工具调用，Agent 功能会失败，建议换一个反代。"
+                        state.toolsSupported == false -> "这个配置不支持工具调用，Agent 功能会失败，建议更换 API 地址或接口格式。"
                         else -> "检测未完成，工具调用能力未知。"
                     },
                     color = if (state.toolsSupported == false) ElecKoiDanger else appearance.mobileMuted,

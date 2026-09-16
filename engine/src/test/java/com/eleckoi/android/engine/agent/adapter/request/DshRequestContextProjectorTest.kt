@@ -20,6 +20,32 @@ import org.junit.Test
 
 class DshRequestContextProjectorTest {
     @Test
+    fun `removes Harness system block and keeps only product system injections`() {
+        val request = buildJsonObject {
+            put("provider", "eleckoi-bridge")
+            put("model", "route")
+            put("sessionId", "session-1")
+            put("system", "DSH coding identity and every process tool")
+            put("messages", JsonArray(listOf(message("current", "user", "现在的问题", "user"))))
+        }
+        val context = context(
+            injections = listOf(
+                injection(
+                    id = "product-system",
+                    anchor = AgentContextAnchor.Instructions,
+                    role = AgentContextRole.System,
+                    content = "角色系统指令",
+                ),
+            ),
+        )
+
+        val projected = DshRequestContextProjector.project(request, context, 1)
+
+        assertEquals("角色系统指令", projected.string("system"))
+        assertFalse(projected.toString().contains("DSH coding identity"))
+    }
+
+    @Test
     fun `keeps same-role insertions separate until pi-ai serializes the target protocol`() {
         val request = dshRequest(message("current", "user", "现在的问题", "user"))
         val context = context(

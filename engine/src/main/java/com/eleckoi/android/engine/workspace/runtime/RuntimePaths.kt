@@ -20,6 +20,7 @@ class RuntimePaths(context: Context) {
     val hostResolverConfig: File = File(hostNetworkRoot, "resolv.conf")
     val nativeLibraryRoot: File = File(requireNotNull(context.applicationInfo.nativeLibraryDir))
     private val runtimeSessionsRoot = File(runtimeRoot, "sessions")
+    private val deepSeekTrajectoryContextRoot = File(runtimeRoot, "state/dsh_trajectory_context")
     private val workspaceDeepSeekHomesRoot = File(runtimeRoot, "state/workspace_dsh_homes")
     private val creatorWorkspaceStorageRoot = File(context.filesDir, "creator_workspaces")
     val persistentDeepSeekWorkspaceId: String = PersistentHarnessWorkspaceId
@@ -33,6 +34,7 @@ class RuntimePaths(context: Context) {
             hostTemp,
             hostNetworkRoot,
             runtimeSessionsRoot,
+            deepSeekTrajectoryContextRoot,
         ).forEach(File::mkdirs)
     }
 
@@ -112,11 +114,26 @@ class RuntimePaths(context: Context) {
         return null
     }
 
+    /** App-owned context activations that DSH cannot persist because they are projected later. */
+    fun persistentDeepSeekTrajectoryContextLog(sessionId: String): File {
+        require(DeepSeekSessionId.matches(sessionId)) { "DSH session 编号无效" }
+        val root = deepSeekTrajectoryContextRoot.canonicalFile
+        require(root.isDirectory || root.mkdirs()) { "无法创建 DSH 上下文轨迹目录" }
+        val target = File(root, "$sessionId.jsonl").canonicalFile
+        require(target.parentFile == root) { "DSH 上下文轨迹路径越界" }
+        return target
+    }
+
     /** Deletes exact, product-declared obsolete DSH sessions without following filesystem links. */
     fun deletePersistentDeepSeekSessions(sessionIds: Set<String>) {
         if (sessionIds.isEmpty()) return
         sessionIds.forEach { sessionId ->
             require(DeepSeekSessionId.matches(sessionId)) { "DSH session 编号无效" }
+            val contextLog = persistentDeepSeekTrajectoryContextLog(sessionId)
+            if (contextLog.exists()) {
+                require(!Files.isSymbolicLink(contextLog.toPath())) { "DSH 上下文轨迹文件不能是符号链接" }
+                Files.deleteIfExists(contextLog.toPath())
+            }
         }
         val sessions = File(workspaceDeepSeekHome(persistentDeepSeekWorkspaceId), "sessions").canonicalFile
         if (!sessions.isDirectory) return

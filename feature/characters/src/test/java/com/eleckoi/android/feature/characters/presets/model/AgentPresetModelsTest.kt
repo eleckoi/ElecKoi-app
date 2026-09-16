@@ -4,6 +4,7 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.S
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryGroup
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.DefaultHiddenToolTimelineContent
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.DefaultHistoryCompactionContent
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.HiddenToolTimelinePromptPositionId
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryInsertRole
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPosition
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPromptPosition
@@ -40,10 +41,15 @@ class AgentPresetModelsTest {
         val hiddenTimeline = preset.entries.first { it.isHiddenToolTimelineEntry() }
         assertEquals(DefaultHiddenToolTimelineContent, hiddenTimeline.content)
         assertEquals(SettingLibraryInsertRole.User, hiddenTimeline.insertRole)
-        assertEquals(SettingLibraryPosition.InsertPoint5, hiddenTimeline.position)
-        assertEquals("", hiddenTimeline.promptPositionId)
+        assertEquals(SettingLibraryPosition.InsertPoint4, hiddenTimeline.position)
+        assertEquals(HiddenToolTimelinePromptPositionId, hiddenTimeline.promptPositionId)
         assertEquals(1, hiddenTimeline.order)
-        assertTrue(preset.promptPositions.isEmpty())
+        val hiddenTimelinePosition = preset.promptPositions.single()
+        assertEquals(HiddenToolTimelinePromptPositionId, hiddenTimelinePosition.id)
+        assertEquals("隐藏工具时间线", hiddenTimelinePosition.name)
+        assertEquals(SettingLibraryPosition.InsertPoint4, hiddenTimelinePosition.anchor)
+        assertEquals(SettingLibraryPromptPositionSide.BeforeSettingPosition, hiddenTimelinePosition.side)
+        assertEquals(1, hiddenTimelinePosition.order)
     }
 
     @Test
@@ -54,6 +60,7 @@ class AgentPresetModelsTest {
                     if (entry.isHiddenToolTimelineEntry()) {
                         entry.copy(
                             position = SettingLibraryPosition.InsertPoint1,
+                            promptPositionId = "",
                             insertRole = SettingLibraryInsertRole.Assistant,
                             order = 4,
                         )
@@ -68,6 +75,73 @@ class AgentPresetModelsTest {
         assertEquals(SettingLibraryPosition.InsertPoint1, hiddenTimeline.position)
         assertEquals(SettingLibraryInsertRole.Assistant, hiddenTimeline.insertRole)
         assertEquals(4, hiddenTimeline.order)
+    }
+
+    @Test
+    fun `legacy hidden timeline receives an editable position below latest user input`() {
+        val normalized = AgentPreset(
+            id = "legacy",
+            name = "旧预设",
+            entries = listOf(
+                SettingLibraryEntry(
+                    id = "built-in-hidden-tool-timeline",
+                    title = "隐藏工具时间线",
+                    triggerMode = SettingLibraryTriggerMode.Always,
+                    position = SettingLibraryPosition.InsertPoint5,
+                    insertRole = SettingLibraryInsertRole.User,
+                ),
+            ),
+        ).withRequiredBuiltIns()
+
+        val hiddenTimeline = normalized.entries.single { it.isHiddenToolTimelineEntry() }
+        val position = normalized.promptPositions.single()
+        assertEquals(HiddenToolTimelinePromptPositionId, hiddenTimeline.promptPositionId)
+        assertEquals(SettingLibraryPosition.InsertPoint4, hiddenTimeline.position)
+        assertEquals(HiddenToolTimelinePromptPositionId, position.id)
+        assertEquals(SettingLibraryPosition.InsertPoint4, position.anchor)
+        assertEquals(SettingLibraryPromptPositionSide.BeforeSettingPosition, position.side)
+    }
+
+    @Test
+    fun `hidden timeline position remains user editable and is not recreated after deletion`() {
+        val customized = defaultAgentPreset().let { preset ->
+            preset.copy(
+                promptPositions = preset.promptPositions.map { position ->
+                    position.copy(
+                        name = "模型工具记录",
+                        anchor = SettingLibraryPosition.InsertPoint2,
+                        side = SettingLibraryPromptPositionSide.AfterSettingPosition,
+                    )
+                },
+            )
+        }.withRequiredBuiltIns()
+
+        val customPosition = customized.promptPositions.single()
+        val customizedEntry = customized.entries.single { it.isHiddenToolTimelineEntry() }
+        assertEquals("模型工具记录", customPosition.name)
+        assertEquals(SettingLibraryPosition.InsertPoint2, customPosition.anchor)
+        assertEquals(SettingLibraryPromptPositionSide.AfterSettingPosition, customPosition.side)
+        assertEquals(SettingLibraryPosition.InsertPoint2, customizedEntry.position)
+
+        val deleted = customized.copy(
+            promptPositions = emptyList(),
+            entries = customized.entries.map { entry ->
+                if (entry.isHiddenToolTimelineEntry()) {
+                    entry.copy(
+                        enabled = false,
+                        position = null,
+                        promptPositionId = "",
+                    )
+                } else {
+                    entry
+                }
+            },
+        ).withRequiredBuiltIns()
+        val deletedEntry = deleted.entries.single { it.isHiddenToolTimelineEntry() }
+        assertTrue(deleted.promptPositions.isEmpty())
+        assertEquals(false, deletedEntry.enabled)
+        assertEquals(null, deletedEntry.position)
+        assertEquals("", deletedEntry.promptPositionId)
     }
 
     @Test

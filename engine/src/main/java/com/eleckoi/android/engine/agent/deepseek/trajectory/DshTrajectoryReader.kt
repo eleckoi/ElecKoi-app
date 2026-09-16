@@ -14,6 +14,7 @@ import kotlinx.serialization.json.jsonPrimitive
 /** Reads DSH's authoritative session log without routing its contents through the chat ledger. */
 class DshTrajectoryReader(context: Context) {
     private val paths = RuntimePaths(context.applicationContext)
+    private val contextStore = DshTrajectoryContextStore(paths)
 
     fun read(
         runtimeThreadId: String,
@@ -23,7 +24,11 @@ class DshTrajectoryReader(context: Context) {
         val log = paths.persistentDeepSeekSessionLog(runtimeThreadId)
             ?: return DshTrajectoryPage.empty(runtimeThreadId)
         val decoded = readLog(log, runtimeThreadId)
-        val projection = DshTrajectoryProjector.project(decoded.events, decoded.header)
+        val projection = DshTrajectoryProjector.project(
+            input = decoded.events,
+            header = decoded.header,
+            contextActivations = contextStore.read(runtimeThreadId),
+        )
         val eligible = options.beforeIndex?.let { before ->
             projection.records.filter { record -> record.index < before }
         } ?: projection.records

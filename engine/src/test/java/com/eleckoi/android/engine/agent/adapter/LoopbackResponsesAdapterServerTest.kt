@@ -46,6 +46,50 @@ import org.junit.Test
 
 class LoopbackResponsesAdapterServerTest {
     @Test
+    fun `records projected context only after DSH starts the runtime turn`() {
+        val captured = mutableListOf<Triple<String, String, List<AgentContextInjection>>>()
+        val server = LoopbackResponsesAdapterServer(
+            modelConfig = ModelConfig(apiKey = "unused", model = "route"),
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+            recordTrajectoryContext = { sessionId, turnId, injections ->
+                captured += Triple(sessionId, turnId, injections)
+            },
+        )
+        val owner = server.registerSessionRoute(
+            routeKey = "trajectory-session",
+            routeModelConfig = ModelConfig(apiKey = "secret", model = "model"),
+            routeEnabledToolGroupIds = emptySet(),
+            routeCaptureProviderRequests = false,
+        )
+        val injection = AgentContextInjection(
+            id = "cache-setting",
+            anchor = AgentContextAnchor.BeforeHistory,
+            role = AgentContextRole.User,
+            activation = AgentContextActivation.Immediate,
+            content = "稳定上下文",
+        )
+
+        val captureId = server.beginSessionTurn(
+            routeKey = "trajectory-session",
+            ownerToken = owner,
+            userMessage = "你好",
+            turnContext = AgentTurnRequestContext(
+                userMessage = "你好",
+                history = emptyList(),
+                injections = listOf(injection),
+                historyProjection = AgentHistoryProjection.Native,
+            ),
+        )
+
+        assertTrue(captured.isEmpty())
+        server.bindSessionTurn("trajectory-session", owner, captureId, "trajectory-session:1")
+        assertEquals(
+            listOf(Triple("trajectory-session", "trajectory-session:1", listOf(injection))),
+            captured,
+        )
+    }
+
+    @Test
     fun `prepares Claude as native pi-ai protocol after DSH context projection`() = runBlocking {
         val server = LoopbackResponsesAdapterServer(
             modelConfig = ModelConfig(apiKey = "unused", model = "route"),
@@ -662,6 +706,7 @@ class LoopbackResponsesAdapterServerTest {
                 {"role":"user","parts":[{"text":"answer now"}]}
               ],
               "generationConfig":{"maxOutputTokens":512},
+              "store":true,
               "tools":[{"functionDeclarations":[
                 {"name":"weather","description":"lookup","parameters":{"type":"OBJECT","properties":{"city":{"type":"STRING"}}}},
                 {"name":"eleckoi_internal_route_${prepared.string("requestToken")}","description":"internal","parameters":{"type":"OBJECT","properties":{}}}
@@ -678,7 +723,9 @@ class LoopbackResponsesAdapterServerTest {
             upstreamRequest.requestLine,
         )
         assertEquals("google-secret", upstreamRequest.headers["x-goog-api-key"])
-        assertTrue("model" !in ElecKoiJson.parseToJsonElement(upstreamRequest.body).jsonObject)
+        val upstreamBody = ElecKoiJson.parseToJsonElement(upstreamRequest.body).jsonObject
+        assertTrue("model" !in upstreamBody)
+        assertTrue("store" !in upstreamBody)
         assertFalse(upstreamRequest.body.contains("eleckoi_internal_route_"))
         assertTrue(upstreamRequest.body.contains("\"name\":\"weather\""))
         assertTrue(upstreamRequest.body.contains("\"functionCall\""))

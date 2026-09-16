@@ -204,13 +204,20 @@ internal class DshProviderBridgeEndpoint(
             request = request,
             format = prepared.format,
             modelConfig = config,
-        )
+        ).withProviderCompatibility(prepared.format)
         return buildJsonObject {
             projected.forEach { (key, value) -> put(key, value) }
             if (prepared.format != ProviderWireFormat.GoogleGemini) {
                 put("model", config.model.trim())
             }
         }
+    }
+
+    private fun JsonObject.withProviderCompatibility(format: ProviderWireFormat): JsonObject {
+        if (format != ProviderWireFormat.GoogleGemini || "store" !in this) return this
+        // ElecKoi owns conversation persistence. Some Gemini Developer API deployments still
+        // reject this optional logging field, so it must not block an otherwise valid request.
+        return JsonObject(this - "store")
     }
 
     private fun com.eleckoi.android.engine.generation.model.ModelConfig.piApiFor(

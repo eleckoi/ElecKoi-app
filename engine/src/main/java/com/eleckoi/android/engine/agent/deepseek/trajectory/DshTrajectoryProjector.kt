@@ -26,10 +26,15 @@ object DshTrajectoryProjector {
     fun project(
         input: List<JsonObject>,
         header: JsonObject = JsonObject(emptyMap()),
+    ): DshTrajectoryProjection = project(input, header, emptyList())
+
+    internal fun project(
+        input: List<JsonObject>,
+        header: JsonObject = JsonObject(emptyMap()),
+        contextActivations: List<DshTrajectoryContextActivation>,
     ): DshTrajectoryProjection {
         val events = input.mapIndexed(::normalizeEvent)
         val records = mutableListOf<MutableRecord>()
-        val initialSystemRecords = mutableListOf<MutableRecord>()
         val stepStarts = mutableMapOf<String, Long>()
         val toolRecords = mutableMapOf<String, MutableRecord>()
         val subtoolRecords = mutableMapOf<String, MutableRecord>()
@@ -37,7 +42,6 @@ object DshTrajectoryProjector {
         val approvalRecords = mutableMapOf<String, MutableRecord>()
         val pendingRequests = mutableListOf<PendingRequest>()
         var requestCount = 0
-        var previousPromptSignature: String? = null
         var currentRequestHeader: RequestHeader? = null
         var activeTurn: Int? = null
         var activeStep: Int? = null
@@ -118,22 +122,14 @@ object DshTrajectoryProjector {
             when (type) {
                 "request/header" -> {
                     val requestHeader = data.objectValue("header")
-                    val system = requestHeader.text("system")
+                    val visibleRequestHeader = requestHeader.withoutKey("system")
                     val reason = data.text("reason")
-                    val config = requestHeader.objectValue("config")
-                    val promptSignature = pretty(
-                        buildJsonObject {
-                            put("system", system)
-                            put("tools", requestHeader["tools"] as? JsonArray ?: JsonArray(emptyList()))
-                        },
-                    )
-                    val promptChanged = previousPromptSignature == null ||
-                        promptSignature != previousPromptSignature
+                    val config = visibleRequestHeader.objectValue("config")
                     val activeRequestHeader = RequestHeader(
                         reason = reason.ifBlank { "request/header" },
                         provider = config.text("provider"),
                         model = config.text("model"),
-                        detail = pretty(requestHeader),
+                        detail = pretty(visibleRequestHeader),
                     )
                     currentRequestHeader = activeRequestHeader
                     pendingRequests.asReversed().firstOrNull { pending ->
@@ -146,27 +142,10 @@ object DshTrajectoryProjector {
                         request.rawJson = pretty(
                             buildJsonArray {
                                 add(parseJson(request.rawJson))
-                                add(event.raw)
+                                add(event.raw.withRequestHeader(visibleRequestHeader))
                             },
                         )
                     }
-                    if (promptChanged) {
-                        val initial = previousPromptSignature == null
-                        val title = if (initial) "初始系统提示词" else "系统提示词更新"
-                        val item = baseRecord(
-                            event = event,
-                            kind = DshTrajectoryRecordKind.System,
-                            title = title,
-                            preview = preview(system.ifBlank { title }),
-                            source = reason.ifBlank { "request/header" },
-                            input = system,
-                            detail = pretty(requestHeader),
-                            turn = turn,
-                            step = step,
-                        )
-                        if (initial) initialSystemRecords += item else records += item
-                    }
-                    previousPromptSignature = promptSignature
                 }
 
                 "user/message" -> {
@@ -408,7 +387,7 @@ object DshTrajectoryProjector {
             }
         }
 
-        val orderedRecords = initialSystemRecords + records
+        val orderedRecords = mergeContextActivations(records, contextActivations)
         val times = events.mapNotNull(NormalizedEvent::time)
         val createdAt = header.nonnegativeLong("createdAt")
         return DshTrajectoryProjection(
@@ -416,6 +395,98 @@ object DshTrajectoryProjector {
             startedAtMillis = createdAt ?: times.firstOrNull(),
             completedAtMillis = times.lastOrNull() ?: createdAt,
         )
+    }
+
+    private fun mergeContextActivations(
+        source: List<MutableRecord>,
+        activations: List<DshTrajectoryContextActivation>,
+    ): List<MutableRecord> {
+        if (source.isEmpty() || activations.isEmpty()) return source
+        val knownTurns = source.mapNotNullTo(hashSetOf(), MutableRecord::turn)
+
+        val result = source.toMutableList()
+        activations.sortedBy(DshTrajectoryContextActivation::capturedAtMillis).forEach { activation ->
+            val turn = activation.turn.takeIf(knownTurns::contains) ?: return@forEach
+            val turnStep = result.firstOrNull { it.turn == turn }?.step
+            val contextRecords = activation.entries.mapIndexed { index, entry ->
+                val raw = buildJsonObject {
+                    put("type", "eleckoi/context")
+                    put("time", activation.capturedAtMillis)
+                    put("data", buildJsonObject {
+                        put("id", entry.id)
+                        put("title", entry.title)
+                        put("source", entry.source)
+                        put("anchor", entry.anchor)
+                        put("role", entry.role)
+                        put("content", entry.content)
+                    })
+                }
+                MutableRecord(
+                    id = "eleckoi/context:${activation.capturedAtMillis}:${entry.key}",
+                    seq = Long.MIN_VALUE + index,
+                    type = "eleckoi/context",
+                    kind = DshTrajectoryRecordKind.Context,
+                    title = entry.title,
+                    preview = preview(entry.content),
+                    source = entry.source,
+                    input = entry.content,
+                    output = "",
+                    detail = pretty(raw.objectValue("data")),
+                    rawJson = pretty(raw),
+                    timeMillis = activation.capturedAtMillis,
+                    durationMillis = null,
+                    turn = turn,
+                    step = turnStep,
+                    status = DshTrajectoryRecordStatus.Complete,
+                )
+            }
+            insertContextRecords(result, turn, contextRecords, activation.entries)
+        }
+        return result
+    }
+
+    private fun insertContextRecords(
+        records: MutableList<MutableRecord>,
+        turn: Int,
+        contexts: List<MutableRecord>,
+        entries: List<DshTrajectoryContextEntry>,
+    ) {
+        val grouped = contexts.zip(entries).groupBy { (_, entry) ->
+            when (entry.anchor) {
+                "afterHistory", "beforeLatestUserInput" -> ContextPlacement.BeforeUser
+                "afterLatestUserInput", "beforeToolFlow" -> ContextPlacement.AfterUser
+                "afterToolFlow" -> ContextPlacement.AfterTools
+                else -> ContextPlacement.BeforeDialogue
+            }
+        }
+        fun insert(placement: ContextPlacement, index: Int) {
+            val values = grouped[placement].orEmpty().map { it.first }
+            if (values.isNotEmpty()) records.addAll(index.coerceIn(0, records.size), values)
+        }
+
+        val firstTurnIndex = records.indexOfFirst { it.turn == turn }.takeIf { it >= 0 } ?: return
+        insert(ContextPlacement.BeforeDialogue, firstTurnIndex)
+
+        val currentUserIndex = records.indexOfLast {
+            it.turn == turn && it.kind == DshTrajectoryRecordKind.User
+        }.takeIf { it >= 0 } ?: firstTurnIndex
+        insert(ContextPlacement.BeforeUser, currentUserIndex)
+
+        val lastUserIndex = records.indexOfLast { it.turn == turn && it.kind == DshTrajectoryRecordKind.User }
+            .takeIf { it >= 0 }
+            ?: records.indexOfLast { it.turn == turn && it.kind == DshTrajectoryRecordKind.Context }
+                .takeIf { it >= 0 }
+            ?: firstTurnIndex
+        insert(ContextPlacement.AfterUser, lastUserIndex + 1)
+
+        val lastToolIndex = records.indexOfLast { it.turn == turn && it.kind == DshTrajectoryRecordKind.Tool }
+            .takeIf { it >= 0 }
+            ?: records.indexOfLast {
+                it.turn == turn &&
+                    (it.kind == DshTrajectoryRecordKind.User || it.kind == DshTrajectoryRecordKind.Context)
+            }.takeIf { it >= 0 }
+            ?: firstTurnIndex
+        insert(ContextPlacement.AfterTools, lastToolIndex + 1)
     }
 
     private fun normalizeEvent(index: Int, event: JsonObject) = NormalizedEvent(
@@ -457,6 +528,13 @@ object DshTrajectoryProjector {
         step = step,
         status = status,
     )
+}
+
+private enum class ContextPlacement {
+    BeforeDialogue,
+    BeforeUser,
+    AfterUser,
+    AfterTools,
 }
 
 private data class NormalizedEvent(
@@ -640,6 +718,22 @@ private fun pretty(value: JsonElement): String =
 private fun stepKey(turn: Int, step: Int): String = "$turn\u0000$step"
 
 private fun JsonObject.objectValue(key: String): JsonObject = this[key] as? JsonObject ?: JsonObject(emptyMap())
+private fun JsonObject.withoutKey(key: String): JsonObject = buildJsonObject {
+    this@withoutKey.forEach { (name, value) -> if (name != key) put(name, value) }
+}
+private fun JsonObject.withRequestHeader(header: JsonObject): JsonObject = buildJsonObject {
+    this@withRequestHeader.forEach { (name, value) ->
+        if (name != "data") {
+            put(name, value)
+        } else {
+            put("data", buildJsonObject {
+                this@withRequestHeader.objectValue("data").forEach { (dataName, dataValue) ->
+                    put(dataName, if (dataName == "header") header else dataValue)
+                }
+            })
+        }
+    }
+}
 private fun JsonObject.text(key: String): String = (this[key] as? JsonPrimitive)?.contentOrNull.orEmpty()
 private fun JsonObject.boolean(key: String): Boolean? = (this[key] as? JsonPrimitive)?.booleanOrNull
 private fun JsonObject.nonnegativeLong(key: String): Long? =

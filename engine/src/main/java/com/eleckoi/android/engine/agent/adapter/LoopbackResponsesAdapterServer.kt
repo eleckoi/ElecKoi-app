@@ -9,6 +9,7 @@ import com.eleckoi.android.engine.agent.adapter.request.AgentTurnRequestContext
 import com.eleckoi.android.foundation.serialization.ElecKoiJson
 import com.eleckoi.android.engine.agent.api.AgentDynamicTool
 import com.eleckoi.android.engine.agent.api.AgentDynamicToolResult
+import com.eleckoi.android.engine.agent.api.AgentContextInjection
 import com.eleckoi.android.engine.generation.model.ModelConfig
 import com.eleckoi.android.engine.generation.model.ModelApiFormat
 import com.eleckoi.android.engine.generation.model.configuredMaxOutputTokens
@@ -63,11 +64,13 @@ class LoopbackResponsesAdapterServer(
     private val toolRequestFilter: (Set<String>, JsonObject) -> JsonObject = { _, request -> request },
     private val dynamicTools: List<AgentDynamicTool> = emptyList(),
     deepSeekFileUploadIndex: File? = null,
+    private val recordTrajectoryContext: (String, String, List<AgentContextInjection>) -> Unit = { _, _, _ -> },
 ) {
     private val _defaultTurnFailures = MutableSharedFlow<String>(extraBufferCapacity = 4)
     val defaultTurnFailures: Flow<String> = _defaultTurnFailures.asSharedFlow()
     private val sockets = ConcurrentHashMap.newKeySet<Socket>()
     private val upstreams = ConcurrentHashMap.newKeySet<Call>()
+    private val pendingTrajectoryContexts = ConcurrentHashMap<String, List<AgentContextInjection>>()
     private var serverSocket: ServerSocket? = null
     private var acceptJob: Job? = null
     private var endpoint: ResponsesAdapterEndpoint? = null
@@ -114,6 +117,7 @@ class LoopbackResponsesAdapterServer(
     }
 
     suspend fun stop() {
+        pendingTrajectoryContexts.clear()
         routeRegistry.close()
         providerBridgeEndpoint.close()
         withContext(Dispatchers.IO) {
@@ -185,6 +189,7 @@ class LoopbackResponsesAdapterServer(
     }
 
     fun unregisterSessionRoute(routeKey: String, ownerToken: String) {
+        pendingTrajectoryContexts.remove(routeKey)
         routeRegistry.unregisterSessionRoute(routeKey, ownerToken)
     }
 
@@ -205,7 +210,15 @@ class LoopbackResponsesAdapterServer(
         ownerToken: String,
         userMessage: String,
         turnContext: AgentTurnRequestContext? = null,
-    ): String = routeRegistry.beginSessionTurn(routeKey, ownerToken, userMessage, turnContext)
+    ): String {
+        val captureId = routeRegistry.beginSessionTurn(routeKey, ownerToken, userMessage, turnContext)
+        if (turnContext == null) {
+            pendingTrajectoryContexts.remove(routeKey)
+        } else {
+            pendingTrajectoryContexts[routeKey] = turnContext.injections
+        }
+        return captureId
+    }
 
     fun bindSessionTurn(
         routeKey: String,
@@ -214,9 +227,13 @@ class LoopbackResponsesAdapterServer(
         runtimeTurnId: String,
     ) {
         routeRegistry.bindSessionTurn(routeKey, ownerToken, captureId, runtimeTurnId)
+        pendingTrajectoryContexts.remove(routeKey)?.let { injections ->
+            recordTrajectoryContext(routeKey, runtimeTurnId, injections)
+        }
     }
 
     fun endSessionTurn(routeKey: String, ownerToken: String) {
+        pendingTrajectoryContexts.remove(routeKey)
         routeRegistry.endSessionTurn(routeKey, ownerToken)
     }
 

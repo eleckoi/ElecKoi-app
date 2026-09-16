@@ -22,7 +22,12 @@ internal object DshRequestContextProjector {
         turnContext: AgentTurnRequestContext,
         requestIndex: Int,
     ): JsonObject {
-        val originalMessages = request["messages"] as? JsonArray ?: return request
+        // ElecKoi owns the complete model context for every product session. DSH's generated
+        // system block describes process-wide coding tools, including tools this route has not
+        // enabled, so forwarding it would waste tokens and compete with product instructions.
+        // Capability probes do not enter this projector and keep their isolated Harness context.
+        val baseRequest = request.withoutHarnessSystem()
+        val originalMessages = baseRequest["messages"] as? JsonArray ?: return baseRequest
         val activeInjections = turnContext.injections
             .filter { injection -> injection.isActive(originalMessages, requestIndex) }
             .sortedWith(compareBy(AgentContextInjection::order, AgentContextInjection::id))
@@ -31,7 +36,7 @@ internal object DshRequestContextProjector {
         val currentUserIndex = originalMessages.indexOfLast { message ->
             message.matchesCurrentUserMessage(turnContext.userMessage)
         }
-        if (currentUserIndex < 0) return request.withSystemInjections(instructionInjections)
+        if (currentUserIndex < 0) return baseRequest.withSystemInjections(instructionInjections)
 
         val messages = originalMessages.toMutableList()
         val firstDialogue = messages.indexOfFirst { it.isCleanDialogueMessage() }
@@ -59,9 +64,15 @@ internal object DshRequestContextProjector {
             }
         }
         return buildJsonObject {
-            request.forEach { (key, value) -> put(key, value) }
+            baseRequest.forEach { (key, value) -> put(key, value) }
             put("messages", JsonArray(messages))
         }.withSystemInjections(instructionInjections)
+    }
+
+    private fun JsonObject.withoutHarnessSystem(): JsonObject = buildJsonObject {
+        this@withoutHarnessSystem.forEach { (key, value) ->
+            if (key != "system") put(key, value)
+        }
     }
 
     private fun JsonObject.withSystemInjections(

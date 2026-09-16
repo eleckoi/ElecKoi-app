@@ -142,6 +142,19 @@ class CharacterSettingContextResolverTest {
         assertEquals(listOf("ordinary", "cache-1", "cache-2", "after-cache"), resolved.map { it.id })
         assertTrue(resolved.all { it.anchor == AgentContextAnchor.BeforeHistory })
         assertTrue(resolved.all { it.role == AgentContextRole.User })
+        assertEquals(
+            listOf(
+                "设定 · 未命名设定",
+                "缓存设定 · 未命名设定",
+                "缓存设定 · 未命名设定",
+                "设定 · 未命名设定",
+            ),
+            resolved.map { it.traceTitle },
+        )
+        assertEquals(
+            listOf("设定插入点 1", "设定插入点 1", "设定插入点 1", "设定插入点 2"),
+            resolved.map { it.traceSource },
+        )
     }
 
     @Test
@@ -353,6 +366,8 @@ class CharacterSettingContextResolverTest {
 
         assertEquals(AgentContextAnchor.AfterToolFlow, resolved.single().anchor)
         assertEquals("custom-entry", resolved.single().id)
+        assertEquals("设定 · 未命名设定", resolved.single().traceTitle)
+        assertEquals("工具完成后的约束", resolved.single().traceSource)
     }
 
     @Test
@@ -381,16 +396,21 @@ class CharacterSettingContextResolverTest {
             promptPositions = listOf(after, before),
             entries = listOf(
                 resident("setting"),
-                resident("preset-after-entry", after.id),
-                resident("preset-before-entry", before.id),
+                resident("agent-preset:test:after-entry", after.id),
+                resident("agent-preset:test:before-entry", before.id),
             ),
         )
 
         val resolved = CharacterSettingContextResolver.resolve(library, emptyList())
 
         assertEquals(
-            listOf("preset-before-entry", "setting", "preset-after-entry"),
+            listOf("agent-preset:test:before-entry", "setting", "agent-preset:test:after-entry"),
             resolved.map { it.id },
         )
+        assertEquals(
+            listOf("预设条目 · 未命名设定", "设定 · 未命名设定", "预设条目 · 未命名设定"),
+            resolved.map { it.traceTitle },
+        )
+        assertEquals(listOf("预设前置", "设定插入点 2", "预设后置"), resolved.map { it.traceSource })
     }
 }

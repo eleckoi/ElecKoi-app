@@ -59,6 +59,8 @@ const val DefaultOpeningMessageId: String = "opening-default"
 const val DefaultOpeningMessageTitle: String = "默认开场"
 const val HiddenToolTimelineEntryTitle: String = "隐藏工具时间线"
 const val HiddenToolTimelineEntryId: String = "built-in-hidden-tool-timeline"
+const val HiddenToolTimelinePromptPositionId: String = "hidden-tool-timeline"
+const val HiddenToolTimelinePromptPositionTitle: String = "隐藏工具时间线"
 const val DefaultHiddenToolTimelineContent: String = """<roleplay_output_protocol>
 tool_phase:
   setting_library:
@@ -252,7 +254,8 @@ fun settingLibraryHiddenToolTimelineEntry(existing: SettingLibraryEntry? = null)
         content = DefaultHiddenToolTimelineContent,
         kind = SettingLibraryEntryKind.HiddenToolTimeline,
         triggerMode = SettingLibraryTriggerMode.Always,
-        position = SettingLibraryPosition.InsertPoint5,
+        position = SettingLibraryPosition.InsertPoint4,
+        promptPositionId = HiddenToolTimelinePromptPositionId,
         insertRole = SettingLibraryInsertRole.User,
         order = 1,
     )
@@ -263,6 +266,14 @@ fun settingLibraryHiddenToolTimelineEntry(existing: SettingLibraryEntry? = null)
         treeViewOrder = Int.MIN_VALUE + 1,
     )
 }
+
+fun hiddenToolTimelinePromptPosition(): SettingLibraryPromptPosition = SettingLibraryPromptPosition(
+    id = HiddenToolTimelinePromptPositionId,
+    name = HiddenToolTimelinePromptPositionTitle,
+    anchor = SettingLibraryPosition.InsertPoint4,
+    side = SettingLibraryPromptPositionSide.BeforeSettingPosition,
+    order = 1,
+)
 
 fun normalizeSettingLibraryFixedEntry(entry: SettingLibraryEntry): SettingLibraryEntry {
     return when {

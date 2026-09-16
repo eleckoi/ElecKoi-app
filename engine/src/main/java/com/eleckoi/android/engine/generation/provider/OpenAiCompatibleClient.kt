@@ -1,8 +1,10 @@
 package com.eleckoi.android.engine.generation.provider
 
 import com.eleckoi.android.engine.generation.model.ModelConfig
+import com.eleckoi.android.engine.generation.model.ModelApiFormat
 import com.eleckoi.android.engine.generation.model.ModelOption
 import com.eleckoi.android.engine.generation.model.configuredMaxOutputTokens
+import com.eleckoi.android.engine.generation.model.effectiveApiFormat
 import com.eleckoi.android.engine.generation.model.resolvedProviderBaseUrl
 import com.eleckoi.android.foundation.network.SecureModelHttpClientFactory
 import com.eleckoi.android.foundation.network.SensitiveTextSanitizer
@@ -29,16 +31,28 @@ import java.net.URI
 class OpenAiCompatibleClient {
     fun fetchModels(config: ModelConfig): List<ModelOption> {
         if (config.apiKey.trim().isEmpty()) throw ElecKoiDataException("缺少 API Key")
-        val data = getJson("${openAiBaseUrl(config)}/models", config, "${config.provider} 模型列表请求")
-        return data.optJSONArray("data")
+        val format = config.effectiveApiFormat()
+        val data = getJson(
+            url = modelListUrl(config, format),
+            config = config,
+            label = "${config.provider} 模型列表请求",
+            format = format,
+        )
+        val arrayName = if (format == ModelApiFormat.GoogleGemini) "models" else "data"
+        return data.optJSONArray(arrayName)
             ?.objects()
             ?.mapNotNull { item ->
-                val id = item.stringOrEmpty("id").trim()
+                if (format == ModelApiFormat.GoogleGemini && !item.supportsGenerateContent()) {
+                    return@mapNotNull null
+                }
+                val idKey = if (format == ModelApiFormat.GoogleGemini) "name" else "id"
+                val id = item.stringOrEmpty(idKey).trim()
                 id.takeIf(String::isNotBlank)?.let {
                     ModelOption(
                         id = id,
                         name = id,
                         contextWindowTokens = item.firstPositiveInt(
+                            "inputTokenLimit",
                             "context_window",
                             "context_length",
                             "max_context_length",
@@ -47,6 +61,7 @@ class OpenAiCompatibleClient {
                             "contextLength",
                         ),
                         maxOutputTokens = item.firstPositiveInt(
+                            "outputTokenLimit",
                             "max_output_tokens",
                             "max_completion_tokens",
                             "max_tokens",
@@ -97,14 +112,48 @@ class OpenAiCompatibleClient {
         throw ElecKoiDataException("请填写自定义模型提供商 API 地址")
     }
 
+    private fun JSONObject.supportsGenerateContent(): Boolean {
+        val methods = optJSONArray("supportedGenerationMethods") ?: return true
+        return (0 until methods.length()).any { index ->
+            methods.optString(index).equals("generateContent", ignoreCase = true)
+        }
+    }
+
     private fun chatCompletionsUrl(config: ModelConfig): String {
         val base = openAiBaseUrl(config)
         return if (base.endsWith("/chat/completions", ignoreCase = true)) base
         else "$base/chat/completions"
     }
 
-    private fun getJson(url: String, config: ModelConfig, label: String): JSONObject {
-        val requestTarget = validatedRequestTarget(url, config)
+    private fun modelListUrl(config: ModelConfig, format: ModelApiFormat): String {
+        val base = openAiBaseUrl(config)
+        if (format != ModelApiFormat.GoogleGemini) return "$base/models"
+
+        val baseUri = runCatching { URI(base) }.getOrElse {
+            throw ElecKoiDataException("模型接口地址格式无效")
+        }
+        if (baseUri.userInfo != null || baseUri.query != null || baseUri.fragment != null) {
+            throw ElecKoiDataException("模型接口地址不能包含账号、查询参数或片段")
+        }
+        val apiRoot = base
+            .removeSuffixIgnoringCase("/v1beta/openai")
+            .removeSuffixIgnoringCase("/v1beta")
+            .removeSuffixIgnoringCase("/v1")
+            .trimEnd('/')
+        return "$apiRoot/v1beta/models?pageSize=1000"
+    }
+
+    private fun getJson(
+        url: String,
+        config: ModelConfig,
+        label: String,
+        format: ModelApiFormat,
+    ): JSONObject {
+        val requestTarget = validatedRequestTarget(
+            url = url,
+            config = config,
+            allowQuery = format == ModelApiFormat.GoogleGemini,
+        )
         val client = SecureModelHttpClientFactory.create(
             explicitProxy = requestTarget.proxy,
             connectTimeoutMillis = 8_000,
@@ -113,7 +162,15 @@ class OpenAiCompatibleClient {
         val request = Request.Builder()
             .url(requestTarget.uri.toString())
             .applyCustomHeaders(config)
-            .header("Authorization", "Bearer ${config.apiKey.trim()}")
+            .apply {
+                if (format == ModelApiFormat.GoogleGemini) {
+                    header("x-goog-api-key", config.apiKey.trim())
+                    removeHeader("Authorization")
+                } else {
+                    header("Authorization", "Bearer ${config.apiKey.trim()}")
+                }
+            }
+            .header("Accept", "application/json")
             .get()
             .build()
         client.newCall(request).execute().use { response ->
@@ -162,7 +219,11 @@ class OpenAiCompatibleClient {
         }
     }
 
-    private fun validatedRequestTarget(url: String, config: ModelConfig): RequestTarget {
+    private fun validatedRequestTarget(
+        url: String,
+        config: ModelConfig,
+        allowQuery: Boolean = false,
+    ): RequestTarget {
         val uri = runCatching { URI(url) }.getOrElse {
             throw ElecKoiDataException("模型接口地址格式无效")
         }
@@ -173,7 +234,7 @@ class OpenAiCompatibleClient {
         if (scheme == "http" && !isStrictLoopbackHost(uri.host)) {
             throw ElecKoiDataException("远程模型接口必须使用 HTTPS；HTTP 仅允许本机回环地址")
         }
-        if (uri.userInfo != null || uri.query != null || uri.fragment != null) {
+        if (uri.userInfo != null || (!allowQuery && uri.query != null) || uri.fragment != null) {
             throw ElecKoiDataException("模型接口地址不能包含账号、查询参数或片段")
         }
         val proxy = proxyFrom(config.proxyUrl)
@@ -232,6 +293,9 @@ class OpenAiCompatibleClient {
         const val MaxPromptChars = 48 * 1024
     }
 }
+
+private fun String.removeSuffixIgnoringCase(suffix: String): String =
+    if (endsWith(suffix, ignoreCase = true)) dropLast(suffix.length) else this
 
 internal fun textCompletionPayload(
     config: ModelConfig,

@@ -197,6 +197,9 @@ data class AgentContextInjection(
     val activation: AgentContextActivation,
     val content: String,
     val order: Int = 1,
+    /** Human-readable provenance used by diagnostics; never changes provider semantics. */
+    val traceTitle: String = "",
+    val traceSource: String = "",
 )
 
 sealed interface AgentContextActivation {

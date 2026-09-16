@@ -6,6 +6,8 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.S
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPosition
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPromptPosition
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryTriggerMode
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.HiddenToolTimelinePromptPositionId
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.hiddenToolTimelinePromptPosition
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isHiddenToolTimelineEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isHistoryCompactionEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.settingLibraryHiddenToolTimelineEntry
@@ -209,10 +211,32 @@ fun AgentPreset.withRequiredBuiltIns(): AgentPreset {
     val compactionEntry = settingLibraryHistoryCompactionEntry(
         entries.firstOrNull(SettingLibraryEntry::isHistoryCompactionEntry),
     )
+    val existingHiddenTimelineEntry = entries.firstOrNull(SettingLibraryEntry::isHiddenToolTimelineEntry)
+    val hiddenTimelineSource = existingHiddenTimelineEntry?.let { entry ->
+        if (
+            entry.promptPositionId.isBlank() &&
+            entry.position == SettingLibraryPosition.InsertPoint5
+        ) {
+            entry.copy(
+                position = SettingLibraryPosition.InsertPoint4,
+                promptPositionId = HiddenToolTimelinePromptPositionId,
+            )
+        } else {
+            entry
+        }
+    }
     val hiddenTimelineEntry = settingLibraryHiddenToolTimelineEntry(
-        entries.firstOrNull(SettingLibraryEntry::isHiddenToolTimelineEntry),
+        hiddenTimelineSource,
     )
-    val normalizedPromptPositions = promptPositions
+    val positionsWithHiddenTimelineDefault = if (
+        hiddenTimelineEntry.promptPositionId == HiddenToolTimelinePromptPositionId &&
+        promptPositions.none { it.id == HiddenToolTimelinePromptPositionId }
+    ) {
+        promptPositions + hiddenToolTimelinePromptPosition().copy(order = 0)
+    } else {
+        promptPositions
+    }
+    val normalizedPromptPositions = positionsWithHiddenTimelineDefault
         .distinctBy(SettingLibraryPromptPosition::id)
         .sortedWith(
             compareBy<SettingLibraryPromptPosition> { it.anchor.ordinal }
@@ -225,6 +249,9 @@ fun AgentPreset.withRequiredBuiltIns(): AgentPreset {
             positions.mapIndexed { index, position -> position.copy(order = index + 1) }
         }
     val positionsById = normalizedPromptPositions.associateBy(SettingLibraryPromptPosition::id)
+    val positionedHiddenTimelineEntry = positionsById[hiddenTimelineEntry.promptPositionId]
+        ?.let { position -> hiddenTimelineEntry.copy(position = position.anchor) }
+        ?: hiddenTimelineEntry
     val ordinaryEntries = entries.filterNot { candidate ->
         candidate.isHistoryCompactionEntry() || candidate.isHiddenToolTimelineEntry()
     }.map { entry ->
@@ -237,7 +264,7 @@ fun AgentPreset.withRequiredBuiltIns(): AgentPreset {
         }
     }
     return copy(
-        entries = listOf(compactionEntry, hiddenTimelineEntry) + ordinaryEntries,
+        entries = listOf(compactionEntry, positionedHiddenTimelineEntry) + ordinaryEntries,
         promptPositions = normalizedPromptPositions,
         toolConfiguration = toolConfiguration.normalized(),
         roleplayPlan = roleplayPlan.normalized(),

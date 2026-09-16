@@ -43,10 +43,9 @@ class DshTrajectoryProjectorTest {
             header = event("""{"type":"session","id":"thread-1","createdAt":900}"""),
         )
 
-        assertEquals(5, projection.records.size)
+        assertEquals(4, projection.records.size)
         assertEquals(
             listOf(
-                DshTrajectoryRecordKind.System,
                 DshTrajectoryRecordKind.User,
                 DshTrajectoryRecordKind.Tool,
                 DshTrajectoryRecordKind.Assistant,
@@ -62,13 +61,13 @@ class DshTrajectoryProjectorTest {
         assertEquals("openai", tool.requests.single().provider)
         assertEquals("gpt-test", tool.requests.single().model)
         assertEquals(20L, tool.requests.single().durationMillis)
-        assertTrue(projection.records.first().rawJson.contains("request/header"))
+        assertTrue(tool.requests.single().rawJson.contains("request/header"))
         assertEquals(900L, projection.startedAtMillis)
         assertEquals(1120L, projection.completedAtMillis)
     }
 
     @Test
-    fun keepsSystemPromptUpdatesAndApprovalOutcome() {
+    fun omitsHarnessSystemPromptAndKeepsApprovalOutcome() {
         val projection = DshTrajectoryProjector.project(
             listOf(
                 event("""{"type":"request/header","seq":0,"time":10,"data":{"header":{"system":"one","tools":[],"config":{}}}}"""),
@@ -78,10 +77,83 @@ class DshTrajectoryProjectorTest {
             ),
         )
 
-        assertEquals(listOf("初始系统提示词", "系统提示词更新", "授权请求"), projection.records.map { it.title })
+        assertEquals(listOf("授权请求"), projection.records.map { it.title })
         val approval = projection.records.last()
         assertEquals(DshTrajectoryRecordStatus.Cancelled, approval.status)
         assertEquals(15L, approval.durationMillis)
+    }
+
+    @Test
+    fun insertsAppContextAtItsVisibleTurnWithoutDuplicatingHarnessSystem() {
+        val projection = DshTrajectoryProjector.project(
+            input = listOf(
+                event("""{"type":"turn/start","seq":0,"time":1010,"data":{"turn":1}}"""),
+                event(
+                    """{"type":"user/message","seq":1,"time":1020,"data":{"turn":1,"message":{"source":{"kind":"user"},"content":[{"type":"text","text":"hello"}]}}}""",
+                ),
+                event(
+                    """{"type":"request/header","seq":2,"time":1030,"data":{"turn":1,"step":1,"header":{"system":"DSH INTERNAL","tools":[],"config":{}}}}""",
+                ),
+                event(
+                    """{"type":"assistant/message","seq":3,"time":1080,"data":{"turn":1,"step":1,"message":{"source":{"provider":"openai","model":"gpt-test"},"content":[{"type":"text","text":"done"}]}}}""",
+                ),
+            ),
+            contextActivations = listOf(
+                DshTrajectoryContextActivation(
+                    turn = 1,
+                    capturedAtMillis = 1000,
+                    entries = listOf(
+                        DshTrajectoryContextEntry(
+                            key = "cache-key",
+                            id = "cache",
+                            title = "缓存设定 · 测试",
+                            source = "设定插入点 1",
+                            anchor = "beforeHistory",
+                            role = "user",
+                            content = "你是鲸鱼娘",
+                        ),
+                        DshTrajectoryContextEntry(
+                            key = "fixed-key",
+                            id = "fixed",
+                            title = "预设固定条目 · 隐藏工具时间线",
+                            source = "设定插入点 5",
+                            anchor = "afterToolFlow",
+                            role = "user",
+                            content = "只在最终阶段输出正文",
+                        ),
+                        DshTrajectoryContextEntry(
+                            key = "preset-key",
+                            id = "preset",
+                            title = "预设条目 · 文风",
+                            source = "对白前约束",
+                            anchor = "beforeLatestUserInput",
+                            role = "system",
+                            content = "使用简洁对白",
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        assertEquals(
+            listOf(
+                "缓存设定 · 测试",
+                "预设条目 · 文风",
+                "用户消息",
+                "预设固定条目 · 隐藏工具时间线",
+                "助手消息",
+            ),
+            projection.records.map(DshTrajectoryRecord::title),
+        )
+        assertTrue(projection.records.none { record ->
+            record.input.contains("DSH INTERNAL") ||
+                record.detail.contains("DSH INTERNAL") ||
+                record.rawJson.contains("DSH INTERNAL") ||
+                record.requests.any { request ->
+                    request.detail.contains("DSH INTERNAL") || request.rawJson.contains("DSH INTERNAL")
+                }
+        })
+        assertEquals(listOf(1, 2, 3, 4, 5), projection.records.map(DshTrajectoryRecord::index))
     }
 
     private fun event(raw: String): JsonObject = Json.parseToJsonElement(raw) as JsonObject

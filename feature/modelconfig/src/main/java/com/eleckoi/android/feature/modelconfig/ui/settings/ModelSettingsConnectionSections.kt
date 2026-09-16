@@ -59,7 +59,7 @@ internal fun ModelConnectionSection(
             ModelFieldDivider(appearance)
         }
         ModelField(
-            label = "反代地址",
+            label = "API 地址",
             value = form.baseUrl,
             placeholder = provider.baseUrlPlaceholder,
             appearance = appearance,

@@ -49,6 +49,13 @@ internal object CharacterSettingContextResolver {
             )
             .mapIndexed { runtimeOrder, entry ->
                 val runtimePosition = entry.runtimePosition(promptPositions)
+                val presetEntry = entry.id.startsWith(AgentPresetEntryIdPrefix)
+                val entryTitle = entry.title.trim().ifBlank { "未命名设定" }
+                val tracePosition = promptPositions[entry.promptPositionId]
+                    ?.name
+                    ?.trim()
+                    ?.takeIf(String::isNotBlank)
+                    ?: runtimePosition.label
                 AgentContextInjection(
                     id = entry.id.take(MaxIdLength),
                     anchor = runtimePosition.toAgentAnchor(),
@@ -63,6 +70,13 @@ internal object CharacterSettingContextResolver {
                     // can share one provider boundary, so carry the fully resolved placement order
                     // into the runtime instead of sorting those local order values against each other.
                     order = runtimeOrder + 1,
+                    traceTitle = when {
+                        entry.triggerMode == SettingLibraryTriggerMode.Cache -> "缓存设定 · $entryTitle"
+                        entry.isHiddenToolTimelineEntry() -> "预设固定条目 · $entryTitle"
+                        presetEntry -> "预设条目 · $entryTitle"
+                        else -> "设定 · $entryTitle"
+                    },
+                    traceSource = tracePosition,
                 )
             }
             .toList()
@@ -215,4 +229,5 @@ internal object CharacterSettingContextResolver {
     }
 
     private const val MaxIdLength = 128
+    private const val AgentPresetEntryIdPrefix = "agent-preset:"
 }

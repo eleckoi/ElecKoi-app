@@ -51,6 +51,7 @@ class DeepSeekRuntimeProcessSpecFactoryTest {
             assertTrue(spec.arguments.contains("LD_LIBRARY_PATH=/opt/eleckoi/lib/sharp"))
             assertTrue(spec.arguments.contains("/opt/eleckoi/bin/dsh-jsonrpc-agent"))
             assertTrue(spec.arguments.contains("DSH_CORDIS_CONFIG=/deepseek-home/eleckoi/cordis.yml"))
+            assertTrue(spec.arguments.contains("DSH_SYSTEM_PROMPT="))
             assertTrue(spec.arguments.contains("/deepseek-home/eleckoi/cordis.yml"))
         } finally {
             fixture.close()
