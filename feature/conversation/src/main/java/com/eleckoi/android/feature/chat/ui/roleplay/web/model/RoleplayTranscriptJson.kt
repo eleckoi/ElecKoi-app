@@ -15,6 +15,8 @@ internal fun RoleplayTranscriptModel.toBootstrapJson(): String = JSONObject().ap
     put("frontendRendererEnabled", frontendRendererEnabled)
     put("historyHasMore", historyHasMore)
     put("historyLoading", historyLoading)
+    put("deleteMode", deleteMode)
+    put("deleteFromMessageId", deleteFromMessageId)
     put("messages", JSONArray().apply { messages.forEach { put(it.toJson()) } })
 }.toString()
 

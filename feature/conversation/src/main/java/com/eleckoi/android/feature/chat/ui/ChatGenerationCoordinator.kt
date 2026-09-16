@@ -127,12 +127,66 @@ internal class ChatGenerationCoordinator(
         val draft = snapshot.draft ?: return
         val replacement = snapshot.editInput.trim()
         if (replacement.isEmpty() || snapshot.isSending) return
+        if (target.role == MessageRole.Assistant) {
+            saveEditedMessage()
+            return
+        }
         updateState { it.copy(editingMessage = null, editInput = "") }
         regenerate(
             draft = draft,
             target = target,
             replacement = replacement,
         )
+    }
+
+    fun saveEditedMessage() {
+        val snapshot = state()
+        val target = snapshot.editingMessage ?: return
+        val sessionId = snapshot.draft?.session?.id ?: return
+        val replacement = snapshot.editInput.trim()
+        if (
+            target.role != MessageRole.Assistant ||
+            target.pending ||
+            replacement.isEmpty() ||
+            snapshot.isSending ||
+            snapshot.isSavingEditedMessage
+        ) return
+        updateState { it.copy(isSavingEditedMessage = true, errorMessage = "") }
+        scope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    chatService.editAssistantMessage(
+                        sessionId = sessionId,
+                        messageId = target.id,
+                        content = replacement,
+                    )
+                }
+            }.onSuccess {
+                updateState { current ->
+                    if (current.draft?.session?.id == sessionId) {
+                        current.copy(
+                            editingMessage = null,
+                            editInput = "",
+                            isSavingEditedMessage = false,
+                        )
+                    } else {
+                        current
+                    }
+                }
+                onMessagesChanged(sessionId, "edited", listOf(target.id))
+            }.onFailure { error ->
+                updateState { current ->
+                    if (current.draft?.session?.id == sessionId) {
+                        current.copy(
+                            isSavingEditedMessage = false,
+                            errorMessage = error.message ?: "修改消息失败",
+                        )
+                    } else {
+                        current
+                    }
+                }
+            }
+        }
     }
 
     fun regenerateFrom(message: ChatMessage) {

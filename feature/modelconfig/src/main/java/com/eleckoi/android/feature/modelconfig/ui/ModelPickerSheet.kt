@@ -1,5 +1,6 @@
 package com.eleckoi.android.feature.modelconfig.ui
 
+import android.view.WindowManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -71,7 +72,12 @@ internal fun ModelPickerSheet(
         appearance = appearance,
         onClose = onClose,
     ) {
-        Column(Modifier.fillMaxWidth().heightIn(max = 520.dp)) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(max = 520.dp)
+                .imePadding(),
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(start = 18.dp, end = 8.dp, top = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -101,7 +107,6 @@ internal fun ModelPickerSheet(
                     appearance = appearance,
                     modifier = Modifier.weight(1f),
                     height = 48.dp,
-                    inputModifier = Modifier.semantics { contentDescription = "搜索模型" },
                     onKeywordChange = { keyword = it },
                 )
                 TextButton(
@@ -194,6 +199,7 @@ private fun ModelPickerOverlay(
         SideEffect {
             window?.setDimAmount(0f)
             window?.setWindowAnimations(0)
+            window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
         }
         var visible by remember { mutableStateOf(false) }
         LaunchedEffect(Unit) { visible = true }
@@ -203,7 +209,7 @@ private fun ModelPickerOverlay(
                 visible = visible,
                 appearance = appearance,
                 onDismiss = onClose,
-                sheetModifier = Modifier.statusBarsPadding().imePadding(),
+                sheetModifier = Modifier.statusBarsPadding(),
                 content = content,
             )
         }

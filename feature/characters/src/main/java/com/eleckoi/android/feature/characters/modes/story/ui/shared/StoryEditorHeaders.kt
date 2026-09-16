@@ -159,6 +159,7 @@ internal fun StorySearchHeader(
     onQueryChange: (String) -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
+    backgroundColor: Color = appearance.mobileBg,
 ) {
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
@@ -166,7 +167,7 @@ internal fun StorySearchHeader(
         modifier = modifier
             .fillMaxWidth()
             .height(60.dp)
-            .background(appearance.mobileBg)
+            .background(backgroundColor)
             .padding(horizontal = 16.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
@@ -197,8 +198,7 @@ internal fun StorySearchHeader(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(start = 54.dp),
-            surface = appearance.mobileBg,
-            height = 42.dp,
+            height = 44.dp,
             inputModifier = Modifier.focusRequester(focusRequester),
             onKeywordChange = onQueryChange,
         )

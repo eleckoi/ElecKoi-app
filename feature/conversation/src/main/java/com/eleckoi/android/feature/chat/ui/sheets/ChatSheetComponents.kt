@@ -1,7 +1,6 @@
 package com.eleckoi.android.feature.chat.ui.sheets
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,30 +9,20 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.foundation.design.components.AppIconPaths
-import com.eleckoi.android.foundation.design.components.SearchIcon
+import com.eleckoi.android.foundation.design.components.AppSearchField
 import com.eleckoi.android.foundation.design.components.StrokeSvgIcon
 import com.eleckoi.android.foundation.design.components.noRippleClickable
-import com.eleckoi.android.foundation.design.fieldPalette
 import com.eleckoi.android.foundation.design.overlayScrim
 import com.eleckoi.android.foundation.design.selectionPalette
 
@@ -62,28 +51,15 @@ internal fun SheetHeader(title: String, subtitle: String, appearance: Appearance
 
 @Composable
 internal fun SearchField(value: String, placeholder: String, appearance: AppearanceTheme, onChange: (String) -> Unit) {
-    val field = appearance.fieldPalette()
-    var focused by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(12.dp)
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp).height(40.dp)
-            .border(if (focused) 1.dp else 0.5.dp, if (focused) field.focusedBorder else field.border, shape)
-            .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        SearchIcon(appearance)
-        Box(modifier = Modifier.weight(1f).padding(start = 8.dp), contentAlignment = Alignment.CenterStart) {
-            if (value.isBlank()) Text(placeholder, color = field.placeholder, fontSize = 15.sp)
-            BasicTextField(
-                value = value,
-                onValueChange = onChange,
-                modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused },
-                textStyle = androidx.compose.ui.text.TextStyle(color = field.text, fontSize = 15.sp),
-                cursorBrush = SolidColor(appearance.mobileBlue),
-                singleLine = true,
-            )
-        }
-    }
+    AppSearchField(
+        keyword = value,
+        placeholder = placeholder,
+        appearance = appearance,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 18.dp),
+        onKeywordChange = onChange,
+    )
 }
 
 @Composable

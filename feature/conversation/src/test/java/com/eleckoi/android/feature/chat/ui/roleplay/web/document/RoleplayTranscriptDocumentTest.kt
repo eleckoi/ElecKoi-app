@@ -7,6 +7,18 @@ import java.util.Base64
 
 class RoleplayTranscriptDocumentTest {
     @Test
+    fun inlineCodeUsesAQuietThemeTintInsteadOfTheDarkCodeBlockSurface() {
+        val document = buildRoleplayTranscriptDocument("")
+
+        assertTrue(
+            document.contains(
+                "background: color-mix(in srgb, var(--inline-code-text) 10%, transparent)",
+            ),
+        )
+        assertFalse(document.contains("var(--code-background) 72%, transparent"))
+    }
+
+    @Test
     fun lightRoleplayTextDoesNotInheritTheDarkWallpaperShadow() {
         val document = buildRoleplayTranscriptDocument("")
 
@@ -317,6 +329,24 @@ class RoleplayTranscriptDocumentTest {
         assertTrue(document.contains("block.__eleckoiFrontendAllowed !== allowFrontend"))
         assertTrue(document.contains("previousMessage.pending !== message.pending"))
         assertTrue(document.contains("const createFrontendCodeBlock = source =>"))
+    }
+
+    @Test
+    fun deleteModeSelectsTheSuffixInTheExistingTranscript() {
+        val document = buildRoleplayTranscriptDocument("")
+
+        assertTrue(document.contains("const applyDeletePresentation = (turn, index) =>"))
+        assertTrue(document.contains("index >= state.deleteFromIndex"))
+        assertTrue(document.contains("turn.classList.toggle('delete-selected', selected)"))
+        assertTrue(document.contains("post({ type: 'deleteSelect', messageId: message.id })"))
+        assertTrue(document.contains("background: color-mix(in srgb, var(--accent) 7%, transparent)"))
+        assertTrue(document.contains("padding-left: calc(var(--horizontal-padding) + 48px)"))
+        assertTrue(document.contains("left: calc(var(--horizontal-padding) + 13px)"))
+        assertTrue(document.contains("top: 19px"))
+        assertTrue(document.contains("width: 24px"))
+        assertTrue(document.contains("transform: translate(1px, 1px)"))
+        assertTrue(document.contains("M9 16.17 5.53 12.7c-.39-.39-1.02-.39-1.41 0"))
+        assertTrue(document.contains("center / 17px 17px no-repeat"))
     }
 
     @Test

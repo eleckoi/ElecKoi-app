@@ -90,6 +90,12 @@ internal val RoleplayTranscriptInteraction = """    const onViewportResize = () 
       const target = event.target.closest('[data-action]'); if (!target) return;
       const turn = target.closest('.turn'), message = turn ? state.byId.get(turn.dataset.id) : null; if (!message) return;
       const action = target.dataset.action;
+      if (action === 'delete-select') {
+        if (!message.pending && message.role !== 'system') {
+          post({ type: 'deleteSelect', messageId: message.id });
+        }
+        return;
+      }
       if (action === 'menu') {
         setExpandedToolbar(message.id); return;
       }

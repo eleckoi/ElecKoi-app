@@ -27,4 +27,5 @@ dependencies {
     implementation("sh.calvin.reorderable:reorderable:3.1.0")
 
     testImplementation("org.json:json:20240303")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
 }

@@ -72,6 +72,7 @@ internal class ChatConversationListActions(
     val onSelectText: (String) -> Unit,
     val onOpenUserAvatars: () -> Unit,
     val onOpenCharacterSettings: (String) -> Unit,
+    val onSelectDeleteFrom: (String) -> Unit,
 )
 
 /**
@@ -104,6 +105,9 @@ internal fun ChatConversationList(
         LocalMarkdownHostScrollInProgress provides layout.listState.isScrollInProgress,
     ) {
         val roleplay = state.chatLayoutMode == ChatLayoutMode.Roleplay
+        val deleteFromIndex = remember(messages, state.deleteFromMessageId) {
+            messages.indexOfFirst { it.id == state.deleteFromMessageId }
+        }
         LazyColumn(
             state = layout.listState,
             verticalArrangement = Arrangement.Top,
@@ -155,7 +159,14 @@ internal fun ChatConversationList(
                 val liveReplyKey = visualReplyState.activeKey?.takeIf { key ->
                     key.messageId == message.id && timelineItem.isLastInMessage
                 }
-                Box(
+                ChatDeleteSelectionRow(
+                    active = state.deleteMessagesOpen,
+                    selected = isDeleteSuffixSelected(messageIndex, deleteFromIndex),
+                    enabled = message.role != MessageRole.System && !message.pending,
+                    isFirstInMessage = timelineItem.isFirstInMessage,
+                    isLastInMessage = timelineItem.isLastInMessage,
+                    appearance = state.appearance,
+                    onSelect = { actions.onSelectDeleteFrom(message.id) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .then(

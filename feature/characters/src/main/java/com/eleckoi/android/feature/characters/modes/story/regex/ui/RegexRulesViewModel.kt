@@ -7,6 +7,7 @@ import com.eleckoi.android.feature.characters.modes.story.regex.api.RegexRuleSer
 import com.eleckoi.android.feature.characters.modes.story.regex.model.RegexRuleCollection
 import com.eleckoi.android.feature.characters.modes.story.regex.model.RegexRuleImportDocument
 import com.eleckoi.android.feature.characters.modes.story.regex.model.RegexRuleScope
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -14,6 +15,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -35,6 +37,7 @@ sealed interface RegexRulesEffect {
 
 class RegexRulesViewModel(
     private val service: RegexRuleService,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(RegexRulesUiState())
     val uiState: StateFlow<RegexRulesUiState> = _uiState.asStateFlow()
@@ -42,8 +45,18 @@ class RegexRulesViewModel(
     val effects: SharedFlow<RegexRulesEffect> = _effects.asSharedFlow()
     private val saveMutex = Mutex()
 
-    fun load(characterId: String) = runAction(characterId, loading = true) {
-        service.loadRegexRules(characterId)
+    init {
+        viewModelScope.launch {
+            service.regexRulesRevision.drop(1).collect {
+                val characterId = _uiState.value.characterId
+                if (characterId.isNotBlank()) refresh(characterId, showLoading = false)
+            }
+        }
+    }
+
+    fun load(characterId: String) {
+        if (characterId.isBlank()) return
+        viewModelScope.launch { refresh(characterId, showLoading = true) }
     }
 
     fun save(characterId: String, rules: RegexRuleCollection) {
@@ -54,7 +67,7 @@ class RegexRulesViewModel(
         viewModelScope.launch {
             runCatching {
                 saveMutex.withLock {
-                    withContext(Dispatchers.IO) { service.saveRegexRules(characterId, rules) }
+                    withContext(ioDispatcher) { service.saveRegexRules(characterId, rules) }
                 }
             }.onSuccess { saved ->
                 _uiState.update { current ->
@@ -86,7 +99,7 @@ class RegexRulesViewModel(
             _uiState.update { it.copy(characterId = characterId, saving = true, errorMessage = "") }
             runCatching {
                 saveMutex.withLock {
-                    withContext(Dispatchers.IO) { service.importRegexRules(characterId, scope, documents) }
+                    withContext(ioDispatcher) { service.importRegexRules(characterId, scope, documents) }
                 }
             }.onSuccess { result ->
                 _uiState.update {
@@ -113,7 +126,7 @@ class RegexRulesViewModel(
 
     fun exportRules(characterId: String, ruleIds: Set<String>) {
         viewModelScope.launch {
-            runCatching { withContext(Dispatchers.IO) { service.exportRegexRules(characterId, ruleIds) } }
+            runCatching { withContext(ioDispatcher) { service.exportRegexRules(characterId, ruleIds) } }
                 .onSuccess { json ->
                     _effects.emit(RegexRulesEffect.RulesExportReady(json, "eleckoi-regex-rules.json"))
                 }
@@ -121,26 +134,33 @@ class RegexRulesViewModel(
         }
     }
 
-    private fun runAction(
+    private suspend fun refresh(
         characterId: String,
-        loading: Boolean = false,
-        saving: Boolean = false,
-        action: () -> RegexRuleCollection,
+        showLoading: Boolean,
     ) {
-        if (characterId.isBlank()) return
-        viewModelScope.launch {
-            _uiState.update {
-                it.copy(characterId = characterId, loading = loading, saving = saving, errorMessage = "")
+        _uiState.update {
+            it.copy(characterId = characterId, loading = showLoading, errorMessage = "")
+        }
+        runCatching {
+            saveMutex.withLock {
+                withContext(ioDispatcher) { service.loadRegexRules(characterId) }
             }
-            runCatching { withContext(Dispatchers.IO) { action() } }
-                .onSuccess { rules ->
-                    _uiState.update { it.copy(characterId = characterId, rules = rules, loading = false, saving = false) }
+        }.onSuccess { rules ->
+            _uiState.update { current ->
+                if (current.characterId == characterId) {
+                    current.copy(rules = rules, loading = false)
+                } else {
+                    current
                 }
-                .onFailure { error ->
-                    _uiState.update {
-                        it.copy(loading = false, saving = false, errorMessage = error.message ?: "正则规则保存失败")
-                    }
+            }
+        }.onFailure { error ->
+            _uiState.update { current ->
+                if (current.characterId == characterId) {
+                    current.copy(loading = false, errorMessage = error.message ?: "正则规则加载失败")
+                } else {
+                    current
                 }
+            }
         }
     }
 

@@ -108,6 +108,32 @@ class ConversationAttachmentCleanupTest {
         assertTrue(shared.exists())
     }
 
+    @Test fun `suffix deletion removes user uploads and generated replies but retains earlier files`() {
+        val retained = temporary.newFile("retained-input.png")
+        val removedInput = temporary.newFile("removed-input.png")
+        val generatedRoot = temporary.newFolder("suffix-generated")
+        val removedOutput = File(generatedRoot, "removed-output.png").apply { writeText("generated") }
+        val parts = mutableListOf(
+            part("chat", "input_images", retained.path).copy(ownerId = "retained-turn"),
+            part("chat", "input_images", removedInput.path).copy(ownerId = "removed-turn"),
+            part("chat", "images", removedOutput.path).copy(ownerType = "response", ownerId = "removed-response"),
+        )
+        val cleanup = ConversationAttachmentCleanup(
+            { it() },
+            { parts.asSequence() },
+            { File(it).delete() },
+            ReplyImageGenerator(generatedRoot),
+        )
+
+        cleanup.discardMessages("chat") {
+            parts.removeAll { it.ownerId.startsWith("removed-") }
+        }
+
+        assertTrue(retained.exists())
+        assertFalse(removedInput.exists())
+        assertFalse(removedOutput.exists())
+    }
+
     private fun part(conversation: String, kind: String, path: String) = AgentContentPartEntity(
         conversationId = conversation, ownerType = "turn", ownerId = "$conversation-$kind",
         partIndex = 0, kind = kind, text = "",

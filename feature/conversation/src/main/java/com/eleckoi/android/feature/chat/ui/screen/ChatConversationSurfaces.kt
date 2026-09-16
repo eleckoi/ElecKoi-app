@@ -39,6 +39,7 @@ internal fun ChatRoleplayConversationSurface(
     onMessageRendered: (String) -> Unit,
     onScrollStateChanged: (browsingHistory: Boolean, canScrollForward: Boolean) -> Unit,
     onRequestOpeningJump: () -> Unit,
+    onSelectDeleteFrom: (String) -> Unit,
     onSelectText: (String) -> Unit,
     onRegenerate: (ChatMessage) -> Unit,
     onOpenProcess: (String) -> Unit,
@@ -67,6 +68,7 @@ internal fun ChatRoleplayConversationSurface(
             onLoadOlder = { onIntent(ChatIntent.LoadOlderMessages) },
             onSelectOpeningOption = { onIntent(ChatIntent.SelectOpeningOption(it)) },
             onRequestOpeningJump = onRequestOpeningJump,
+            onSelectDeleteFrom = onSelectDeleteFrom,
             onMessageAction = { action, message ->
                 val displayText = model.messages
                     .firstOrNull { it.source.id == message.id }
@@ -157,6 +159,9 @@ internal fun ChatNativeConversationSurface(
             onSelectText = onSelectText,
             onOpenUserAvatars = onOpenUserAvatars,
             onOpenCharacterSettings = onOpenCharacterSettings,
+            onSelectDeleteFrom = {
+                onIntent(ChatIntent.SelectDeleteFromMessage(it))
+            },
         ),
         authorGateway = messageGateway,
         modifier = Modifier.graphicsLayer { alpha = presentationAlpha },

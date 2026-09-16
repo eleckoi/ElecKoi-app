@@ -142,7 +142,7 @@ internal fun SettingLibraryManagerPage(
                             }
 
                             ManagerCard(appearance, modifier = Modifier.padding(top = StoryEditorCardSpacing)) {
-                                ManagerCardTitle("导入 · 导出", appearance)
+                                ManagerCardTitle("导入与导出", appearance)
                                 ManagerRow(
                                     icon = SettingLibraryIcons.Merge,
                                     title = "并入设定库",
@@ -189,8 +189,8 @@ internal fun SettingLibraryManagerPage(
  * On the page's own surface, not a recessed one. The search field's well is that control's
  * identity — it is tuned at 38dp around a leading magnifier, and stretched to a name row it is
  * just a grey slab with a word in it, the only thing on a page of white cards that is not one.
- * What separates this from the version rows below is the pencil: they carry a selection check
- * and you tap them, this carries a cursor and you type in it. One glyph, not a second material.
+ * What separates this from the version rows below is direct text editing: the rows carry a
+ * selection check and you tap them, while this field carries a cursor and accepts text.
  */
 @Composable
 private fun VersionNameField(
@@ -211,30 +211,18 @@ private fun VersionNameField(
             fontSize = 15.sp,
             fontWeight = FontWeight.SemiBold,
         )
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            AppInsetTextField(
-                value = value,
-                onValueChange = { onValueChange(it.take(60)) },
-                appearance = appearance,
-                placeholder = "待命名",
-                modifier = Modifier.weight(1f).height(44.dp),
-                textStyle = TextStyle(
-                    color = appearance.mobileText,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                ),
-            )
-            StrokeSvgIcon(
-                SettingLibraryIcons.Rename,
-                appearance.mobileSoft,
-                modifier = Modifier.padding(start = 10.dp),
-                iconSize = 18.dp,
-                strokeWidth = 1.7f,
-            )
-        }
+        AppInsetTextField(
+            value = value,
+            onValueChange = { onValueChange(it.take(60)) },
+            appearance = appearance,
+            placeholder = "待命名",
+            modifier = Modifier.fillMaxWidth().padding(top = 10.dp).height(44.dp),
+            textStyle = TextStyle(
+                color = appearance.mobileText,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+            ),
+        )
     }
 }
 

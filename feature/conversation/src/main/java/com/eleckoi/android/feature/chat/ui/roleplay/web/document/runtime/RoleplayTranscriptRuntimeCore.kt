@@ -29,6 +29,9 @@ internal val RoleplayTranscriptRuntimeCore = """
       },
       cardPanel: false,
       frontendRendererEnabled: true,
+      deleteMode: false,
+      deleteFromMessageId: '',
+      deleteFromIndex: -1,
       forceTail: false,
       scroll: {
         mode: 'follow-tail', frame: 0, renderRequested: false,

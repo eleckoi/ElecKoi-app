@@ -59,7 +59,7 @@ internal fun PresetProfileCard(
             .fillMaxWidth()
             .dropShadow(shape, appearance.mobileText.copy(alpha = 0.05f), blur = 13.dp, offsetY = 4.dp)
             .clip(shape)
-            .background(if (active) appearance.mobilePinnedBg else appearance.mobileSurface)
+            .background(appearance.mobileSurface)
             .padding(14.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {

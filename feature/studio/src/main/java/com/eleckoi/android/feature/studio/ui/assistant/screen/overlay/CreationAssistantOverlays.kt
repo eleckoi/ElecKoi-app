@@ -77,6 +77,7 @@ internal fun CreationAssistantOverlays(
         EditMessageSheet(
             editorKey = message.id,
             value = state.editInput,
+            isAssistant = false,
             appearance = appearance,
             onValueChange = {
                 viewModel.onIntent(AiCreationAssistantIntent.ChangeEditInput(it))
@@ -84,7 +85,8 @@ internal fun CreationAssistantOverlays(
             onDismiss = {
                 viewModel.onIntent(AiCreationAssistantIntent.CloseUserMessageEditor)
             },
-            onSubmit = { editedText ->
+            onSave = null,
+            onRegenerate = { editedText ->
                 viewModel.onIntent(AiCreationAssistantIntent.ChangeEditInput(editedText))
                 viewModel.onIntent(AiCreationAssistantIntent.SubmitEditedUserMessage)
             },

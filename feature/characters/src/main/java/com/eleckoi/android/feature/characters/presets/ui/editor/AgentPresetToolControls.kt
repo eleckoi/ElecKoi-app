@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -34,6 +35,7 @@ import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Schema
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
@@ -104,8 +106,7 @@ internal fun AgentPresetToolsTab(
                 appearance = appearance,
                 modifier = Modifier.weight(1f),
                 height = 48.dp,
-                cornerRadius = 16.dp,
-                inputModifier = Modifier.semantics { contentDescription = "搜索预设工具" },
+                clearContentDescription = "清除预设工具搜索",
                 onKeywordChange = { query = it },
             )
             Button(
@@ -271,22 +272,42 @@ private fun QuickToolListContent(
     onDismiss: () -> Unit,
 ) {
     SheetHeader(title = "预设工具", appearance = appearance, onDismiss = onDismiss)
-    LazyColumn(
-        modifier = Modifier.fillMaxWidth().heightIn(min = 190.dp, max = 520.dp),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        items(groups, key = AgentToolGroupSnapshot::id) { group ->
-            PresetToolCard(
-                group = group,
-                enabled = group.id in enabledGroupIds,
-                appearance = appearance,
-                compact = true,
-                onOpen = { onOpen(group.id) },
-                onEnabledChange = { onEnabledChange(group.id, it) },
-            )
+    if (groups.isEmpty()) {
+        Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            ToolEmptyState("当前预设还没有添加工具", appearance)
         }
-        if (groups.isEmpty()) item { ToolEmptyState("当前预设还没有添加工具", appearance) }
+    } else {
+        Surface(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            color = appearance.mobileSurface,
+            shape = RoundedCornerShape(18.dp),
+            shadowElevation = 0.dp,
+        ) {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp),
+                contentPadding = PaddingValues(vertical = 6.dp),
+            ) {
+                itemsIndexed(groups, key = { _, group -> group.id }) { index, group ->
+                    Column {
+                        if (index > 0) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(start = 54.dp),
+                                thickness = 0.5.dp,
+                                color = appearance.mobileText.copy(alpha = 0.07f),
+                            )
+                        }
+                        PresetToolCard(
+                            group = group,
+                            enabled = group.id in enabledGroupIds,
+                            appearance = appearance,
+                            compact = true,
+                            onOpen = { onOpen(group.id) },
+                            onEnabledChange = { onEnabledChange(group.id, it) },
+                        )
+                    }
+                }
+            }
+        }
     }
     Row(
         modifier = Modifier.fillMaxWidth().padding(end = 10.dp, bottom = 6.dp),
@@ -315,25 +336,28 @@ internal fun PresetToolCard(
 ) {
     Surface(
         color = appearance.mobileSurface,
-        shape = RoundedCornerShape(18.dp),
-        shadowElevation = if (enabled) 1.dp else 0.dp,
+        shape = RoundedCornerShape(if (compact) 0.dp else 18.dp),
+        shadowElevation = 0.dp,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().heightIn(min = if (compact) 68.dp else 78.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = if (compact) 54.dp else 78.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(
-                modifier = Modifier.weight(1f).clickable(onClick = onOpen).padding(start = 12.dp, top = 10.dp, bottom = 10.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable(onClick = onOpen)
+                    .padding(start = 13.dp, top = if (compact) 5.dp else 10.dp, bottom = if (compact) 5.dp else 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                ToolGroupIcon(group.id, enabled, appearance)
-                Column(modifier = Modifier.weight(1f).padding(start = 12.dp, end = 6.dp)) {
+                ToolGroupIcon(group.id, enabled, appearance, compact)
+                Column(modifier = Modifier.weight(1f).padding(start = 11.dp, end = 6.dp)) {
                     Text(
                         group.name,
                         color = appearance.mobileText,
                         fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
+                        fontWeight = if (compact) FontWeight.Medium else FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -353,7 +377,7 @@ internal fun PresetToolCard(
                     Icons.AutoMirrored.Rounded.KeyboardArrowRight,
                     contentDescription = "配置${group.name}",
                     tint = appearance.mobileMuted.copy(alpha = 0.62f),
-                    modifier = Modifier.size(22.dp),
+                    modifier = Modifier.size(if (compact) 19.dp else 22.dp),
                 )
             }
             AppSwitch(
@@ -369,11 +393,20 @@ internal fun PresetToolCard(
 }
 
 @Composable
-private fun ToolGroupIcon(groupId: String, enabled: Boolean, appearance: AppearanceTheme) {
+private fun ToolGroupIcon(
+    groupId: String,
+    enabled: Boolean,
+    appearance: AppearanceTheme,
+    compact: Boolean,
+) {
     Box(
-        modifier = Modifier.size(44.dp).background(
-            color = if (enabled) appearance.mobileBlue.copy(alpha = 0.12f) else appearance.mobileSoft.copy(alpha = 0.6f),
-            shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.size(if (compact) 30.dp else 44.dp).background(
+            color = if (enabled) {
+                appearance.mobileBlue.copy(alpha = 0.10f)
+            } else {
+                appearance.mobileText.copy(alpha = 0.055f)
+            },
+            shape = RoundedCornerShape(if (compact) 9.dp else 14.dp),
         ),
         contentAlignment = Alignment.Center,
     ) {
@@ -381,7 +414,7 @@ private fun ToolGroupIcon(groupId: String, enabled: Boolean, appearance: Appeara
             toolGroupIcon(groupId),
             contentDescription = null,
             tint = if (enabled) appearance.mobileBlue else appearance.mobileMuted,
-            modifier = Modifier.size(22.dp),
+            modifier = Modifier.size(if (compact) 17.dp else 22.dp),
         )
     }
 }

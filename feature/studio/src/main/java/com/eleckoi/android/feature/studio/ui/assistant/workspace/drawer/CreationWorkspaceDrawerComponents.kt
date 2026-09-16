@@ -13,14 +13,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.PushPin
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -34,7 +31,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -42,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import com.eleckoi.android.engine.workspace.model.CreatorConversation
 import com.eleckoi.android.engine.workspace.model.CreatorWorkspace
 import com.eleckoi.android.foundation.design.AppearanceTheme
+import com.eleckoi.android.foundation.design.components.AppSearchField
 import com.eleckoi.android.foundation.design.components.DshFolderGlyph
 import com.eleckoi.android.foundation.design.components.DshIconPaths
 import com.eleckoi.android.foundation.design.components.DshTreeDisclosureGlyph
@@ -54,43 +51,16 @@ internal fun DrawerSearchField(
     appearance: AppearanceTheme,
     onQueryChange: (String) -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(52.dp)
-            .border(0.5.dp, appearance.mobileLine.copy(alpha = 0.62f), RoundedCornerShape(26.dp))
-            .padding(start = 16.dp, end = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            Icons.Rounded.Search,
-            contentDescription = null,
-            modifier = Modifier.size(21.dp),
-            tint = appearance.mobileMuted,
-        )
-        BasicTextField(
-            value = query,
-            onValueChange = onQueryChange,
-            modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = 10.dp),
-            singleLine = true,
-            textStyle = TextStyle(color = appearance.mobileText, fontSize = 14.sp),
-            decorationBox = { inner ->
-                Box {
-                    if (query.isBlank()) {
-                        Text("搜索对话内容…", color = appearance.mobileMuted, fontSize = 14.sp)
-                    }
-                    inner()
-                }
-            },
-        )
-        if (query.isNotBlank()) {
-            IconButton(onClick = { onQueryChange("") }, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.Rounded.Close, contentDescription = "清空搜索", tint = appearance.mobileMuted)
-            }
-        }
-    }
+    AppSearchField(
+        keyword = query,
+        placeholder = "搜索对话内容…",
+        appearance = appearance,
+        modifier = Modifier.fillMaxWidth(),
+        height = 52.dp,
+        fontSize = 14.sp,
+        clearContentDescription = "清空搜索",
+        onKeywordChange = onQueryChange,
+    )
 }
 
 @Composable

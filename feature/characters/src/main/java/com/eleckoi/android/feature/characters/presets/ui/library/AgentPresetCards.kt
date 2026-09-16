@@ -41,7 +41,6 @@ import com.eleckoi.android.foundation.design.components.AvatarCircle
 import com.eleckoi.android.foundation.design.components.DshGeneralGlyph
 import com.eleckoi.android.foundation.design.components.DshSettingsGlyph
 import com.eleckoi.android.foundation.design.components.ModelProviderIcon
-import com.eleckoi.android.foundation.design.components.dropShadow
 import com.eleckoi.android.foundation.design.components.noRippleClickable
 
 @Composable
@@ -153,16 +152,11 @@ private fun PresetWideCard(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 94.dp)
-            .dropShadow(shape, appearance.mobileText.copy(alpha = 0.045f), blur = 10.dp, offsetY = 3.dp)
             .clip(shape)
-            .background(if (active) appearance.mobilePinnedBg else appearance.mobileSurface)
+            .background(appearance.mobileSurface)
             .border(
                 width = 0.5.dp,
-                color = if (active) {
-                    appearance.mobileBlue.copy(alpha = if (appearance.isDark) 0.24f else 0.14f)
-                } else {
-                    appearance.mobileLine
-                },
+                color = appearance.mobileLine,
                 shape = shape,
             )
             .noRippleClickable(onClick = if (selectionMode) onToggleSelected else onOpen)
@@ -235,10 +229,8 @@ private fun PresetWideCard(
                             "使用中",
                             modifier = Modifier
                                 .padding(start = 7.dp)
-                                .clip(androidx.compose.foundation.shape.RoundedCornerShape(7.dp))
-                                .background(appearance.mobileBlue.copy(alpha = if (appearance.isDark) 0.18f else 0.09f))
-                                .padding(horizontal = 6.dp, vertical = 2.dp),
-                            color = appearance.mobileBlue,
+                                .padding(horizontal = 2.dp, vertical = 2.dp),
+                            color = appearance.mobileBlue.copy(alpha = 0.92f),
                             fontSize = 10.sp,
                             lineHeight = 12.sp,
                             fontWeight = FontWeight.Medium,

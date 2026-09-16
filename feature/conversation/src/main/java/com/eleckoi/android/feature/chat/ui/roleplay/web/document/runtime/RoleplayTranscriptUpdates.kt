@@ -52,6 +52,11 @@ internal val RoleplayTranscriptUpdates = """    const authorApiIdle = () => {
         state.snapshots.clear();
       }
       state.sessionId = payload.sessionId; state.messages = payload.messages || [];
+      state.deleteMode = !!payload.deleteMode;
+      state.deleteFromMessageId = String(payload.deleteFromMessageId || '');
+      state.deleteFromIndex = state.deleteMode
+        ? state.messages.findIndex(message => message.id === state.deleteFromMessageId)
+        : -1;
       state.icons = payload.icons || state.icons;
       state.frontendRendererEnabled = payload.frontendRendererEnabled !== false;
       state.byId = new Map(state.messages.map(message => [message.id, message]));
@@ -82,6 +87,12 @@ internal val RoleplayTranscriptUpdates = """    const authorApiIdle = () => {
         state.frontendRendererEnabled !== payload.frontendRendererEnabled;
       if (typeof payload.frontendRendererEnabled === 'boolean') {
         state.frontendRendererEnabled = payload.frontendRendererEnabled;
+      }
+      const deleteSelectionChanged =
+        typeof payload.deleteMode === 'boolean' || typeof payload.deleteFromMessageId === 'string';
+      if (typeof payload.deleteMode === 'boolean') state.deleteMode = payload.deleteMode;
+      if (typeof payload.deleteFromMessageId === 'string') {
+        state.deleteFromMessageId = payload.deleteFromMessageId;
       }
       if (payload.style) applyStyle(payload.style);
 
@@ -114,6 +125,9 @@ internal val RoleplayTranscriptUpdates = """    const authorApiIdle = () => {
         state.messages = next;
       }
       state.byId = new Map(state.messages.map(message => [message.id, message]));
+      state.deleteFromIndex = state.deleteMode
+        ? state.messages.findIndex(message => message.id === state.deleteFromMessageId)
+        : -1;
       if (frontendRendererChanged) {
         turns.querySelectorAll(':scope > .turn').forEach(turn => {
           const message = state.byId.get(turn.dataset.id);
@@ -143,7 +157,7 @@ internal val RoleplayTranscriptUpdates = """    const authorApiIdle = () => {
       empty.style.display = state.messages.length ? 'none' : 'block';
       requestGeometryCommit({
         renderRange: true,
-        forceRender: Array.isArray(payload.order) || !!payload.style,
+        forceRender: Array.isArray(payload.order) || !!payload.style || deleteSelectionChanged,
         afterCommit: () => {
           incoming.forEach(message => post({ type: 'messageRendered', messageId: message.id }));
           commitTransaction(payload);

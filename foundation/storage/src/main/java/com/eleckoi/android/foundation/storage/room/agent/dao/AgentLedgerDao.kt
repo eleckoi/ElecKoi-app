@@ -279,6 +279,22 @@ interface AgentLedgerDao {
         """,
     )
     fun deleteUnreferencedContentParts(conversationId: String)
+
+    @Query(
+        """
+        DELETE FROM conversation_speakers
+        WHERE conversationId = :conversationId
+            AND NOT EXISTS (
+                SELECT 1 FROM agent_turns AS turn
+                WHERE turn.speakerId = conversation_speakers.id
+            )
+            AND NOT EXISTS (
+                SELECT 1 FROM agent_responses AS response
+                WHERE response.speakerId = conversation_speakers.id
+            )
+        """,
+    )
+    fun deleteUnreferencedSpeakers(conversationId: String)
 }
 
 /** Lightweight positional row; large bodies are loaded in bounded chunks after Paging selects IDs. */

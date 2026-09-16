@@ -77,6 +77,9 @@ internal class RoleplayTranscriptBridge(
                     .takeIf(String::isNotBlank)
                     ?.let(callbacksProvider().onSelectOpeningOption)
                 "openingJump" -> callbacksProvider().onRequestOpeningJump()
+                "deleteSelect" -> value.optString("messageId")
+                    .takeIf(String::isNotBlank)
+                    ?.let(callbacksProvider().onSelectDeleteFrom)
                 "userAvatar" -> callbacksProvider().onUserAvatarClick()
                 "assistantAvatar" -> callbacksProvider().onAssistantAvatarClick()
                 "messageAction" -> {

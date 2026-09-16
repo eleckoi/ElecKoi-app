@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -28,17 +27,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.eleckoi.android.foundation.design.components.AppIconPaths
+import com.eleckoi.android.foundation.design.components.AppSearchField
 import com.eleckoi.android.foundation.design.components.ModelProviderIcon
 import com.eleckoi.android.foundation.design.components.StrokeSvgIcon
-import com.eleckoi.android.foundation.design.components.SvgCircle
 import com.eleckoi.android.foundation.design.components.noRippleClickable
 import com.eleckoi.android.engine.generation.model.ModelConfig
 import com.eleckoi.android.engine.generation.model.ModelOption
@@ -407,35 +404,16 @@ private fun ModelSearchField(
     modifier: Modifier = Modifier,
     onValueChange: (String) -> Unit,
 ) {
-    val field = appearance.fieldPalette()
-    Row(
-        modifier = modifier
-            .height(34.dp)
-            .border(0.5.dp, field.border, RoundedCornerShape(9.dp))
-            .padding(horizontal = 11.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        StrokeSvgIcon(
-            paths = AppIconPaths.Search,
-            circles = listOf(SvgCircle(10.8f, 10.8f, 5.8f)),
-            color = field.icon,
-            iconSize = 14.dp,
-            strokeWidth = 1.8f,
-        )
-        Box(modifier = Modifier.weight(1f).padding(start = 7.dp), contentAlignment = Alignment.CenterStart) {
-            if (value.isEmpty()) {
-                Text(placeholder, color = field.placeholder, fontSize = 13.sp, maxLines = 1)
-            }
-            BasicTextField(
-                value = value,
-                onValueChange = onValueChange,
-                modifier = Modifier.fillMaxWidth(),
-                textStyle = TextStyle(color = field.text, fontSize = 13.sp),
-                cursorBrush = SolidColor(appearance.mobileBlue),
-                singleLine = true,
-            )
-        }
-    }
+    AppSearchField(
+        keyword = value,
+        placeholder = placeholder,
+        appearance = appearance,
+        modifier = modifier,
+        height = 44.dp,
+        fontSize = 14.sp,
+        iconSize = 15.dp,
+        onKeywordChange = onValueChange,
+    )
 }
 
 @Composable

@@ -97,7 +97,15 @@ internal fun CharacterPickerPanel(
                 Text("取消", color = appearance.mobileMuted, fontSize = 14.sp, modifier = Modifier.noRippleClickable(onClick = onDismiss).padding(8.dp))
                 Text("完成", color = appearance.mobileBlue, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.noRippleClickable { onConfirm(selectedIds.toSet()) }.padding(8.dp))
             }
-            AppSearchField(keyword, "搜索角色名称", appearance) { keyword = it }
+            AppSearchField(
+                keyword = keyword,
+                placeholder = "搜索角色名称",
+                appearance = appearance,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, top = 11.dp, end = 16.dp, bottom = 8.dp),
+                onKeywordChange = { keyword = it },
+            )
             LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp)) {
                 if (visible.isEmpty()) {
                     item { MobileEmptyState("没有匹配的角色", appearance) }

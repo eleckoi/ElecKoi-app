@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -24,12 +23,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -37,7 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.foundation.design.components.AppIconPaths
-import com.eleckoi.android.foundation.design.components.SearchIcon
+import com.eleckoi.android.foundation.design.components.AppSearchField
 import com.eleckoi.android.foundation.design.components.StrokeSvgIcon
 import com.eleckoi.android.foundation.design.components.focusDismissInputRegion
 import com.eleckoi.android.foundation.design.components.noRippleClickable
@@ -75,36 +71,14 @@ internal fun SearchInput(
     modifier: Modifier,
     onChange: (String) -> Unit,
 ) {
-    val field = appearance.fieldPalette()
-    var focused by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(12.dp)
-    Box(
-        modifier = modifier
-            .height(40.dp)
-            .clip(shape)
-            .background(field.container)
-            .border(if (focused) 1.dp else 0.5.dp, if (focused) field.focusedBorder else field.border, shape)
-            .focusDismissInputRegion()
-            .padding(start = 12.dp, end = 12.dp),
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            SearchIcon(appearance, iconSize = 18.dp)
-            Box(modifier = Modifier.weight(1f).padding(start = 8.dp), contentAlignment = Alignment.CenterStart) {
-                if (value.isBlank()) {
-                    Text(placeholder, color = field.placeholder, fontSize = 15.sp, maxLines = 1)
-                }
-                BasicTextField(
-                    value = value,
-                    onValueChange = onChange,
-                    modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused },
-                    textStyle = TextStyle(color = field.text, fontSize = 15.sp, lineHeight = 20.sp),
-                    singleLine = true,
-                    cursorBrush = SolidColor(appearance.mobileBlue),
-                )
-            }
-        }
-    }
+    AppSearchField(
+        keyword = value,
+        placeholder = placeholder,
+        appearance = appearance,
+        modifier = modifier.focusDismissInputRegion(),
+        iconSize = 18.dp,
+        onKeywordChange = onChange,
+    )
 }
 
 @Composable

@@ -66,6 +66,7 @@ internal val RoleplayTranscriptProjection = """    const desiredVirtualItems = (
           turn = createTurn(message);
         }
         turn.dataset.index = String(item.index);
+        applyDeletePresentation(turn, item.index);
         ordered.push(turn);
       }
       let cursor = turns.firstElementChild;

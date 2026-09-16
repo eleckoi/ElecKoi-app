@@ -10,6 +10,7 @@ import com.eleckoi.android.engine.agent.diagnostics.AgentTurnRequestCapture
 import com.eleckoi.android.engine.generation.model.ModelConfig
 import com.eleckoi.android.feature.chat.model.ChatDraft
 import com.eleckoi.android.feature.chat.model.ChatMessage
+import com.eleckoi.android.feature.chat.model.MessageRole
 import com.eleckoi.android.feature.chat.ui.diagnostics.AgentRequestCaptureDialog
 import com.eleckoi.android.feature.chat.ui.sheets.ChatHistorySheet
 import com.eleckoi.android.feature.chat.ui.sheets.EditMessageSheet
@@ -50,13 +51,42 @@ internal fun ChatScreenOverlays(
         EditMessageSheet(
             editorKey = state.editingMessage.id,
             value = state.editInput,
+            isAssistant = state.editingMessage.role == MessageRole.Assistant,
+            saving = state.isSavingEditedMessage,
             appearance = state.appearance,
             onValueChange = { onIntent(ChatIntent.EditInputChanged(it)) },
             onDismiss = { onIntent(ChatIntent.CloseEditMessage) },
-            onSubmit = { editedText ->
+            onSave = if (state.editingMessage.role == MessageRole.Assistant) {
+                { editedText ->
+                    onIntent(ChatIntent.EditInputChanged(editedText))
+                    onIntent(ChatIntent.SaveEditedMessage)
+                }
+            } else {
+                null
+            },
+            onRegenerate = if (state.editingMessage.role == MessageRole.User) {
+                { editedText ->
+                    onResumeToEnd()
+                    onIntent(ChatIntent.EditInputChanged(editedText))
+                    onIntent(ChatIntent.SubmitEditedMessage)
+                }
+            } else {
+                null
+            },
+        )
+    }
+
+    if (state.deleteMessagesConfirmationOpen) {
+        ConfirmDialog(
+            title = "删除这些消息？",
+            message = "所选消息以及它之后的全部消息、图片和工具调用记录都会被永久删除。",
+            appearance = state.appearance,
+            confirmText = "确认删除",
+            destructive = true,
+            onDismiss = { onIntent(ChatIntent.DismissDeleteMessagesConfirmation) },
+            onConfirm = {
                 onResumeToEnd()
-                onIntent(ChatIntent.EditInputChanged(editedText))
-                onIntent(ChatIntent.SubmitEditedMessage)
+                onIntent(ChatIntent.ConfirmDeleteMessages)
             },
         )
     }

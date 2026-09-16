@@ -28,6 +28,11 @@ data class ChatUiState(
     val chatBackgroundErrorMessage: String = "",
     val editingMessage: ChatMessage? = null,
     val editInput: String = "",
+    val isSavingEditedMessage: Boolean = false,
+    val deleteMessagesOpen: Boolean = false,
+    val deleteFromMessageId: String? = null,
+    val deleteMessagesConfirmationOpen: Boolean = false,
+    val isDeletingMessages: Boolean = false,
     val assistantBubbleEnabled: Boolean = RoleplayLayoutDefaults.AssistantBubbleEnabled,
     val chatLayoutMode: ChatLayoutMode = ChatLayoutMode.Default,
     val chatRoleplayCardPanel: Boolean = RoleplayLayoutDefaults.CardPanel,
@@ -98,6 +103,13 @@ sealed interface ChatIntent {
     data object CloseEditMessage : ChatIntent
     data class EditInputChanged(val value: String) : ChatIntent
     data object SubmitEditedMessage : ChatIntent
+    data object SaveEditedMessage : ChatIntent
+    data object OpenDeleteMessages : ChatIntent
+    data object CloseDeleteMessages : ChatIntent
+    data class SelectDeleteFromMessage(val messageId: String) : ChatIntent
+    data object RequestDeleteMessages : ChatIntent
+    data object DismissDeleteMessagesConfirmation : ChatIntent
+    data object ConfirmDeleteMessages : ChatIntent
     data class RegenerateFrom(val message: ChatMessage) : ChatIntent
     data class RegenerateImage(val messageId: String, val attachmentId: String) : ChatIntent
     data class SelectOpeningOption(val openingOptionId: String) : ChatIntent

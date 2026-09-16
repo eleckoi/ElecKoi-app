@@ -370,6 +370,19 @@ internal class ChatServiceImpl(
         return generationRunCoordinator.sendMessage(draft, message, inputImages, onDelta, onUserTurnPersisted)
     }
 
+    override suspend fun rawChatMessage(sessionId: String, messageId: String): ChatMessage? =
+        withContext(Dispatchers.IO) { sessions.message(sessionId, messageId) }
+
+    override suspend fun editAssistantMessage(sessionId: String, messageId: String, content: String) {
+        val obsoleteRuntimeThreadIds = withContext(Dispatchers.IO) {
+            sessions.editAssistantMessage(sessionId, messageId, content)
+        }
+        withContext(Dispatchers.IO) {
+            deleteObsoleteRuntimeSessions(obsoleteRuntimeThreadIds)
+        }
+        draftProjector.clearCaches()
+    }
+
     override suspend fun deleteMessagesFrom(sessionId: String, messageId: String): ChatDeleteMessagesResult {
         val removed = withContext(Dispatchers.IO) { sessions.deleteMessagesFrom(sessionId, messageId) }
         withContext(Dispatchers.IO) {

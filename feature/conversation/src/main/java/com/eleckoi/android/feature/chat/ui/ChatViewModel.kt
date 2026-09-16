@@ -246,6 +246,15 @@ class ChatViewModel(
             ChatIntent.CloseEditMessage -> closeEditMessage()
             is ChatIntent.EditInputChanged -> _uiState.update { it.copy(editInput = intent.value) }
             ChatIntent.SubmitEditedMessage -> submitEditedMessage()
+            ChatIntent.SaveEditedMessage -> saveEditedMessage()
+            ChatIntent.OpenDeleteMessages -> openDeleteMessages()
+            ChatIntent.CloseDeleteMessages -> closeDeleteMessages()
+            is ChatIntent.SelectDeleteFromMessage -> selectDeleteFromMessage(intent.messageId)
+            ChatIntent.RequestDeleteMessages -> requestDeleteMessages()
+            ChatIntent.DismissDeleteMessagesConfirmation -> _uiState.update {
+                it.copy(deleteMessagesConfirmationOpen = false)
+            }
+            ChatIntent.ConfirmDeleteMessages -> confirmDeleteMessages()
             is ChatIntent.RegenerateFrom -> regenerateFrom(intent.message)
             is ChatIntent.RegenerateImage -> draftMutationController.regenerateImage(intent.messageId, intent.attachmentId)
             is ChatIntent.SelectOpeningOption -> draftMutationController.selectOpeningOption(intent.openingOptionId)
@@ -420,22 +429,139 @@ class ChatViewModel(
     fun openEditMessage(message: ChatMessage) {
         val snapshot = _uiState.value
         val rejectedReason = when {
-            message.role != MessageRole.User -> "not-user"
+            message.role == MessageRole.System -> "system"
+            message.pending -> "pending"
             snapshot.isSending -> "sending"
             else -> null
         }
         if (rejectedReason != null) {
             return
         }
-        _uiState.update { it.copy(editingMessage = message, editInput = message.content) }
+        val sessionId = snapshot.draft?.session?.id ?: return
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) { chatService.rawChatMessage(sessionId, message.id) }
+            }.onSuccess { rawMessage ->
+                if (rawMessage == null) return@onSuccess
+                _uiState.update { current ->
+                    if (
+                        current.draft?.session?.id == sessionId &&
+                        !current.isSending &&
+                        rawMessage.role != MessageRole.System &&
+                        !rawMessage.pending
+                    ) {
+                        current.copy(editingMessage = rawMessage, editInput = rawMessage.content)
+                    } else {
+                        current
+                    }
+                }
+            }.onFailure { error ->
+                _uiState.update { current ->
+                    if (current.draft?.session?.id == sessionId) {
+                        current.copy(errorMessage = error.message ?: "读取原始消息失败")
+                    } else {
+                        current
+                    }
+                }
+            }
+        }
     }
 
     fun closeEditMessage() {
-        _uiState.update { it.copy(editingMessage = null, editInput = "") }
+        _uiState.update { current ->
+            if (current.isSavingEditedMessage) current else {
+                current.copy(editingMessage = null, editInput = "", isSavingEditedMessage = false)
+            }
+        }
     }
 
     fun submitEditedMessage() {
         generationCoordinator.submitEditedMessage()
+    }
+
+    fun saveEditedMessage() {
+        generationCoordinator.saveEditedMessage()
+    }
+
+    private fun openDeleteMessages() {
+        val snapshot = _uiState.value
+        if (snapshot.isSending || snapshot.isDeletingMessages || snapshot.draft == null) return
+        _uiState.update {
+            it.copy(
+                moreToolsOpen = false,
+                deleteMessagesOpen = true,
+                deleteFromMessageId = null,
+                deleteMessagesConfirmationOpen = false,
+            )
+        }
+    }
+
+    private fun closeDeleteMessages() {
+        _uiState.update { current ->
+            if (current.isDeletingMessages) current else {
+                current.copy(
+                    deleteMessagesOpen = false,
+                    deleteFromMessageId = null,
+                    deleteMessagesConfirmationOpen = false,
+                )
+            }
+        }
+    }
+
+    private fun selectDeleteFromMessage(messageId: String) {
+        val snapshot = _uiState.value
+        val message = snapshot.draft?.session?.messages?.firstOrNull { it.id == messageId } ?: return
+        if (
+            !snapshot.deleteMessagesOpen ||
+            snapshot.isDeletingMessages ||
+            message.role == MessageRole.System ||
+            message.pending
+        ) return
+        _uiState.update { it.copy(deleteFromMessageId = messageId) }
+    }
+
+    private fun requestDeleteMessages() {
+        _uiState.update { current ->
+            if (current.deleteMessagesOpen && current.deleteFromMessageId != null && !current.isDeletingMessages) {
+                current.copy(deleteMessagesConfirmationOpen = true)
+            } else {
+                current
+            }
+        }
+    }
+
+    private fun confirmDeleteMessages() {
+        val snapshot = _uiState.value
+        val messageId = snapshot.deleteFromMessageId ?: return
+        if (!snapshot.deleteMessagesOpen || snapshot.isDeletingMessages || snapshot.isSending) return
+        _uiState.update {
+            it.copy(
+                deleteMessagesConfirmationOpen = false,
+                isDeletingMessages = true,
+                errorMessage = "",
+            )
+        }
+        viewModelScope.launch {
+            runCatching { authorGateway.deleteMessagesFrom(messageId) }
+                .onSuccess {
+                    _uiState.update { current ->
+                        current.copy(
+                            deleteMessagesOpen = false,
+                            deleteFromMessageId = null,
+                            deleteMessagesConfirmationOpen = false,
+                            isDeletingMessages = false,
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    _uiState.update { current ->
+                        current.copy(
+                            isDeletingMessages = false,
+                            errorMessage = error.message ?: "删除消息失败",
+                        )
+                    }
+                }
+        }
     }
 
     fun regenerateFrom(message: ChatMessage) {

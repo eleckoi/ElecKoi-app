@@ -29,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -159,6 +160,9 @@ internal fun AgentPresetLibrary(
             selectedPresetIds + preset.id
         }
     }
+    // Root-page states must all reveal the same MobileRootTopBar material. Painting mobileBg here
+    // made only search/export/delete modes turn blue while the normal action header stayed neutral.
+    val headerBackground = if (onBack == null) Color.Transparent else mobileRootContentColor(appearance)
 
     PinnedStatusScaffold(
         appearance = appearance,
@@ -170,12 +174,17 @@ internal fun AgentPresetLibrary(
         backgroundColor = mobileRootContentColor(appearance),
         includeStatusBarPadding = false,
     ) {
-        MobileRootTopBar(appearance = appearance) {
+        MobileRootTopBar(
+            appearance = appearance,
+            chromeColor = if (onBack != null) mobileRootContentColor(appearance) else null,
+            glassEnabled = onBack == null,
+        ) {
             if (searchOpen) {
                 StorySearchHeader(
                     query = search,
                     placeholder = "搜索预设",
                     appearance = appearance,
+                    backgroundColor = headerBackground,
                     onQueryChange = { search = it },
                     onClose = {
                         searchOpen = false
@@ -212,6 +221,7 @@ internal fun AgentPresetLibrary(
                     appearance = appearance,
                     onBack = onBack,
                     onOpenSidebar = onOpenSidebar,
+                    backgroundColor = headerBackground,
                     actionWidth = if (batchMode == null) 96.dp else 48.dp,
                     action = {
                         if (batchMode == null) {

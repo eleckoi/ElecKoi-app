@@ -1,5 +1,6 @@
 package com.eleckoi.android.feature.modelconfig.ui.modelpicker
 
+import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -10,13 +11,17 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -26,10 +31,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
 import com.eleckoi.android.foundation.design.components.AppIconPaths
 import com.eleckoi.android.foundation.design.components.ModelProviderIcon
 import com.eleckoi.android.foundation.design.components.MobileBottomSheetOverlay
@@ -130,20 +139,41 @@ fun ModelPickerSheet(
     LaunchedEffect(openConfigId, openConfig) {
         if (openConfigId.isNotBlank() && openConfig == null) openConfigId = ""
     }
-    MobileBottomSheetOverlay(
-        visible = visible,
-        appearance = appearance,
-        onDismiss = onDismiss,
-        sheetModifier = Modifier.fillMaxHeight(0.88f),
-        showHandle = true,
+    if (!visible) return
+
+    // Keep IME insets owned by the picker window. Hosting this sheet in the chat composition made
+    // the search keyboard update the conversation's WindowInsets and move the transcript with it.
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false,
+        ),
     ) {
+        val window = (LocalView.current.parent as? DialogWindowProvider)?.window
+        SideEffect {
+            window?.setDimAmount(0f)
+            window?.setWindowAnimations(0)
+            window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
+        }
+        var sheetVisible by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) { sheetVisible = true }
+        CompositionLocalProvider(LocalContentColor provides appearance.mobileText) {
+            MobileBottomSheetOverlay(
+                visible = sheetVisible,
+                appearance = appearance,
+                onDismiss = onDismiss,
+                sheetModifier = Modifier.fillMaxHeight(0.88f),
+                showHandle = true,
+            ) {
         // Register inside the sheet content so this nested-page handler takes precedence over the
         // modal's own dismiss handler. At the root, it is disabled and system back closes the sheet.
         BackHandler(enabled = canNavigateBack, onBack = navigateBack)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f),
+                .weight(1f)
+                .imePadding(),
         ) {
         Column(
             modifier = Modifier
@@ -283,6 +313,8 @@ fun ModelPickerSheet(
                 },
             )
         }
+        }
+            }
         }
     }
 }

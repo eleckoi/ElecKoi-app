@@ -45,15 +45,14 @@ internal fun mobileStoryRouteEntry(
                 )
         }
         is MobileRoute.RegexRules -> NavEntry(currentRoute) {
+                val regexState = currentRegexRulesState.value
                 LaunchedEffect(currentRoute.characterId) {
-                    if (currentRegexRulesState.value.characterId != currentRoute.characterId) {
-                        regexRulesViewModel.load(currentRoute.characterId)
-                    }
+                    regexRulesViewModel.load(currentRoute.characterId)
                 }
                 RegexRulesPage(
-                    rules = currentRegexRulesState.value.rules,
+                    rules = regexState.rules.takeIf { regexState.characterId == currentRoute.characterId },
                     appearance = currentThemeState.value.appearance,
-                    errorMessage = currentRegexRulesState.value.errorMessage,
+                    errorMessage = regexState.errorMessage,
                     onBack = goBackInsideApp,
                     onSave = { rules -> regexRulesViewModel.save(currentRoute.characterId, rules) },
                     onImportRules = { scope -> documentActions.importRegexRules(currentRoute.characterId, scope) },

@@ -20,6 +20,12 @@ internal object RoleplayTranscriptPatchPlanner {
         if (baseline.frontendRendererEnabled != next.frontendRendererEnabled) {
             patch.put("frontendRendererEnabled", next.frontendRendererEnabled)
         }
+        if (baseline.deleteMode != next.deleteMode) {
+            patch.put("deleteMode", next.deleteMode)
+        }
+        if (baseline.deleteFromMessageId != next.deleteFromMessageId) {
+            patch.put("deleteFromMessageId", next.deleteFromMessageId)
+        }
 
         @Suppress("UNCHECKED_CAST")
         val baselineAppended = baseline.messages as? ImmutableAppendedList<RoleplayTranscriptMessage>

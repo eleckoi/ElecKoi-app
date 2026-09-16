@@ -169,6 +169,8 @@ internal fun buildRoleplayTranscriptModel(
     frontendRendererEnabled: Boolean,
     historyHasMore: Boolean,
     historyLoading: Boolean,
+    deleteMode: Boolean = false,
+    deleteFromMessageId: String = "",
     projectionCache: RoleplayTranscriptProjectionCache? = null,
 ): RoleplayTranscriptModel {
     val character = draft.session.characterPersona
@@ -390,6 +392,8 @@ internal fun buildRoleplayTranscriptModel(
         frontendRendererEnabled = frontendRendererEnabled,
         historyHasMore = historyHasMore,
         historyLoading = historyLoading,
+        deleteMode = deleteMode,
+        deleteFromMessageId = deleteFromMessageId,
     )
 }
 

@@ -13,6 +13,7 @@ import java.lang.reflect.Proxy
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,6 +24,86 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ChatGenerationCoordinatorTest {
+    @Test
+    fun `repeated assistant edits in a long chat persist only the selected message`() {
+        val messages = (0 until 300).flatMap { index ->
+            listOf(
+                ChatMessage("user-$index", MessageRole.User, "问题 $index"),
+                ChatMessage("assistant-$index", MessageRole.Assistant, "回复 $index"),
+            )
+        }
+        val target = messages.first { it.id == "assistant-150" }
+        val session = ChatSession(
+            id = "session-1", title = "", characterId = "", characterName = "",
+            characterAvatar = "", characterPersona = CharacterCard(),
+            messages = messages, updatedAt = "",
+        )
+        val draft = ChatDraft(session = session, selectedModelConfig = ModelConfig(), selectedModel = "model")
+        val calls = AtomicReference<List<Triple<String, String, String>>>(emptyList())
+        val eventCount = AtomicInteger(0)
+        val firstSaved = CountDownLatch(1)
+        val secondSaved = CountDownLatch(1)
+        val service = Proxy.newProxyInstance(
+            ChatService::class.java.classLoader, arrayOf(ChatService::class.java),
+        ) { _, method, args ->
+            when (method.name) {
+                "editAssistantMessage" -> {
+                    calls.updateAndGet {
+                        it + Triple(args!![0] as String, args[1] as String, args[2] as String)
+                    }
+                    Unit
+                }
+                else -> error("Unexpected ChatService call: ${method.name}")
+            }
+        } as ChatService
+        val state = AtomicReference(
+            ChatUiState(draft = draft, editingMessage = target, editInput = "第一次修改"),
+        )
+        val events = AtomicReference<List<Triple<String, String, List<String>>>>(emptyList())
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val coordinator = ChatGenerationCoordinator(
+            scope = scope,
+            chatService = service,
+            state = state::get,
+            updateState = { transform -> state.updateAndGet(transform) },
+            onStopRequested = {},
+            onMessagesChanged = { id, reason, ids ->
+                events.updateAndGet { it + Triple(id, reason, ids) }
+                if (eventCount.incrementAndGet() == 1) firstSaved.countDown() else secondSaved.countDown()
+            },
+        )
+
+        try {
+            coordinator.saveEditedMessage()
+            assertTrue(firstSaved.await(2, TimeUnit.SECONDS))
+            assertTrue("保存 AI 消息不应复制或替换 Paging 时间线", state.get().draft === draft)
+
+            state.updateAndGet {
+                it.copy(editingMessage = target, editInput = "第二次修改", isSavingEditedMessage = false)
+            }
+            coordinator.saveEditedMessage()
+            assertTrue(secondSaved.await(2, TimeUnit.SECONDS))
+
+            assertEquals(
+                listOf(
+                    Triple("session-1", "assistant-150", "第一次修改"),
+                    Triple("session-1", "assistant-150", "第二次修改"),
+                ),
+                calls.get(),
+            )
+            assertEquals(
+                listOf(
+                    Triple("session-1", "edited", listOf("assistant-150")),
+                    Triple("session-1", "edited", listOf("assistant-150")),
+                ),
+                events.get(),
+            )
+            assertEquals(600, state.get().draft?.session?.messages?.size)
+        } finally {
+            scope.cancel()
+        }
+    }
+
     @Test
     fun `stale pending reply can regenerate when no request is active`() {
         val user = ChatMessage(id = "user-1", role = MessageRole.User, content = "重写")

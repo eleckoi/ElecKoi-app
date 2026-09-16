@@ -13,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -27,6 +28,7 @@ import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.foundation.design.components.AboveAnchorPopupPositionProvider
 import com.eleckoi.android.foundation.design.components.AppIconPaths
 import com.eleckoi.android.foundation.design.components.DshIconPaths
+import com.eleckoi.android.foundation.design.components.DshPresetGlyph
 import com.eleckoi.android.foundation.design.components.FilledSvgIcon
 import com.eleckoi.android.foundation.design.components.StrokeSvgIcon
 
@@ -37,6 +39,7 @@ internal fun ChatComposerMenu(
     permissionMode: AgentPermissionMode,
     permissionEnabled: Boolean,
     canRegenerateLatest: Boolean,
+    canDeleteMessages: Boolean,
     canAttachImages: Boolean,
     onDismiss: () -> Unit,
     onPickImages: () -> Unit,
@@ -47,6 +50,7 @@ internal fun ChatComposerMenu(
     onOpenRequestViewer: () -> Unit,
     onOpenVariableViewer: () -> Unit,
     onOpenDynamicSettings: (() -> Unit)?,
+    onDeleteMessages: () -> Unit,
     onRegenerateLatest: () -> Unit,
 ) {
     if (!expanded) return
@@ -89,9 +93,11 @@ internal fun ChatComposerMenu(
                 HorizontalDivider(color = appearance.mobileLine)
                 RoleplayMenuAction(
                     label = "预设",
-                    paths = AppIconPaths.CardStack,
                     appearance = appearance,
                     onDismiss = onDismiss,
+                    leadingContent = { color ->
+                        DshPresetGlyph(tint = color, iconSize = 17.dp)
+                    },
                     onClick = onOpenPresets,
                 )
                 RoleplayMenuAction(
@@ -146,6 +152,14 @@ internal fun ChatComposerMenu(
                         onSelectionComplete = onDismiss,
                     )
                 }
+                RoleplayMenuAction(
+                    label = "删除消息",
+                    paths = AppIconPaths.Trash,
+                    appearance = appearance,
+                    onDismiss = onDismiss,
+                    enabled = canDeleteMessages,
+                    onClick = onDeleteMessages,
+                )
                 HorizontalDivider(color = appearance.mobileLine)
                 RoleplayMenuAction(
                     label = "重新生成",
@@ -163,9 +177,10 @@ internal fun ChatComposerMenu(
 @Composable
 private fun RoleplayMenuAction(
     label: String,
-    paths: List<String>,
     appearance: AppearanceTheme,
     onDismiss: () -> Unit,
+    paths: List<String> = emptyList(),
+    leadingContent: (@Composable (Color) -> Unit)? = null,
     enabled: Boolean = true,
     filled: Boolean = false,
     onClick: () -> Unit,
@@ -174,7 +189,9 @@ private fun RoleplayMenuAction(
     DropdownMenuItem(
         text = { Text(label, color = color, fontSize = 13.5.sp, maxLines = 1) },
         leadingIcon = {
-            if (filled) {
+            if (leadingContent != null) {
+                leadingContent(color)
+            } else if (filled) {
                 FilledSvgIcon(
                     paths = paths,
                     color = color,

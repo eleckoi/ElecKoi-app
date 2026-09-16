@@ -6,10 +6,13 @@ import com.eleckoi.android.feature.characters.modes.story.regex.model.RegexRuleC
 import com.eleckoi.android.feature.characters.modes.story.regex.model.RegexRuleImportDocument
 import com.eleckoi.android.feature.characters.modes.story.regex.model.RegexRuleImportResult
 import com.eleckoi.android.feature.characters.modes.story.regex.model.RegexRuleScope
+import kotlinx.coroutines.flow.StateFlow
 
 internal class RegexRuleServiceImpl(
     private val rules: RegexRuleRepository,
 ) : RegexRuleService {
+    override val regexRulesRevision: StateFlow<Long> = rules.revision
+
     override fun loadRegexRules(characterId: String): RegexRuleCollection = rules.load(characterId)
 
     override fun saveRegexRules(characterId: String, collection: RegexRuleCollection): RegexRuleCollection {

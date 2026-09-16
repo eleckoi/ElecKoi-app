@@ -37,7 +37,6 @@ import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.foundation.design.components.AppIconPaths
 import com.eleckoi.android.foundation.design.components.DshSettingsGlyph
 import com.eleckoi.android.foundation.design.components.StrokeSvgIcon
-import com.eleckoi.android.foundation.design.components.dropShadow
 import com.eleckoi.android.foundation.design.components.noRippleClickable
 
 @Composable
@@ -152,18 +151,6 @@ private fun PresetGroupRailItem(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 66.dp)
-            .then(
-                if (selected) {
-                    Modifier.dropShadow(
-                        shape = shape,
-                        color = appearance.mobileText.copy(alpha = 0.045f),
-                        blur = 9.dp,
-                        offsetY = 3.dp,
-                    )
-                } else {
-                    Modifier
-                },
-            )
             .clip(shape)
             .background(if (selected) appearance.mobileSurface else Color.Transparent)
             .noRippleClickable(onClick = onClick)
@@ -173,7 +160,7 @@ private fun PresetGroupRailItem(
         Column(modifier = Modifier.weight(1f).padding(vertical = 9.dp)) {
             Text(
                 group.name,
-                color = if (selected) appearance.mobileBlue else appearance.mobileMuted,
+                color = if (selected) appearance.mobileText else appearance.mobileMuted,
                 fontSize = 12.5.sp,
                 lineHeight = 16.sp,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
@@ -181,7 +168,7 @@ private fun PresetGroupRailItem(
             Text(
                 count.toString(),
                 modifier = Modifier.padding(top = 3.dp),
-                color = if (selected) appearance.mobileBlue.copy(alpha = 0.78f) else appearance.mobileSoft,
+                color = if (selected) appearance.mobileMuted else appearance.mobileSoft,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium,
             )

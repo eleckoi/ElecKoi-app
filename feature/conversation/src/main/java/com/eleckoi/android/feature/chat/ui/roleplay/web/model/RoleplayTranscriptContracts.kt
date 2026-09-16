@@ -12,6 +12,8 @@ internal data class RoleplayTranscriptModel(
     val frontendRendererEnabled: Boolean = true,
     val historyHasMore: Boolean,
     val historyLoading: Boolean,
+    val deleteMode: Boolean = false,
+    val deleteFromMessageId: String = "",
 )
 
 internal data class RoleplayTranscriptMessage(

@@ -1,6 +1,34 @@
 package com.eleckoi.android.feature.chat.ui.roleplay.web.document.runtime
 
 internal val RoleplayTranscriptTurns = """    const missingAvatar = () => '<svg class="avatar-placeholder" viewBox="0 0 256 256" aria-hidden="true"><path d="M230.93,220a8,8,0,0,1-6.93,4H32a8,8,0,0,1-6.92-12c15.23-26.33,38.7-45.21,66.09-54.16a72,72,0,1,1,73.66,0c27.39,8.95,50.86,27.83,66.09,54.16A8,8,0,0,1,230.93,220Z"></path></svg>';
+    const applyDeletePresentation = (turn, index) => {
+      const active = state.deleteMode;
+      const message = state.messages[index];
+      const enabled = !!message && !message.pending && message.role !== 'system';
+      const selected = active && state.deleteFromIndex >= 0 && index >= state.deleteFromIndex;
+      turn.classList.toggle('delete-mode', active);
+      turn.classList.toggle('delete-selected', selected);
+      let selector = turn.querySelector(':scope > .delete-selector');
+      if (!active) {
+        if (selector) selector.remove();
+        return;
+      }
+      if (!selector) {
+        selector = document.createElement('button');
+        selector.type = 'button';
+        selector.className = 'delete-selector';
+        selector.dataset.action = 'delete-select';
+        selector.setAttribute('role', 'checkbox');
+        turn.prepend(selector);
+      }
+      selector.disabled = !enabled;
+      selector.classList.toggle('is-selected', selected);
+      selector.setAttribute('aria-checked', selected ? 'true' : 'false');
+      selector.setAttribute(
+        'aria-label',
+        selected ? '从这条消息开始删除，已选中' : '从这条消息开始删除',
+      );
+    };
     const createBody = message => {
       const body = document.createElement('div'); body.className = 'message-body';
       if (message.liveStatus && message.liveStatus.label) {
@@ -151,6 +179,7 @@ internal val RoleplayTranscriptTurns = """    const missingAvatar = () => '<svg 
       captureTurnSnapshot(existing);
       const next = createTurn(message);
       next.dataset.index = existing.dataset.index || '';
+      applyDeletePresentation(next, Number(next.dataset.index));
       const nextRichRoots = richRootsWithin(next);
       if (nextRichRoots.length) {
         nextRichRoots.forEach((root, rootIndex) => {

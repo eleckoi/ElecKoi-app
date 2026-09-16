@@ -164,14 +164,15 @@ fun MobileRootGlassBar(
     modifier: Modifier = Modifier,
     placement: MobileRootGlassPlacement = MobileRootGlassPlacement.Top,
     chromeColor: Color? = null,
+    glassEnabled: Boolean = true,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val resolvedChromeColor = chromeColor ?: when (placement) {
         MobileRootGlassPlacement.Top -> appearance.mobileTopbarBg
         MobileRootGlassPlacement.Bottom -> appearance.mobileTabbarBg
     }
-    if (appearance.isDark && resolvedChromeColor == Color.Black) {
-        Box(modifier = modifier.background(Color.Black), content = content)
+    if (!glassEnabled || (appearance.isDark && resolvedChromeColor == Color.Black)) {
+        Box(modifier = modifier.background(resolvedChromeColor), content = content)
         return
     }
     val stableAlpha = if (appearance.isDark) 0.88f else 0.92f
@@ -199,12 +200,15 @@ fun MobileRootTopBar(
     appearance: AppearanceTheme,
     modifier: Modifier = Modifier,
     includeStatusBarInset: Boolean = true,
+    chromeColor: Color? = null,
+    glassEnabled: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     MobileRootGlassBar(
         appearance = appearance,
         placement = MobileRootGlassPlacement.Top,
-        chromeColor = mobileRootTopBarContainerColor(appearance),
+        chromeColor = chromeColor ?: mobileRootTopBarContainerColor(appearance),
+        glassEnabled = glassEnabled,
         modifier = modifier.fillMaxWidth(),
     ) {
         Box(

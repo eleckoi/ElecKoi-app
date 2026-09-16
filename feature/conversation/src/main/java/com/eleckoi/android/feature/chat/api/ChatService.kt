@@ -60,6 +60,8 @@ interface ChatService {
         onDelta: (ChatDraft) -> Unit,
         onUserTurnPersisted: (ChatDraft, String) -> Unit = { _, _ -> },
     ): ChatSendResult
+    suspend fun rawChatMessage(sessionId: String, messageId: String): ChatMessage?
+    suspend fun editAssistantMessage(sessionId: String, messageId: String, content: String)
     suspend fun deleteMessagesFrom(sessionId: String, messageId: String): ChatDeleteMessagesResult
     suspend fun prepareRegeneration(
         draft: ChatDraft,

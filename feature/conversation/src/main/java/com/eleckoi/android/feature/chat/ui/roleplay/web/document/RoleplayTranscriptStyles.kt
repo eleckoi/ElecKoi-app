@@ -74,12 +74,64 @@ internal val RoleplayTranscriptStyles = """
       margin-bottom: var(--turn-gap);
       contain: layout style;
     }
+    .turn.delete-mode {
+      position: relative;
+      padding-left: calc(var(--horizontal-padding) + 48px);
+    }
+    .turn.delete-mode .tools,
+    .turn.delete-mode .pager { visibility: hidden; }
+    .delete-selector {
+      position: absolute;
+      inset: 0;
+      z-index: 20;
+      width: 100%;
+      height: 100%;
+      cursor: pointer;
+      touch-action: pan-y;
+      user-select: none;
+      text-align: left;
+    }
+    .delete-selector::before {
+      content: "";
+      position: absolute;
+      left: calc(var(--horizontal-padding) + 13px);
+      top: 19px;
+      width: 24px;
+      height: 24px;
+      border: 1.5px solid color-mix(in srgb, var(--muted) 55%, transparent);
+      border-radius: 6px;
+      background: transparent;
+    }
+    .delete-selector.is-selected::before {
+      border-color: var(--accent);
+      background: var(--accent);
+    }
+    .delete-selector.is-selected::after {
+      content: "";
+      position: absolute;
+      left: calc(var(--horizontal-padding) + 13px);
+      top: 19px;
+      width: 24px;
+      height: 24px;
+      background: #fff;
+      transform: translate(1px, 1px);
+      /* Keep this identical to the 17dp Icons.Rounded.Check used by SquareSelectionCheck. */
+      -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 16.17 5.53 12.7c-.39-.39-1.02-.39-1.41 0-.39.39-.39 1.02 0 1.41l4.18 4.18c.39.39 1.02.39 1.41 0L20.29 7.71c.39-.39.39-1.02 0-1.41-.39-.39-1.02-.39-1.41 0L9 16.17z'/%3E%3C/svg%3E") center / 17px 17px no-repeat;
+      mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 16.17 5.53 12.7c-.39-.39-1.02-.39-1.41 0-.39.39-.39 1.02 0 1.41l4.18 4.18c.39.39 1.02.39 1.41 0L20.29 7.71c.39-.39.39-1.02 0-1.41-.39-.39-1.02-.39-1.41 0L9 16.17z'/%3E%3C/svg%3E") center / 17px 17px no-repeat;
+    }
+    .delete-selector:disabled { cursor: default; }
     .turn.has-pager { grid-template-columns: var(--avatar-width) minmax(0, 1fr); }
     .turn.card {
       padding: 8px var(--horizontal-padding);
       border: .5px solid var(--line);
       border-radius: 10px;
       background: color-mix(in srgb, var(--panel) 55%, transparent);
+    }
+    .turn.card.delete-mode {
+      padding-left: calc(var(--horizontal-padding) + 48px);
+    }
+    .turn.delete-selected {
+      background: color-mix(in srgb, var(--accent) 7%, transparent);
     }
     .portrait-lane {
       display: flex; flex-direction: column; align-self: stretch;
@@ -282,7 +334,7 @@ internal val RoleplayTranscriptStyles = """
     }
     .native-part pre.wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
     .native-part pre.show-all { max-height: none; }
-    .native-part code { padding: .08em .28em; border-radius: 4px; background: color-mix(in srgb, var(--code-background) 72%, transparent); color: var(--inline-code-text); font-family: monospace; text-shadow: none; }
+    .native-part code { padding: .08em .28em; border-radius: 4px; background: color-mix(in srgb, var(--inline-code-text) 10%, transparent); color: var(--inline-code-text); font-family: monospace; text-shadow: none; }
     .native-part pre code { padding: 0; background: transparent; color: inherit; }
     .native-part .code-workbench { padding: 0; border-radius: 8px; }
     .code-header { display: flex; min-height: 28px; align-items: center; padding: 5px 6px 5px 12px; border-bottom: 1px solid var(--code-border); background: var(--code-header); color: color-mix(in srgb, var(--code-foreground) 66%, transparent); font: 500 .76em/1 sans-serif; }

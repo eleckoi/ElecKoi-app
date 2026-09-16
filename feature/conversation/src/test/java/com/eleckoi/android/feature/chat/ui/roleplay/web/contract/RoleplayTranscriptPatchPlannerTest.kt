@@ -69,6 +69,22 @@ class RoleplayTranscriptPatchPlannerTest {
         assertFalse(patch.has("order"))
     }
 
+    @Test
+    fun deleteSelectionProducesAStateOnlyPatch() {
+        val baseline = model(listOf(message("one", "first"), message("two", "second")))
+        val next = baseline.copy(
+            deleteMode = true,
+            deleteFromMessageId = "two",
+        )
+
+        val patch = requireNotNull(RoleplayTranscriptPatchPlanner.plan(baseline, next))
+
+        assertTrue(patch.getBoolean("deleteMode"))
+        assertEquals("two", patch.getString("deleteFromMessageId"))
+        assertFalse(patch.has("messages"))
+        assertFalse(patch.has("order"))
+    }
+
     private fun model(messages: List<RoleplayTranscriptMessage>) = RoleplayTranscriptModel(
         sessionId = "session",
         messages = messages,

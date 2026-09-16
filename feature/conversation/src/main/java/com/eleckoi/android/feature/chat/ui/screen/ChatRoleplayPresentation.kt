@@ -73,6 +73,8 @@ internal fun rememberChatRoleplayPresentation(
         frontendWorkspace.messageRendererEnabled,
         state.historyHasMore,
         state.historyPageLoading,
+        state.deleteMessagesOpen,
+        state.deleteFromMessageId,
     ) {
         buildRoleplayTranscriptModel(
             draft = draft,
@@ -94,6 +96,8 @@ internal fun rememberChatRoleplayPresentation(
             frontendRendererEnabled = frontendWorkspace.messageRendererEnabled,
             historyHasMore = state.historyHasMore,
             historyLoading = state.historyPageLoading,
+            deleteMode = state.deleteMessagesOpen,
+            deleteFromMessageId = state.deleteFromMessageId.orEmpty(),
             projectionCache = projectionCache,
         )
     }

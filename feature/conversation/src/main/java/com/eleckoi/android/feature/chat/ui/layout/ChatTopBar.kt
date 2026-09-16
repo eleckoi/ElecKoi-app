@@ -32,6 +32,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.eleckoi.android.foundation.design.AppearanceTheme
+import com.eleckoi.android.foundation.design.PhosphorRegular
 import com.eleckoi.android.foundation.design.components.AppIconPaths
 import com.eleckoi.android.foundation.design.components.DshIconPaths
 import com.eleckoi.android.foundation.design.components.FilledSvgIcon
@@ -124,17 +125,17 @@ fun ChatTopBar(
                 modifier = Modifier
                     .size(if (compact) CompactIconSize else 36.dp)
                     .semantics {
-                        contentDescription = "更多对话选项"
+                        contentDescription = "对话操作"
                         role = Role.Button
                     }
                     .noRippleClickable(onClick = onMore),
                 contentAlignment = Alignment.Center,
             ) {
                 FilledSvgIcon(
-                    paths = DshIconPaths.Ellipsis,
+                    paths = listOf(PhosphorRegular.SlidersHorizontalBold),
                     color = appearance.mobileText,
-                    iconSize = if (compact) 18.dp else 22.dp,
-                    viewportSize = DshIconPaths.Viewport16,
+                    iconSize = if (compact) 19.dp else 23.dp,
+                    viewportSize = 256f,
                 )
                 DropdownMenu(
                     expanded = moreMenuExpanded,

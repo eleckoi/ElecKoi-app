@@ -42,6 +42,11 @@ data class LedgerSuffixDeletion(
     val obsoleteRuntimeThreadIds: Set<String>,
 )
 
+data class LedgerMessageEdit(
+    val message: LedgerMessage,
+    val obsoleteRuntimeThreadIds: Set<String>,
+)
+
 class RoomConversationLedger(
     private val database: ElecKoiDatabase,
     private val dao: AgentLedgerDao = database.agentLedgerDao(),
@@ -242,6 +247,7 @@ class RoomConversationLedger(
         }
         dao.deleteUnreferencedTurns(conversationId)
         dao.deleteUnreferencedContentParts(conversationId)
+        dao.deleteUnreferencedSpeakers(conversationId)
         // A DSH thread represents the whole conversation, not just one reply. Once its suffix is
         // changed, every retained pointer is stale and the next turn must rebuild from Room.
         dao.clearRuntimeAssociations(conversationId)
@@ -257,6 +263,81 @@ class RoomConversationLedger(
             },
             obsoleteRuntimeThreadIds = obsoleteRuntimeThreadIds,
         )
+    }
+
+    /** Updates one assistant message without materializing or rewriting the surrounding transcript. */
+    fun editAssistantMessageInTransaction(
+        conversationId: String,
+        sourceMessageId: String,
+        content: String,
+        updatedAt: String,
+    ): LedgerMessageEdit {
+        requireTransaction()
+        val replacement = content.trim()
+        require(replacement.isNotEmpty()) { "消息内容不能为空" }
+        val conversation = requireNotNull(dao.conversation(conversationId)) {
+            "对话不存在：$conversationId"
+        }
+        val turn = dao.turnBySourceMessageId(conversationId, sourceMessageId)
+        val response = if (turn == null) {
+            dao.responseBySourceMessageId(conversationId, sourceMessageId)
+        } else {
+            null
+        }
+        val ownerTurn = turn ?: response?.let { reply ->
+            dao.turns(listOf(reply.turnId)).singleOrNull()
+        } ?: throw IllegalArgumentException("没有找到消息：$sourceMessageId")
+        val ref = requireNotNull(dao.branchTurn(conversation.activeBranchId, ownerTurn.id)) {
+            "消息不在当前聊天分支：$sourceMessageId"
+        }
+        val current = materialize(listOf(ref)).firstOrNull { it.id == sourceMessageId }
+            ?: throw IllegalArgumentException("没有找到消息：$sourceMessageId")
+        require(current.role == KindAssistant) { "只能直接修改 AI 消息" }
+        require(!current.pending) { "消息仍在生成中，暂时不能修改" }
+
+        val obsoleteRuntimeThreadIds = dao.runtimeThreadIds(conversationId).toSet()
+        val edited = current.copy(
+            content = replacement,
+            // Native history and resumed runtime state still contain the original text. Force the
+            // next turn to rebuild from Room so the edited reply is the sole source of truth.
+            modelHistoryItems = emptyList(),
+            runtimeThreadId = "",
+            runtimeTurnId = "",
+        )
+        dao.clearRuntimeAssociations(conversationId)
+        if (response != null) {
+            upsertResponseInTransaction(
+                conversationId = conversationId,
+                updatedAt = updatedAt,
+                turnSourceMessageId = ownerTurn.sourceMessageId,
+                response = edited,
+            )
+        } else {
+            upsertTurnInTransaction(
+                conversationId = conversationId,
+                createdAt = conversation.createdAt,
+                updatedAt = updatedAt,
+                turn = edited,
+            )
+        }
+        return LedgerMessageEdit(
+            message = edited,
+            obsoleteRuntimeThreadIds = obsoleteRuntimeThreadIds,
+        )
+    }
+
+    /** Reads one raw persisted message by public ID, bounded to its owning turn. */
+    fun message(conversationId: String, sourceMessageId: String): LedgerMessage? {
+        val conversation = dao.conversation(conversationId) ?: return null
+        val turn = dao.turnBySourceMessageId(conversationId, sourceMessageId)
+        val response = if (turn == null) {
+            dao.responseBySourceMessageId(conversationId, sourceMessageId)
+        } else {
+            null
+        }
+        val turnId = turn?.id ?: response?.turnId ?: return null
+        val ref = dao.branchTurn(conversation.activeBranchId, turnId) ?: return null
+        return materialize(listOf(ref)).firstOrNull { it.id == sourceMessageId }
     }
 
     fun page(

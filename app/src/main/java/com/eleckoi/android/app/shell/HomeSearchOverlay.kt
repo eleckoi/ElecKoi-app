@@ -26,7 +26,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,16 +39,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -63,7 +59,7 @@ import com.eleckoi.android.feature.modelconfig.ui.normalizeProviderId
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.foundation.design.ElecKoiDanger
 import com.eleckoi.android.foundation.design.components.AppIconPaths
-import com.eleckoi.android.foundation.design.components.DshSearchGlyph
+import com.eleckoi.android.foundation.design.components.AppSearchField
 import com.eleckoi.android.foundation.design.components.MobileConversationRow
 import com.eleckoi.android.foundation.design.components.MobileEmptyState
 import com.eleckoi.android.foundation.design.components.ModelProviderIcon
@@ -73,7 +69,7 @@ import com.eleckoi.android.foundation.design.components.noRippleClickable
 import com.eleckoi.android.foundation.design.components.themedListRowClickable
 import kotlinx.coroutines.delay
 
-/** Full-home search adapted from the reference PR, using the categories this build can open. */
+/** Full-home search over the categories this build can open. */
 @Composable
 internal fun HomeSearchOverlay(
     visible: Boolean,
@@ -147,18 +143,20 @@ internal fun HomeSearchOverlay(
                     onDismiss()
                 },
             )
-            HomeSearchField(
-                value = query,
-                onValueChange = { query = it },
+            AppSearchField(
+                keyword = query,
+                placeholder = "会话、角色、模型",
                 appearance = appearance,
-                focusRequester = focusRequester,
-                onSubmit = {
+                height = 44.dp,
+                inputModifier = Modifier.focusRequester(focusRequester),
+                onSearch = {
                     key.takeIf(String::isNotBlank)?.let(onCommitTerm)
                     keyboardController?.hide()
                 },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = SearchGutter),
+                onKeywordChange = { query = it },
             )
 
             when {
@@ -232,81 +230,6 @@ private fun SearchTitleBar(
             contentAlignment = Alignment.Center,
         ) {
             Text("取消", color = appearance.mobileMuted, fontSize = 14.5.sp)
-        }
-    }
-}
-
-@Composable
-private fun HomeSearchField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    appearance: AppearanceTheme,
-    focusRequester: FocusRequester,
-    onSubmit: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val shape = RoundedCornerShape(19.dp)
-    Row(
-        modifier = modifier
-            .height(38.dp)
-            .clip(shape)
-            .background(appearance.mobileSearchBg)
-            .padding(start = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        DshSearchGlyph(tint = appearance.mobileMuted, iconSize = 16.dp)
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .padding(start = 7.dp),
-            contentAlignment = Alignment.CenterStart,
-        ) {
-            if (value.isBlank()) {
-                Text(
-                    text = "会话、角色、模型",
-                    color = appearance.mobileSoft,
-                    fontSize = 15.sp,
-                    maxLines = 1,
-                )
-            }
-            BasicTextField(
-                value = value,
-                onValueChange = onValueChange,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .focusRequester(focusRequester)
-                    .semantics { contentDescription = "搜索会话、角色或模型" },
-                textStyle = TextStyle(color = appearance.mobileText, fontSize = 15.sp),
-                cursorBrush = SolidColor(appearance.mobileBlue),
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                    imeAction = ImeAction.Search,
-                ),
-                keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-                    onSearch = { onSubmit() },
-                ),
-                singleLine = true,
-            )
-        }
-        if (value.isNotEmpty()) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .semantics {
-                        contentDescription = "清除搜索"
-                        role = Role.Button
-                    }
-                    .noRippleClickable { onValueChange("") },
-                contentAlignment = Alignment.Center,
-            ) {
-                StrokeSvgIcon(
-                    paths = AppIconPaths.X,
-                    color = appearance.mobileMuted,
-                    iconSize = 16.dp,
-                    strokeWidth = 1.8f,
-                )
-            }
-        } else {
-            Spacer(modifier = Modifier.width(12.dp))
         }
     }
 }

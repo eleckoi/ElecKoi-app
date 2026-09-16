@@ -50,6 +50,7 @@ import com.eleckoi.android.feature.chat.ui.layout.LocalChatBackdrop
 import com.eleckoi.android.feature.chat.ui.layout.positionOnScreenOf
 import com.eleckoi.android.feature.chat.ui.layout.asRoleplayReadingTheme
 import com.eleckoi.android.feature.chat.ui.message.dismissRoleplayToolbarOnOutsidePress
+import com.eleckoi.android.feature.chat.model.MessageRole
 import com.eleckoi.android.engine.agent.diagnostics.AgentRequestDiagnostics
 import com.eleckoi.android.feature.chat.data.roleConversationId
 import com.eleckoi.android.feature.chat.data.MaxChatInputImages
@@ -164,8 +165,7 @@ fun ChatScreen(
         state.errorMessage.isNotBlank() ||
         showRequestCaptures ||
         roleplayProcessMessageId != null ||
-        roleplayOpeningJumpOpen ||
-        topMenuOpen
+        roleplayOpeningJumpOpen
     val modalBackdropBlur by animateDpAsState(
         targetValue = if (modalSurfaceOpen) 12.dp else 0.dp,
         animationSpec = tween(durationMillis = 180),
@@ -292,6 +292,10 @@ fun ChatScreen(
             dynamicSettingsAvailable = roleplay &&
                 sessionId.isNotBlank() &&
                 dynamicSettingsSessionIds.contains(sessionId),
+            canDeleteMessages = !timeline.replyPresentationActive &&
+                presentedMessages.any { message ->
+                    message.role != MessageRole.System && !message.pending
+                },
             canRegenerateLatest = timeline.latestRegenerableMessage != null &&
                 !timeline.replyPresentationActive,
             onIntent = viewModel::onIntent,
@@ -311,6 +315,7 @@ fun ChatScreen(
                     onOpenDynamicSettings(current.session.characterId, sessionId)
                 }
             },
+            onDeleteMessages = { viewModel.onIntent(ChatIntent.OpenDeleteMessages) },
             onRegenerateLatest = {
                 timeline.latestRegenerableMessage?.let(timeline.regenerate)
             },
@@ -405,6 +410,9 @@ fun ChatScreen(
                                 onMessageRendered = timeline.onRoleplayMessageRendered,
                                 onScrollStateChanged = timeline.onRoleplayScrollStateChanged,
                                 onRequestOpeningJump = { roleplayOpeningJumpOpen = true },
+                                onSelectDeleteFrom = {
+                                    viewModel.onIntent(ChatIntent.SelectDeleteFromMessage(it))
+                                },
                                 onSelectText = { selectedUserMessageText = it },
                                 onRegenerate = timeline.regenerate,
                                 onOpenProcess = { roleplayProcessMessageId = it },
@@ -451,7 +459,7 @@ fun ChatScreen(
             ChatComposerBar(
                 visible = draft != null && !state.isDraftLoading,
                 roleplayWebActive = roleplayWebActive,
-                userBrowsedAwayFromBottom = userBrowsedAwayFromBottom,
+                userBrowsedAwayFromBottom = userBrowsedAwayFromBottom && !state.deleteMessagesOpen,
                 roleplayWebCanScrollForward = timeline.roleplayWebCanScrollForward,
                 appearance = state.appearance,
                 onJumpToBottom = timeline.resumeToEnd,
@@ -464,6 +472,7 @@ fun ChatScreen(
         ChatNativeJumpToBottom(
             visible = draft != null &&
                 !state.isDraftLoading &&
+                !state.deleteMessagesOpen &&
                 !roleplayWebActive &&
                 timeline.composerTopPx > 0f &&
                 userBrowsedAwayFromBottom &&
@@ -472,7 +481,7 @@ fun ChatScreen(
             appearance = state.appearance,
             onClick = timeline.resumeToEnd,
         )
-        }
+    }
 
         ChatScreenOverlays(
             state = state,

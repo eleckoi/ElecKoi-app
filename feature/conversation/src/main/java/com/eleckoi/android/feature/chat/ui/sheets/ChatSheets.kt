@@ -1,12 +1,20 @@
 package com.eleckoi.android.feature.chat.ui.sheets
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -26,16 +34,19 @@ import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.Send
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -44,6 +55,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -68,19 +83,22 @@ import com.eleckoi.android.foundation.design.components.noRippleClickable
 import com.eleckoi.android.foundation.design.components.focusDismissInputRegion
 import com.eleckoi.android.foundation.design.fieldPalette
 import com.eleckoi.android.foundation.design.overlayScrim
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 
 @Composable
 fun EditMessageSheet(
     editorKey: String,
     value: String,
+    isAssistant: Boolean,
+    saving: Boolean = false,
     appearance: AppearanceTheme,
     onValueChange: (String) -> Unit,
     onDismiss: () -> Unit,
-    onSubmit: (String) -> Unit,
+    onSave: ((String) -> Unit)?,
+    onRegenerate: ((String) -> Unit)?,
 ) {
-    BackHandler(onBack = onDismiss)
-
     val textState = remember(editorKey) {
         TextFieldState(
             initialText = value,
@@ -90,6 +108,23 @@ fun EditMessageSheet(
     val textScrollState = rememberScrollState()
     val latestValue by rememberUpdatedState(value)
     val latestOnValueChange by rememberUpdatedState(onValueChange)
+    val visibility = remember(editorKey) {
+        MutableTransitionState(false).apply { targetState = true }
+    }
+    val scope = rememberCoroutineScope()
+    var dismissing by remember(editorKey) { mutableStateOf(false) }
+    val requestDismiss = {
+        if (!saving && !dismissing) {
+            dismissing = true
+            visibility.targetState = false
+            scope.launch {
+                delay(180)
+                onDismiss()
+            }
+        }
+    }
+
+    BackHandler(enabled = !saving && !dismissing, onBack = requestDismiss)
 
     LaunchedEffect(textState) {
         snapshotFlow { textState.text.toString() }
@@ -108,84 +143,163 @@ fun EditMessageSheet(
         modifier = Modifier
             .fillMaxSize()
             .background(appearance.overlayScrim())
-            .noRippleClickable(onClick = onDismiss),
+            .noRippleClickable(onClick = requestDismiss),
         contentAlignment = Alignment.BottomCenter,
     ) {
-        Column(
+        AnimatedVisibility(
+            visibleState = visibility,
             modifier = Modifier
                 .fillMaxWidth()
-                .noRippleClickable {}
-                .navigationBarsPadding()
-                .imePadding()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                .imePadding(),
+            enter = fadeIn(tween(140)) + slideInVertically(
+                animationSpec = tween(220),
+                initialOffsetY = { it },
+            ),
+            exit = fadeOut(tween(120)) + slideOutVertically(
+                animationSpec = tween(180),
+                targetOffsetY = { it },
+            ),
         ) {
-            Column(
+            BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(appearance.mobileSurface),
+                    .fillMaxHeight(0.5f),
+                contentAlignment = Alignment.BottomCenter,
             ) {
-                Row(
+                val editorMaxHeight = (maxHeight - 104.dp).coerceAtLeast(96.dp)
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 17.dp, top = 8.dp, end = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                        .noRippleClickable {}
+                        .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
+                        .background(appearance.mobileChatBg)
+                        .navigationBarsPadding(),
                 ) {
-                    Text(
-                        text = "修改输入",
-                        modifier = Modifier.weight(1f),
-                        color = appearance.mobileText,
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Box(
+                    Row(
                         modifier = Modifier
-                            .size(40.dp)
-                            .noRippleClickable(onClick = onDismiss),
-                        contentAlignment = Alignment.Center,
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .background(appearance.mobileChatHeaderBg)
+                            .padding(horizontal = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        StrokeSvgIcon(AppIconPaths.X, appearance.mobileText, iconSize = 24.dp)
+                        Icon(
+                            imageVector = Icons.Rounded.Edit,
+                            contentDescription = null,
+                            tint = appearance.mobileBlue,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Text(
+                            text = if (isAssistant) "修改输出" else "修改输入",
+                            modifier = Modifier.padding(start = 8.dp),
+                            color = appearance.mobileText,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
-                }
-                BasicTextField(
-                    state = textState,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 112.dp, max = 240.dp)
-                        .focusDismissInputRegion()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    textStyle = TextStyle(
-                        color = appearance.mobileText,
-                        fontSize = 16.sp,
-                        lineHeight = 24.sp,
-                    ),
-                    lineLimits = TextFieldLineLimits.MultiLine(),
-                    cursorBrush = SolidColor(appearance.mobileBlue),
-                    scrollState = textScrollState,
-                )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(end = 14.dp, bottom = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    TextButton(
-                        onClick = { onSubmit(textState.text.toString()) },
-                        modifier = Modifier.weight(1f),
-                        enabled = textState.text.isNotBlank(),
-                        colors = ButtonDefaults.textButtonColors(
-                            contentColor = appearance.mobileBlue,
-                            disabledContentColor = appearance.mobileMuted.copy(alpha = 0.38f),
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                        color = appearance.mobileMuted.copy(alpha = 0.16f),
+                    )
+                    BasicTextField(
+                        state = textState,
+                        enabled = !saving,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 96.dp, max = editorMaxHeight)
+                            .focusDismissInputRegion()
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        textStyle = TextStyle(
+                            color = appearance.mobileText,
+                            fontSize = 15.sp,
+                            lineHeight = 22.sp,
                         ),
+                        lineLimits = TextFieldLineLimits.MultiLine(),
+                        cursorBrush = SolidColor(appearance.mobileBlue),
+                        scrollState = textScrollState,
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp)
+                            .padding(horizontal = 8.dp),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = "重新生成")
-                        Text("重新生成", modifier = Modifier.padding(start = 8.dp))
+                        onRegenerate?.let { regenerate ->
+                            EditMessageAction(
+                                contentDescription = "保存并重新生成",
+                                enabled = textState.text.isNotBlank() && !saving,
+                                onClick = { regenerate(textState.text.toString()) },
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Refresh,
+                                    contentDescription = null,
+                                    tint = editActionColor(
+                                        enabled = textState.text.isNotBlank() && !saving,
+                                        appearance = appearance,
+                                    ),
+                                    modifier = Modifier.size(19.dp),
+                                )
+                            }
+                        }
+                        onSave?.let { save ->
+                            EditMessageAction(
+                                contentDescription = "保存修改",
+                                enabled = textState.text.isNotBlank() && !saving,
+                                onClick = { save(textState.text.toString()) },
+                            ) {
+                                if (saving) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(18.dp),
+                                        color = appearance.mobileBlue,
+                                        strokeWidth = 2.dp,
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Check,
+                                        contentDescription = null,
+                                        tint = editActionColor(
+                                            enabled = textState.text.isNotBlank(),
+                                            appearance = appearance,
+                                        ),
+                                        modifier = Modifier.size(19.dp),
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
     }
 }
+
+@Composable
+private fun EditMessageAction(
+    contentDescription: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .semantics {
+                this.contentDescription = contentDescription
+                role = Role.Button
+            }
+            .noRippleClickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        content()
+    }
+}
+
+private fun editActionColor(enabled: Boolean, appearance: AppearanceTheme): Color =
+    if (enabled) appearance.mobileText else appearance.mobileMuted.copy(alpha = 0.42f)
 
 @Composable
 fun SelectMessageTextSheet(

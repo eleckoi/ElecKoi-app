@@ -33,6 +33,7 @@ internal data class RoleplayWebChatCallbacks(
     val onLoadOlder: () -> Unit,
     val onSelectOpeningOption: (String) -> Unit,
     val onRequestOpeningJump: () -> Unit,
+    val onSelectDeleteFrom: (String) -> Unit = {},
     val onMessageAction: (action: String, message: ChatMessage) -> Unit,
     val onImageAction: (
         action: String,

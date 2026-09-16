@@ -10,27 +10,15 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.eleckoi.android.foundation.design.AppearanceTheme
@@ -81,72 +69,18 @@ fun RootSearchPage(
                     modifier = Modifier.size(48.dp),
                     iconSize = 23.dp,
                 )
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(48.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(appearance.mobileSearchBg)
-                        .padding(start = 13.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    DshSearchGlyph(
-                        tint = appearance.mobileMuted,
-                        iconSize = 20.dp,
-                    )
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(start = 9.dp),
-                        contentAlignment = Alignment.CenterStart,
-                    ) {
-                        if (query.isBlank()) {
-                            androidx.compose.material3.Text(
-                                text = placeholder,
-                                color = appearance.mobileSoft,
-                                fontSize = 16.sp,
-                                maxLines = 1,
-                            )
-                        }
-                        BasicTextField(
-                            value = query,
-                            onValueChange = onQueryChange,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .focusRequester(focusRequester)
-                                .semantics { contentDescription = placeholder },
-                            textStyle = TextStyle(
-                                color = appearance.mobileText,
-                                fontSize = 16.sp,
-                            ),
-                            cursorBrush = SolidColor(appearance.mobileBlue),
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                            keyboardActions = KeyboardActions(
-                                onSearch = { keyboardController?.hide() },
-                            ),
-                            singleLine = true,
-                        )
-                    }
-                    if (query.isNotEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .semantics {
-                                    contentDescription = "清除搜索"
-                                    role = Role.Button
-                                }
-                                .noRippleClickable { onQueryChange("") },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            StrokeSvgIcon(
-                                paths = AppIconPaths.X,
-                                color = appearance.mobileMuted,
-                                iconSize = 16.dp,
-                                strokeWidth = 1.8f,
-                            )
-                        }
-                    }
-                }
+                AppSearchField(
+                    keyword = query,
+                    placeholder = placeholder,
+                    appearance = appearance,
+                    modifier = Modifier.weight(1f),
+                    height = 48.dp,
+                    fontSize = 16.sp,
+                    iconSize = 20.dp,
+                    inputModifier = Modifier.focusRequester(focusRequester),
+                    onSearch = { keyboardController?.hide() },
+                    onKeywordChange = onQueryChange,
+                )
             }
             Box(modifier = Modifier.fillMaxSize()) {
                 content(appearance)

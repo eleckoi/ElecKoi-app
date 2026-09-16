@@ -1,11 +1,20 @@
 package com.eleckoi.android.feature.chat.ui.screen
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -18,6 +27,7 @@ import com.eleckoi.android.feature.chat.ui.ChatUiState
 import com.eleckoi.android.feature.chat.ui.composer.ChatComposer
 import com.eleckoi.android.feature.chat.ui.loading.ChatWaitingReply
 import com.eleckoi.android.foundation.design.AppearanceTheme
+import com.eleckoi.android.foundation.design.ElecKoiDanger
 import com.eleckoi.android.foundation.design.components.ContextWindowUsage
 
 @Composable
@@ -34,6 +44,7 @@ internal fun ChatScreenComposer(
     generationMetrics: ChatGenerationMetrics,
     contextWindowUsage: ContextWindowUsage?,
     dynamicSettingsAvailable: Boolean,
+    canDeleteMessages: Boolean,
     canRegenerateLatest: Boolean,
     onIntent: (ChatIntent) -> Unit,
     onSubmit: () -> Unit,
@@ -44,14 +55,22 @@ internal fun ChatScreenComposer(
     onOpenRequestViewer: () -> Unit,
     onOpenVariableViewer: () -> Unit,
     onOpenDynamicSettings: () -> Unit,
+    onDeleteMessages: () -> Unit,
     onRegenerateLatest: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    BackHandler(
+        enabled = state.deleteMessagesOpen &&
+            !state.deleteMessagesConfirmationOpen &&
+            !state.isDeletingMessages,
+    ) {
+        onIntent(ChatIntent.CloseDeleteMessages)
+    }
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.Start,
     ) {
-        if (roleplayWebActive && roleplayWaitingSlotReserved) {
+        if (!state.deleteMessagesOpen && roleplayWebActive && roleplayWaitingSlotReserved) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -66,7 +85,7 @@ internal fun ChatScreenComposer(
                     )
                 }
             }
-        } else if (nativeWaitingSlotReserved) {
+        } else if (!state.deleteMessagesOpen && nativeWaitingSlotReserved) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -82,7 +101,18 @@ internal fun ChatScreenComposer(
                 }
             }
         }
-        ChatComposer(
+        if (state.deleteMessagesOpen) {
+            ChatMessageDeleteBar(
+                selected = state.deleteFromMessageId != null,
+                deleting = state.isDeletingMessages,
+                appearance = appearance,
+                onDelete = { onIntent(ChatIntent.RequestDeleteMessages) },
+                onCancel = { onIntent(ChatIntent.CloseDeleteMessages) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding(),
+            )
+        } else ChatComposer(
             input = state.input,
             inputImages = state.inputImages,
             onInputChange = { onIntent(ChatIntent.InputChanged(it)) },
@@ -112,6 +142,8 @@ internal fun ChatScreenComposer(
             onOpenRequestViewer = onOpenRequestViewer,
             onOpenVariableViewer = onOpenVariableViewer,
             onOpenDynamicSettings = onOpenDynamicSettings.takeIf { dynamicSettingsAvailable },
+            canDeleteMessages = canDeleteMessages,
+            onDeleteMessages = onDeleteMessages,
             canRegenerateLatest = canRegenerateLatest,
             onRegenerateLatest = onRegenerateLatest,
             onOpenModelPicker = { onIntent(ChatIntent.SetModelPickerOpen(true)) },
@@ -121,5 +153,57 @@ internal fun ChatScreenComposer(
                 .fillMaxWidth()
                 .then(if (roleplayWebActive) Modifier else Modifier.navigationBarsPadding()),
         )
+    }
+}
+
+@Composable
+private fun ChatMessageDeleteBar(
+    selected: Boolean,
+    deleting: Boolean,
+    appearance: AppearanceTheme,
+    onDelete: () -> Unit,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .height(72.dp)
+            .padding(horizontal = 24.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        OutlinedButton(
+            onClick = onDelete,
+            enabled = selected && !deleting,
+            modifier = Modifier
+                .widthIn(min = 96.dp)
+                .height(48.dp),
+            shape = RoundedCornerShape(10.dp),
+            border = BorderStroke(
+                1.dp,
+                if (selected) ElecKoiDanger.copy(alpha = 0.42f) else appearance.mobileLine,
+            ),
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = ElecKoiDanger,
+                disabledContentColor = appearance.mobileMuted.copy(alpha = 0.5f),
+            ),
+        ) {
+            Text(if (deleting) "删除中…" else "删除")
+        }
+        OutlinedButton(
+            onClick = onCancel,
+            enabled = !deleting,
+            modifier = Modifier
+                .widthIn(min = 96.dp)
+                .height(48.dp),
+            shape = RoundedCornerShape(10.dp),
+            border = BorderStroke(1.dp, appearance.mobileLine),
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = appearance.mobileText,
+                disabledContentColor = appearance.mobileMuted.copy(alpha = 0.5f),
+            ),
+        ) {
+            Text("取消")
+        }
     }
 }

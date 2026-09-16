@@ -1,6 +1,7 @@
 package com.eleckoi.android.foundation.design.components
 
 import android.graphics.Paint
+import android.graphics.Path as AndroidPath
 import androidx.core.graphics.PathParser as AndroidPathParser
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -110,6 +111,7 @@ fun FilledSvgIcon(
     modifier: Modifier = Modifier,
     iconSize: Dp = 24.dp,
     viewportSize: Float = 24f,
+    cutouts: List<SvgCircle> = emptyList(),
 ) {
     Canvas(modifier = modifier.size(iconSize)) {
         drawSvg(
@@ -118,6 +120,7 @@ fun FilledSvgIcon(
             fillPaths = paths,
             fillColor = color,
             viewportSize = viewportSize,
+            fillCutouts = cutouts,
         )
     }
 }
@@ -238,6 +241,7 @@ private fun DrawScope.drawSvg(
     fillColor: Color = color,
     circleOverrideColor: Color? = null,
     viewportSize: Float = 24f,
+    fillCutouts: List<SvgCircle> = emptyList(),
 ) {
     val scale = min(size.width, size.height) / viewportSize
     val dx = (size.width - viewportSize * scale) / 2f
@@ -261,7 +265,16 @@ private fun DrawScope.drawSvg(
             style = Paint.Style.FILL
         }
         for (path in fillPaths) {
-            native.drawPath(AndroidPathParser.createPathFromPathData(path), fillPaint)
+            val fillPath = AndroidPathParser.createPathFromPathData(path)
+            if (fillCutouts.isNotEmpty()) {
+                val cutoutPath = AndroidPath().apply {
+                    fillCutouts.forEach { cutout ->
+                        addCircle(cutout.cx, cutout.cy, cutout.r, AndroidPath.Direction.CW)
+                    }
+                }
+                fillPath.op(cutoutPath, AndroidPath.Op.DIFFERENCE)
+            }
+            native.drawPath(fillPath, fillPaint)
         }
         for (path in translatedFillPaths) {
             val pathCheckpoint = native.save()

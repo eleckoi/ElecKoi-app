@@ -203,9 +203,7 @@ internal fun CreatorCharacterRootsSheet(
                         placeholder = "搜索角色名称",
                         appearance = appearance,
                         modifier = Modifier.fillMaxWidth(),
-                        surface = appearance.mobileBg,
-                        height = 38.dp,
-                        cornerRadius = 12.dp,
+                        height = 44.dp,
                         fontSize = 14.sp,
                         onKeywordChange = onQueryChange,
                     )

@@ -242,6 +242,38 @@ class ChatSessionStore(
         )
     }
 
+    /** Direct assistant edit; the surrounding Paging-owned transcript is never loaded or copied. */
+    fun editAssistantMessage(sessionId: String, messageId: String, content: String): Set<String> {
+        val existing = load(sessionId, touch = false)
+        val updatedAt = nowIso()
+        var obsoleteRuntimeThreadIds: Set<String> = emptySet()
+        database.runInTransaction {
+            val edited = ledger.editAssistantMessageInTransaction(
+                conversationId = sessionId,
+                sourceMessageId = messageId,
+                content = content,
+                updatedAt = updatedAt,
+            )
+            obsoleteRuntimeThreadIds = edited.obsoleteRuntimeThreadIds
+            val latestSummary = ledger.page(sessionId, beforeSequence = null, limit = 1)
+                .messages.lastOrNull()?.content.orEmpty()
+            room.upsertMetadataWithHistoryInTransaction(
+                existing.copy(updatedAt = updatedAt),
+                latestSummary,
+                replaceBlankSummary = true,
+            )
+        }
+        generationStats?.deleteConversation(sessionId)
+        return obsoleteRuntimeThreadIds
+    }
+
+    /** Raw one-message lookup for editors; display regex output must never be written back. */
+    fun message(sessionId: String, messageId: String): ChatMessage? {
+        val entity = room.requireSession(sessionId)
+        room.ensureLedger(entity)
+        return ledger.message(sessionId, messageId)?.toChatMessage()
+    }
+
     /** Complete/failed/image-refreshed response path: update only the selected turn's one reply. */
     internal fun commitAssistantResponse(
         session: ChatSession,
