@@ -75,7 +75,7 @@ import com.eleckoi.android.foundation.storage.room.agent.entity.GenerationAttemp
         AgentPresetVersionGroupEntity::class,
     ],
     views = [SettingLibraryEntryEntity::class, SettingLibraryVersionEntryEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class ElecKoiDatabase : RoomDatabase() {
@@ -105,7 +105,10 @@ abstract class ElecKoiDatabase : RoomDatabase() {
                 ElecKoiDatabase::class.java,
                 "eleckoi-dsh.db",
             )
-                .addMigrations(ElecKoiDatabaseMigrations.version1To2)
+                .addMigrations(
+                    ElecKoiDatabaseMigrations.version1To2,
+                    ElecKoiDatabaseMigrations.version2To3,
+                )
                 .addCallback(object : Callback() {
                     override fun onOpen(db: SupportSQLiteDatabase) {
                         // Scrub deleted b-tree cells without adding extra disk I/O for freelist pages.

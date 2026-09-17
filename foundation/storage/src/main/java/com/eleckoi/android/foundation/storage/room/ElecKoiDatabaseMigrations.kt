@@ -494,4 +494,12 @@ internal object ElecKoiDatabaseMigrations {
             }
         }
     }
+
+    val version2To3: Migration by lazy {
+        object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                HiddenToolTimelinePositionMigration.migrate(db)
+            }
+        }
+    }
 }
