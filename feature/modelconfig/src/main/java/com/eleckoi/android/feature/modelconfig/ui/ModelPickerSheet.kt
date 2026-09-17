@@ -1,10 +1,8 @@
 package com.eleckoi.android.feature.modelconfig.ui
 
-import android.view.WindowManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,13 +17,9 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,22 +28,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
-import androidx.compose.ui.window.DialogWindowProvider
 import com.eleckoi.android.engine.generation.model.ModelOption
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.foundation.design.components.AppIconPaths
 import com.eleckoi.android.foundation.design.components.AppSearchField
 import com.eleckoi.android.foundation.design.components.ConfirmDialog
-import com.eleckoi.android.foundation.design.components.MobileBottomSheetOverlay
+import com.eleckoi.android.foundation.design.components.MobileBottomSheetDialog
+import com.eleckoi.android.foundation.design.components.MobileBottomSheetHeader
 import com.eleckoi.android.foundation.design.components.StrokeSvgIcon
 import com.eleckoi.android.foundation.design.selectionPalette
 
@@ -68,9 +59,11 @@ internal fun ModelPickerSheet(
     var deletingModel by rememberSaveable { mutableStateOf<String?>(null) }
     val filteredItems = remember(items, keyword) { filterModelPickerItems(items, keyword) }
 
-    ModelPickerOverlay(
+    MobileBottomSheetDialog(
         appearance = appearance,
-        onClose = onClose,
+        onDismiss = onClose,
+        sheetModifier = Modifier.statusBarsPadding(),
+        showHandle = false,
     ) {
         Column(
             Modifier
@@ -78,24 +71,11 @@ internal fun ModelPickerSheet(
                 .heightIn(max = 520.dp)
                 .imePadding(),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(start = 18.dp, end = 8.dp, top = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    "模型列表",
-                    modifier = Modifier.weight(1f),
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Medium,
-                )
-                IconButton(
-                    onClick = onClose,
-                    modifier = Modifier.size(48.dp)
-                        .semantics { contentDescription = "关闭模型列表" },
-                ) {
-                    StrokeSvgIcon(AppIconPaths.X, appearance.mobileMuted, iconSize = 22.dp)
-                }
-            }
+            MobileBottomSheetHeader(
+                title = "模型列表",
+                appearance = appearance,
+                onDismiss = onClose,
+            )
             Row(
                 modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, bottom = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -178,40 +158,6 @@ internal fun ModelPickerSheet(
                     },
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun ModelPickerOverlay(
-    appearance: AppearanceTheme,
-    onClose: () -> Unit,
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    Dialog(
-        onDismissRequest = onClose,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false,
-        ),
-    ) {
-        val window = (LocalView.current.parent as? DialogWindowProvider)?.window
-        SideEffect {
-            window?.setDimAmount(0f)
-            window?.setWindowAnimations(0)
-            window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
-        }
-        var visible by remember { mutableStateOf(false) }
-        LaunchedEffect(Unit) { visible = true }
-        CompositionLocalProvider(LocalContentColor provides appearance.mobileText) {
-            // This overlay has no sheet drag or nested-scroll dismissal behavior.
-            MobileBottomSheetOverlay(
-                visible = visible,
-                appearance = appearance,
-                onDismiss = onClose,
-                sheetModifier = Modifier.statusBarsPadding(),
-                content = content,
-            )
         }
     }
 }

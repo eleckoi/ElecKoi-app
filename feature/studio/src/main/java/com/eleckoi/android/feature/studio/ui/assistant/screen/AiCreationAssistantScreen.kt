@@ -480,6 +480,7 @@ internal fun AiCreationAssistantScreen(
                 onOpenWebSearchSettings()
             },
             onSaveModelConfig = viewModel::saveModelConfig,
+            onRefreshModels = viewModel::refreshModels,
             onDismiss = { showTools = false },
         )
     }

@@ -46,7 +46,7 @@ internal fun builtInAgentToolGroups(): List<AgentToolGroupSnapshot> = listOf(
     builtInToolGroupWithNames(
         id = AgentToolRequestPolicy.BuiltInCollaboration,
         name = "多代理协作",
-        description = "创建和管理并行子任务；普通角色通常不需要",
+        description = "创建和管理并行子任务，用于并行检索、设定整理与复杂任务处理",
         members = emptyList(),
     ),
     builtInToolGroupWithNames(

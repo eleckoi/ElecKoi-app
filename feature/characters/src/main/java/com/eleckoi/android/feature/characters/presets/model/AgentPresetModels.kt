@@ -211,22 +211,8 @@ fun AgentPreset.withRequiredBuiltIns(): AgentPreset {
     val compactionEntry = settingLibraryHistoryCompactionEntry(
         entries.firstOrNull(SettingLibraryEntry::isHistoryCompactionEntry),
     )
-    val existingHiddenTimelineEntry = entries.firstOrNull(SettingLibraryEntry::isHiddenToolTimelineEntry)
-    val hiddenTimelineSource = existingHiddenTimelineEntry?.let { entry ->
-        if (
-            entry.promptPositionId.isBlank() &&
-            entry.position == SettingLibraryPosition.InsertPoint5
-        ) {
-            entry.copy(
-                position = SettingLibraryPosition.InsertPoint4,
-                promptPositionId = HiddenToolTimelinePromptPositionId,
-            )
-        } else {
-            entry
-        }
-    }
     val hiddenTimelineEntry = settingLibraryHiddenToolTimelineEntry(
-        hiddenTimelineSource,
+        entries.firstOrNull(SettingLibraryEntry::isHiddenToolTimelineEntry),
     )
     val positionsWithHiddenTimelineDefault = if (
         hiddenTimelineEntry.promptPositionId == HiddenToolTimelinePromptPositionId &&

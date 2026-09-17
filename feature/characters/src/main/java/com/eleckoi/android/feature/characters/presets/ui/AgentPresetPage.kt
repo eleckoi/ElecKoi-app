@@ -57,6 +57,9 @@ fun AgentPresetPage(
     onSaveModelConfig: (ModelConfig, (Result<ModelConfig>) -> Unit) -> Unit = { _, callback ->
         callback(Result.failure(IllegalStateException("当前页面不能保存模型配置")))
     },
+    onRefreshModels: (ModelConfig, (Result<ModelConfig>) -> Unit) -> Unit = { _, callback ->
+        callback(Result.failure(IllegalStateException("当前页面不能刷新模型")))
+    },
 ) {
     DisposableEffect(returnToCallerAfterEntry) {
         onDispose {
@@ -88,6 +91,7 @@ fun AgentPresetPage(
             onUpdateAuthorAvatar = { files -> onUpdateAuthorAvatar(editorPreset.id, files) },
             onOpenWebSearchSettings = onOpenWebSearchSettings,
             onSaveModelConfig = onSaveModelConfig,
+            onRefreshModels = onRefreshModels,
         )
         return
     }

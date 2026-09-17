@@ -9,8 +9,10 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -18,13 +20,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Checklist
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Computer
 import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Folder
@@ -35,13 +35,10 @@ import androidx.compose.material.icons.rounded.Schema
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -65,6 +62,8 @@ import com.eleckoi.android.feature.characters.presets.model.AgentPresetToolConfi
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.foundation.design.components.AppSearchField
 import com.eleckoi.android.foundation.design.components.AppSwitch
+import com.eleckoi.android.foundation.design.components.MobileBottomSheetDialog
+import com.eleckoi.android.foundation.design.components.MobileBottomSheetHeader
 
 @Composable
 internal fun AgentPresetToolsTab(
@@ -76,7 +75,7 @@ internal fun AgentPresetToolsTab(
     onUpdate: (AgentPreset) -> Unit,
     onOpenWebSearchSettings: () -> Unit,
     onSaveModelConfig: (ModelConfig, (Result<ModelConfig>) -> Unit) -> Unit,
-    onModalVisibilityChange: (Boolean) -> Unit = {},
+    onRefreshModels: (ModelConfig, (Result<ModelConfig>) -> Unit) -> Unit,
 ) {
     var query by rememberSaveable(preset.id) { mutableStateOf("") }
     var addOpen by rememberSaveable(preset.id) { mutableStateOf(false) }
@@ -88,11 +87,6 @@ internal fun AgentPresetToolsTab(
         val needle = query.trim()
         needle.isBlank() || group.searchableText().contains(needle, ignoreCase = true)
     }
-    val modalOpen = addOpen || detailGroupId.isNotBlank()
-
-    LaunchedEffect(modalOpen) { onModalVisibilityChange(modalOpen) }
-    DisposableEffect(Unit) { onDispose { onModalVisibilityChange(false) } }
-
     Column(modifier = modifier.fillMaxSize().background(appearance.mobileBg)) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
@@ -189,6 +183,7 @@ internal fun AgentPresetToolsTab(
                 onUpdate(preset.withToolModelConfig(group.id, configId))
             },
             onSaveModelConfig = onSaveModelConfig,
+            onRefreshModels = onRefreshModels,
             onRemove = {
                 onUpdate(preset.withToolRemoved(group.id))
                 detailGroupId = ""
@@ -207,6 +202,7 @@ fun AgentPresetQuickToolsDialog(
     onManage: () -> Unit,
     onOpenWebSearchSettings: () -> Unit,
     onSaveModelConfig: (ModelConfig, (Result<ModelConfig>) -> Unit) -> Unit,
+    onRefreshModels: (ModelConfig, (Result<ModelConfig>) -> Unit) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val configuration = preset.toolConfiguration.normalized()
@@ -228,6 +224,7 @@ fun AgentPresetQuickToolsDialog(
             onUpdate(preset.withToolModelConfig(groupId, configId))
         },
         onSaveModelConfig = onSaveModelConfig,
+        onRefreshModels = onRefreshModels,
         onManage = onManage,
         onDismiss = onDismiss,
     )
@@ -250,17 +247,48 @@ fun AgentToolQuickDialog(
     onSubagentModelChange: (String, String) -> Unit,
     onToolModelConfigChange: (String, String) -> Unit,
     onSaveModelConfig: (ModelConfig, (Result<ModelConfig>) -> Unit) -> Unit,
+    onRefreshModels: (ModelConfig, (Result<ModelConfig>) -> Unit) -> Unit,
     onManage: (() -> Unit)? = null,
     onDismiss: () -> Unit,
 ) {
     var detailGroupId by rememberSaveable(stateKey) { mutableStateOf("") }
+    var modelPickerKind by rememberSaveable(stateKey) { mutableStateOf<ToolModelPickerKind?>(null) }
     val detailGroup = groups.firstOrNull { it.id == detailGroupId }
 
-    PresetBottomSheetDialog(
+    MobileBottomSheetDialog(
         appearance = appearance,
-        onDismiss = if (detailGroup == null) onDismiss else ({ detailGroupId = "" }),
+        onDismiss = when {
+            modelPickerKind != null -> ({ modelPickerKind = null })
+            detailGroup != null -> ({ detailGroupId = "" })
+            else -> onDismiss
+        },
+        sheetModifier = if (detailGroup == null) {
+            Modifier.imePadding()
+        } else {
+            Modifier.fillMaxHeight(0.88f).imePadding()
+        },
+        showHandle = true,
     ) {
-        if (detailGroup != null) {
+        val pickerKind = modelPickerKind
+        if (detailGroup != null && pickerKind != null) {
+            PresetToolModelPickerContent(
+                kind = pickerKind,
+                groupId = detailGroup.id,
+                configuration = configuration,
+                modelConfigs = modelConfigs,
+                appearance = appearance,
+                onBack = { modelPickerKind = null },
+                onDismiss = onDismiss,
+                onSelect = { configId, model ->
+                    when (pickerKind) {
+                        ToolModelPickerKind.Subagent -> onSubagentModelChange(configId, model)
+                        ToolModelPickerKind.Image -> onToolModelConfigChange(detailGroup.id, configId)
+                    }
+                },
+                onSaveModelConfig = onSaveModelConfig,
+                onRefreshModels = onRefreshModels,
+            )
+        } else if (detailGroup != null) {
             ToolDetailSheetContent(
                 group = detailGroup,
                 enabled = detailGroup.id in configuration.enabledGroupIds,
@@ -280,11 +308,7 @@ fun AgentToolQuickDialog(
                     onOpenWebSearchSettings()
                 },
                 onRoleplayPlanChange = onRoleplayPlanChange,
-                onSubagentModelChange = onSubagentModelChange,
-                onToolModelConfigChange = { configId ->
-                    onToolModelConfigChange(detailGroup.id, configId)
-                },
-                onSaveModelConfig = onSaveModelConfig,
+                onOpenModelPicker = { modelPickerKind = it },
                 onRemove = {},
             )
         } else {
@@ -315,7 +339,7 @@ private fun QuickToolListContent(
     onManage: (() -> Unit)?,
     onDismiss: () -> Unit,
 ) {
-    SheetHeader(title = title, appearance = appearance, onDismiss = onDismiss)
+    MobileBottomSheetHeader(title = title, appearance = appearance, onDismiss = onDismiss)
     if (groups.isEmpty()) {
         Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
             ToolEmptyState("当前没有可用工具", appearance)
@@ -466,37 +490,6 @@ private fun toolGroupIcon(groupId: String): ImageVector = when (groupId) {
     AgentToolRequestPolicy.BuiltInCreator -> Icons.Rounded.AutoAwesome
     AgentToolRequestPolicy.BuiltInWorkspace -> Icons.Rounded.Folder
     else -> Icons.Rounded.Extension
-}
-
-@Composable
-internal fun SheetHeader(
-    title: String,
-    appearance: AppearanceTheme,
-    onDismiss: () -> Unit,
-    onBack: (() -> Unit)? = null,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (onBack != null) {
-            IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "返回", tint = appearance.mobileText)
-            }
-        } else Spacer(Modifier.size(48.dp))
-        Text(
-            text = title,
-            color = appearance.mobileText,
-            fontSize = 19.sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
-            Icon(Icons.Rounded.Close, contentDescription = "关闭", tint = appearance.mobileText)
-        }
-    }
 }
 
 @Composable

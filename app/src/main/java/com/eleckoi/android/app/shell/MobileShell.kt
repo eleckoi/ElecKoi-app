@@ -389,6 +389,7 @@ internal fun MobileShell(
                         navigateTo(MobileRoute.WebSearchSettings)
                     },
                     onSaveModelConfig = modelsViewModel::saveModelConfig,
+                    onRefreshModels = modelsViewModel::fetchModelOptions,
                     onDismiss = { presetToolsDialogOpen = false },
                 )
             }

@@ -1,6 +1,5 @@
 package com.eleckoi.android.feature.characters.presets.ui.editor
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -11,6 +10,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
@@ -28,15 +28,11 @@ import androidx.compose.material.icons.rounded.SmartToy
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -54,12 +50,18 @@ import com.eleckoi.android.engine.generation.model.ModelConfig
 import com.eleckoi.android.feature.characters.presets.model.AgentPresetToolConfiguration
 import com.eleckoi.android.feature.characters.presets.model.AgentPresetRoleplayPlan
 import com.eleckoi.android.feature.modelconfig.ui.modelpicker.ImageModelParamsMode
+import com.eleckoi.android.feature.modelconfig.ui.modelpicker.ModelPickerConfigKind
+import com.eleckoi.android.feature.modelconfig.ui.modelpicker.ModelPickerContent
+import com.eleckoi.android.feature.modelconfig.ui.modelpicker.ModelPickerLeadingChoice
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.foundation.design.ElecKoiDanger
 import com.eleckoi.android.foundation.design.components.AppIconPaths
 import com.eleckoi.android.foundation.design.components.AppSwitch
-import com.eleckoi.android.foundation.design.components.MobileBottomSheetOverlay
+import com.eleckoi.android.foundation.design.components.MobileBottomSheetDialog
+import com.eleckoi.android.foundation.design.components.MobileBottomSheetHeader
 import com.eleckoi.android.foundation.design.components.StrokeSvgIcon
+
+internal enum class ToolModelPickerKind { Subagent, Image }
 
 @Composable
 internal fun AddPresetToolSheet(
@@ -68,10 +70,15 @@ internal fun AddPresetToolSheet(
     onDismiss: () -> Unit,
     onAdd: (String) -> Unit,
 ) {
-    PresetBottomSheetDialog(appearance = appearance, onDismiss = onDismiss) {
-        SheetHeader(title = "添加工具", appearance = appearance, onDismiss = onDismiss)
+    MobileBottomSheetDialog(
+        appearance = appearance,
+        onDismiss = onDismiss,
+        sheetModifier = Modifier.fillMaxHeight(0.88f).imePadding(),
+        showHandle = true,
+    ) {
+        MobileBottomSheetHeader(title = "添加工具", appearance = appearance, onDismiss = onDismiss)
         LazyColumn(
-            modifier = Modifier.fillMaxWidth().heightIn(min = 220.dp, max = 580.dp),
+            modifier = Modifier.fillMaxWidth().weight(1f),
             contentPadding = PaddingValues(start = 16.dp, top = 6.dp, end = 16.dp, bottom = 18.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -125,33 +132,59 @@ internal fun PresetToolDetailSheet(
     onSubagentModelChange: (String, String) -> Unit,
     onToolModelConfigChange: (String) -> Unit,
     onSaveModelConfig: (ModelConfig, (Result<ModelConfig>) -> Unit) -> Unit,
+    onRefreshModels: (ModelConfig, (Result<ModelConfig>) -> Unit) -> Unit,
     onRemove: () -> Unit,
 ) {
-    PresetBottomSheetDialog(appearance = appearance, onDismiss = onDismiss) {
-        ToolDetailSheetContent(
-            group = group,
-            enabled = enabled,
-            configuration = configuration,
-            roleplayPlan = roleplayPlan,
-            modelConfigs = modelConfigs,
-            allowRemove = allowRemove,
-            showBack = false,
-            appearance = appearance,
-            onBack = onDismiss,
-            onDismiss = onDismiss,
-            onEnabledChange = onEnabledChange,
-            onOpenWebSearchSettings = onOpenWebSearchSettings,
-            onRoleplayPlanChange = onRoleplayPlanChange,
-            onSubagentModelChange = onSubagentModelChange,
-            onToolModelConfigChange = onToolModelConfigChange,
-            onSaveModelConfig = onSaveModelConfig,
-            onRemove = onRemove,
-        )
+    var modelPickerKind by rememberSaveable(group.id) { mutableStateOf<ToolModelPickerKind?>(null) }
+    MobileBottomSheetDialog(
+        appearance = appearance,
+        onDismiss = onDismiss,
+        sheetModifier = Modifier.fillMaxHeight(0.88f).imePadding(),
+        showHandle = true,
+    ) {
+        val kind = modelPickerKind
+        if (kind != null) {
+            PresetToolModelPickerContent(
+                kind = kind,
+                groupId = group.id,
+                configuration = configuration,
+                modelConfigs = modelConfigs,
+                appearance = appearance,
+                onBack = { modelPickerKind = null },
+                onDismiss = onDismiss,
+                onSelect = { configId, model ->
+                    when (kind) {
+                        ToolModelPickerKind.Subagent -> onSubagentModelChange(configId, model)
+                        ToolModelPickerKind.Image -> onToolModelConfigChange(configId)
+                    }
+                },
+                onSaveModelConfig = onSaveModelConfig,
+                onRefreshModels = onRefreshModels,
+            )
+        } else {
+            ToolDetailSheetContent(
+                group = group,
+                enabled = enabled,
+                configuration = configuration,
+                roleplayPlan = roleplayPlan,
+                modelConfigs = modelConfigs,
+                allowRemove = allowRemove,
+                showBack = false,
+                appearance = appearance,
+                onBack = onDismiss,
+                onDismiss = onDismiss,
+                onEnabledChange = onEnabledChange,
+                onOpenWebSearchSettings = onOpenWebSearchSettings,
+                onRoleplayPlanChange = onRoleplayPlanChange,
+                onOpenModelPicker = { modelPickerKind = it },
+                onRemove = onRemove,
+            )
+        }
     }
 }
 
 @Composable
-internal fun ToolDetailSheetContent(
+internal fun ColumnScope.ToolDetailSheetContent(
     group: AgentToolGroupSnapshot,
     enabled: Boolean,
     configuration: AgentPresetToolConfiguration,
@@ -167,43 +200,9 @@ internal fun ToolDetailSheetContent(
     onEnabledChange: (Boolean) -> Unit,
     onOpenWebSearchSettings: () -> Unit,
     onRoleplayPlanChange: (AgentPresetRoleplayPlan) -> Unit,
-    onSubagentModelChange: (String, String) -> Unit,
-    onToolModelConfigChange: (String) -> Unit,
-    onSaveModelConfig: (ModelConfig, (Result<ModelConfig>) -> Unit) -> Unit,
+    onOpenModelPicker: (ToolModelPickerKind) -> Unit,
     onRemove: () -> Unit,
 ) {
-    var modelPickerKind by rememberSaveable(group.id) { mutableStateOf<ToolModelPickerKind?>(null) }
-    modelPickerKind?.let { kind ->
-        ToolModelPickerContent(
-            kind = kind,
-            configs = modelConfigs,
-            selectedConfigId = when (kind) {
-                ToolModelPickerKind.Subagent -> configuration.subagentModelConfigId
-                ToolModelPickerKind.Image -> configuration.toolModelConfigIds[group.id].orEmpty()
-            },
-            selectedModel = configuration.subagentModel,
-            imageParamsMode = if (group.id == AgentToolRequestPolicy.BuiltInCreator) {
-                ImageModelParamsMode.OnDemand
-            } else {
-                ImageModelParamsMode.AutomaticIllustration
-            },
-            appearance = appearance,
-            onBack = { modelPickerKind = null },
-            onDismiss = onDismiss,
-            onSaveConfig = onSaveModelConfig,
-            onSelect = { configId, model ->
-                when (kind) {
-                    ToolModelPickerKind.Subagent -> {
-                        onSubagentModelChange(configId, model)
-                        modelPickerKind = null
-                    }
-                    ToolModelPickerKind.Image -> onToolModelConfigChange(configId)
-                }
-            },
-        )
-        return
-    }
-
     val selectedSubagentConfig = modelConfigs.firstOrNull { it.id == configuration.subagentModelConfigId }
     val selectedImageConfig = modelConfigs.firstOrNull {
         it.id == configuration.toolModelConfigIds[group.id]
@@ -211,14 +210,14 @@ internal fun ToolDetailSheetContent(
     val isCreatorGroup = group.id == AgentToolRequestPolicy.BuiltInCreator
     val isImageConfigurationGroup = isCreatorGroup ||
         group.id == AgentToolRequestPolicy.BuiltInAutoIllustration
-    SheetHeader(
+    MobileBottomSheetHeader(
         title = group.name,
         appearance = appearance,
         onDismiss = onDismiss,
         onBack = onBack.takeIf { showBack },
     )
     LazyColumn(
-        modifier = Modifier.fillMaxWidth().heightIn(max = 610.dp),
+        modifier = Modifier.fillMaxWidth().weight(1f),
         contentPadding = PaddingValues(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -305,7 +304,7 @@ internal fun ToolDetailSheetContent(
                     } ?: "使用当前对话选择的模型与参数",
                     actionDescription = "选择子 Agent 模型",
                     appearance = appearance,
-                    onClick = { modelPickerKind = ToolModelPickerKind.Subagent },
+                    onClick = { onOpenModelPicker(ToolModelPickerKind.Subagent) },
                 )
             }
         }
@@ -324,7 +323,7 @@ internal fun ToolDetailSheetContent(
                         },
                     actionDescription = "选择图片生成模型",
                     appearance = appearance,
-                    onClick = { modelPickerKind = ToolModelPickerKind.Image },
+                    onClick = { onOpenModelPicker(ToolModelPickerKind.Image) },
                 )
             }
         }
@@ -433,6 +432,55 @@ internal fun ToolDetailSheetContent(
 }
 
 @Composable
+internal fun ColumnScope.PresetToolModelPickerContent(
+    kind: ToolModelPickerKind,
+    groupId: String,
+    configuration: AgentPresetToolConfiguration,
+    modelConfigs: List<ModelConfig>,
+    appearance: AppearanceTheme,
+    onBack: () -> Unit,
+    onDismiss: () -> Unit,
+    onSelect: (String, String) -> Unit,
+    onSaveModelConfig: (ModelConfig, (Result<ModelConfig>) -> Unit) -> Unit,
+    onRefreshModels: (ModelConfig, (Result<ModelConfig>) -> Unit) -> Unit,
+) {
+    val isSubagent = kind == ToolModelPickerKind.Subagent
+    val selectedConfigId = if (isSubagent) {
+        configuration.subagentModelConfigId
+    } else {
+        configuration.toolModelConfigIds[groupId].orEmpty()
+    }
+    ModelPickerContent(
+        configs = modelConfigs,
+        selectedConfigId = selectedConfigId,
+        selectedModel = configuration.subagentModel.takeIf { isSubagent }.orEmpty(),
+        appearance = appearance,
+        onBack = onBack,
+        onDismiss = onDismiss,
+        onSelect = onSelect,
+        onSaveConfig = onSaveModelConfig,
+        onRefreshModels = onRefreshModels,
+        leadingChoice = ModelPickerLeadingChoice(
+            title = if (isSubagent) "跟随主模型" else "不指定图片模型",
+            subtitle = if (isSubagent) {
+                "使用当前对话选择的模型与参数"
+            } else {
+                "工具启用时不会生成图片"
+            },
+            selected = selectedConfigId.isBlank(),
+            onSelect = { onSelect("", "") },
+        ),
+        configKind = if (isSubagent) ModelPickerConfigKind.Chat else ModelPickerConfigKind.Image,
+        imageParamsMode = if (groupId == AgentToolRequestPolicy.BuiltInCreator) {
+            ImageModelParamsMode.OnDemand
+        } else {
+            ImageModelParamsMode.AutomaticIllustration
+        },
+        showCharacterImagePrompt = false,
+    )
+}
+
+@Composable
 private fun ToolConfigurationSelector(
     title: String,
     subtitle: String,
@@ -486,28 +534,5 @@ private fun ToolDetailCard(
     val modifier = if (onClick == null) Modifier.fillMaxWidth() else Modifier.fillMaxWidth().clickable(onClick = onClick)
     Surface(color = appearance.mobileBg, shape = RoundedCornerShape(18.dp), modifier = modifier) {
         Column(content = content)
-    }
-}
-
-@Composable
-internal fun PresetBottomSheetDialog(
-    appearance: AppearanceTheme,
-    onDismiss: () -> Unit,
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    var visible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { visible = true }
-    BackHandler(onBack = onDismiss)
-    CompositionLocalProvider(LocalContentColor provides appearance.mobileText) {
-        // Use the same host-level overlay as chat history. Besides keeping modal behavior
-        // consistent, this lets the explicit scrim cover the status bar on every supported OEM.
-        MobileBottomSheetOverlay(
-            visible = visible,
-            appearance = appearance,
-            onDismiss = onDismiss,
-            showHandle = true,
-            sheetModifier = Modifier.imePadding(),
-            content = content,
-        )
     }
 }

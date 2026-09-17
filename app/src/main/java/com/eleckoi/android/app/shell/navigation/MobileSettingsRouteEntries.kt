@@ -252,6 +252,7 @@ internal fun MobileShellRouteContext.AgentPresetPageContent(
             navigateTo(MobileRoute.WebSearchSettings)
         },
         onSaveModelConfig = modelsViewModel::saveModelConfig,
+        onRefreshModels = modelsViewModel::fetchModelOptions,
     )
 }
 

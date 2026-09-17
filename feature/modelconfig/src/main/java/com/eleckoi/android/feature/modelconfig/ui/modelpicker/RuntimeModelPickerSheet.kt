@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -36,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import com.eleckoi.android.foundation.design.components.AppIconPaths
 import com.eleckoi.android.foundation.design.components.ModelProviderIcon
 import com.eleckoi.android.foundation.design.components.MobileBottomSheetOverlay
+import com.eleckoi.android.foundation.design.components.MobileBottomSheetHeader
 import com.eleckoi.android.foundation.design.components.StrokeSvgIcon
 import com.eleckoi.android.foundation.design.components.noRippleClickable
 import com.eleckoi.android.engine.generation.model.ModelConfig
@@ -82,6 +84,62 @@ fun ModelPickerSheet(
     imageParamsMode: ImageModelParamsMode = ImageModelParamsMode.AutomaticIllustration,
     showCharacterImagePrompt: Boolean = true,
 ) {
+    CompositionLocalProvider(LocalContentColor provides appearance.mobileText) {
+        // Root-level callers keep the overlay host; nested editors reuse the content below inside
+        // their existing window-level sheet so navigation does not create a second modal.
+        MobileBottomSheetOverlay(
+            visible = visible,
+            appearance = appearance,
+            onDismiss = onDismiss,
+            sheetModifier = Modifier.fillMaxHeight(0.88f),
+            showHandle = true,
+        ) {
+            ModelPickerContent(
+                configs = configs,
+                selectedConfigId = selectedConfigId,
+                selectedModel = selectedModel,
+                characterImagePrompt = characterImagePrompt,
+                appearance = appearance,
+                onDismiss = onDismiss,
+                onSelect = onSelect,
+                onSaveConfig = onSaveConfig,
+                onCharacterImagePromptChange = onCharacterImagePromptChange,
+                onRefreshModels = onRefreshModels,
+                title = title,
+                leadingChoice = leadingChoice,
+                showParameters = showParameters,
+                configKind = configKind,
+                imageParamsMode = imageParamsMode,
+                showCharacterImagePrompt = showCharacterImagePrompt,
+                backHandlerEnabled = visible,
+            )
+        }
+    }
+}
+
+@Composable
+fun ColumnScope.ModelPickerContent(
+    configs: List<ModelConfig>,
+    selectedConfigId: String,
+    selectedModel: String,
+    characterImagePrompt: String = "",
+    appearance: AppearanceTheme,
+    onDismiss: () -> Unit,
+    onBack: (() -> Unit)? = null,
+    onSelect: (configId: String, modelId: String) -> Unit,
+    onSaveConfig: (ModelConfig, (Result<ModelConfig>) -> Unit) -> Unit,
+    onCharacterImagePromptChange: (String, (Result<String>) -> Unit) -> Unit = { _, callback ->
+        callback(Result.failure(IllegalStateException("当前页面没有角色提示词")))
+    },
+    onRefreshModels: (ModelConfig, (Result<ModelConfig>) -> Unit) -> Unit,
+    title: String = "选择模型",
+    leadingChoice: ModelPickerLeadingChoice? = null,
+    showParameters: Boolean = true,
+    configKind: ModelPickerConfigKind = ModelPickerConfigKind.Chat,
+    imageParamsMode: ImageModelParamsMode = ImageModelParamsMode.AutomaticIllustration,
+    showCharacterImagePrompt: Boolean = true,
+    backHandlerEnabled: Boolean = true,
+) {
     var refreshedCatalogs by remember { mutableStateOf<Map<String, RefreshedModelCatalog>>(emptyMap()) }
     val runtimeConfigs = remember(configs, refreshedCatalogs) {
         applyRefreshedModelCatalogs(configs, refreshedCatalogs)
@@ -122,36 +180,27 @@ fun ModelPickerSheet(
     val selectedImageConfigId = selectedConfigId.takeIf {
         configKind == ModelPickerConfigKind.Image
     }.orEmpty()
-    val canNavigateBack = openConfig != null || page != ModelPickerPage.Models
+    val canNavigateBack = openConfig != null || page != ModelPickerPage.Models || onBack != null
     val navigateBack: () -> Unit = {
         when {
             openConfig != null -> openConfigId = ""
             page != ModelPickerPage.Models -> page = ModelPickerPage.Models
+            else -> onBack?.invoke()
         }
     }
     // A config can disappear underneath us while its model list is open.
     LaunchedEffect(openConfigId, openConfig) {
         if (openConfigId.isNotBlank() && openConfig == null) openConfigId = ""
     }
-    BackHandler(enabled = visible) {
+    BackHandler(enabled = backHandlerEnabled) {
         if (canNavigateBack) navigateBack() else onDismiss()
     }
-    CompositionLocalProvider(LocalContentColor provides appearance.mobileText) {
-        // Match the chat-history sheet: keep the overlay in the host composition so its scrim also
-        // covers the status bar. A separate Dialog window is inset below the status bar on some OEMs.
-        MobileBottomSheetOverlay(
-            visible = visible,
-            appearance = appearance,
-            onDismiss = onDismiss,
-            sheetModifier = Modifier.fillMaxHeight(0.88f),
-            showHandle = true,
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .imePadding(),
-            ) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .weight(1f)
+            .imePadding(),
+    ) {
                 Column(modifier = Modifier.fillMaxSize()) {
                     ModelPickerHeader(
                         title = openConfig?.let(::configVersionName) ?: title,
@@ -289,8 +338,6 @@ fun ModelPickerSheet(
                         },
                     )
                 }
-            }
-        }
     }
 }
 
@@ -323,28 +370,13 @@ private fun ModelPickerHeader(
     onBack: (() -> Unit)?,
     onDismiss: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
-        verticalAlignment = Alignment.Top,
-    ) {
-        if (onBack != null) {
-            Box(
-                modifier = Modifier.size(30.dp).padding(top = 1.dp).noRippleClickable(onClick = onBack),
-                contentAlignment = Alignment.Center,
-            ) {
-                StrokeSvgIcon(AppIconPaths.ChevronLeft, appearance.mobileText, iconSize = 21.dp, strokeWidth = 1.9f)
-            }
-        }
-        Column(modifier = Modifier.weight(1f).padding(start = if (onBack != null) 4.dp else 10.dp)) {
-            Text(
-                title,
-                color = appearance.mobileText,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (showSubtitle) {
+    MobileBottomSheetHeader(
+        title = title,
+        appearance = appearance,
+        onBack = onBack,
+        onDismiss = onDismiss,
+        subtitleContent = if (showSubtitle) {
+            {
                 Row(
                     modifier = Modifier.padding(top = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -367,14 +399,8 @@ private fun ModelPickerHeader(
                     )
                 }
             }
-        }
-        Box(
-            modifier = Modifier.size(30.dp).noRippleClickable(onClick = onDismiss),
-            contentAlignment = Alignment.Center,
-        ) {
-            StrokeSvgIcon(AppIconPaths.X, appearance.mobileText, iconSize = 19.dp, strokeWidth = 1.9f)
-        }
-    }
+        } else null,
+    )
 }
 
 // 32dp, not 48. It used to be a full-height pill in semibold, louder than everything it switches

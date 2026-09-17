@@ -78,31 +78,6 @@ class AgentPresetModelsTest {
     }
 
     @Test
-    fun `legacy hidden timeline receives an editable position below latest user input`() {
-        val normalized = AgentPreset(
-            id = "legacy",
-            name = "旧预设",
-            entries = listOf(
-                SettingLibraryEntry(
-                    id = "built-in-hidden-tool-timeline",
-                    title = "隐藏工具时间线",
-                    triggerMode = SettingLibraryTriggerMode.Always,
-                    position = SettingLibraryPosition.InsertPoint5,
-                    insertRole = SettingLibraryInsertRole.User,
-                ),
-            ),
-        ).withRequiredBuiltIns()
-
-        val hiddenTimeline = normalized.entries.single { it.isHiddenToolTimelineEntry() }
-        val position = normalized.promptPositions.single()
-        assertEquals(HiddenToolTimelinePromptPositionId, hiddenTimeline.promptPositionId)
-        assertEquals(SettingLibraryPosition.InsertPoint4, hiddenTimeline.position)
-        assertEquals(HiddenToolTimelinePromptPositionId, position.id)
-        assertEquals(SettingLibraryPosition.InsertPoint4, position.anchor)
-        assertEquals(SettingLibraryPromptPositionSide.BeforeSettingPosition, position.side)
-    }
-
-    @Test
     fun `hidden timeline position remains user editable and is not recreated after deletion`() {
         val customized = defaultAgentPreset().let { preset ->
             preset.copy(

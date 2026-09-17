@@ -25,6 +25,7 @@ internal fun CreationAssistantToolsDialog(
     onImageModelConfigChange: (String) -> Unit,
     onOpenWebSearchSettings: () -> Unit,
     onSaveModelConfig: (ModelConfig, (Result<ModelConfig>) -> Unit) -> Unit,
+    onRefreshModels: (ModelConfig, (Result<ModelConfig>) -> Unit) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val toolModelConfigIds = imageModelConfigId
@@ -55,6 +56,7 @@ internal fun CreationAssistantToolsDialog(
             }
         },
         onSaveModelConfig = onSaveModelConfig,
+        onRefreshModels = onRefreshModels,
         onDismiss = onDismiss,
     )
 }

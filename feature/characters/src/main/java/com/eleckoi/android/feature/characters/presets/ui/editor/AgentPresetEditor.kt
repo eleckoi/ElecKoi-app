@@ -2,8 +2,6 @@ package com.eleckoi.android.feature.characters.presets.ui.editor
 
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -24,8 +22,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.BlurredEdgeTreatment
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -88,6 +84,7 @@ internal fun AgentPresetEditor(
     onUpdateAuthorAvatar: (Map<AvatarSlot, File>) -> Unit,
     onOpenWebSearchSettings: () -> Unit,
     onSaveModelConfig: (ModelConfig, (Result<ModelConfig>) -> Unit) -> Unit,
+    onRefreshModels: (ModelConfig, (Result<ModelConfig>) -> Unit) -> Unit,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val editorLibrary = remember(preset) { preset.asEditorLibrary() }
@@ -98,7 +95,6 @@ internal fun AgentPresetEditor(
     var invalidEnableEntry by remember { mutableStateOf<SettingLibraryEntry?>(null) }
     var conflictingOrderEntry by remember { mutableStateOf<SettingLibraryEntry?>(null) }
     var hiddenTimelineDisableConfirmationOpen by remember { mutableStateOf(false) }
-    var toolModalOpen by remember { mutableStateOf(false) }
     var searchOpen by rememberSaveable(preset.id) { mutableStateOf(false) }
     var selectedTab by rememberSaveable(preset.id) {
         mutableStateOf(if (startOnTools) AgentPresetEditorTab.Tools else AgentPresetEditorTab.Usage)
@@ -223,19 +219,9 @@ internal fun AgentPresetEditor(
     val displayedTreeNodes = treeInternalReorder.displayNodes()
     val selectedTreeNode = treeNodes.firstOrNull { it.id == editorState.selectedTreeNodeId }
 
-    val modalBackdropBlur by animateDpAsState(
-        targetValue = if (toolModalOpen) 12.dp else 0.dp,
-        animationSpec = tween(durationMillis = 180),
-        label = "presetToolModalBackdropBlur",
-    )
     PinnedStatusScaffold(
         appearance = appearance,
         backgroundColor = appearance.mobileBg,
-        modifier = if (modalBackdropBlur > 0.dp) {
-            Modifier.blur(modalBackdropBlur, BlurredEdgeTreatment.Unbounded)
-        } else {
-            Modifier
-        },
     ) {
         if (searchOpen && selectedTab == AgentPresetEditorTab.Prompts) {
             StorySearchHeader(
@@ -293,7 +279,7 @@ internal fun AgentPresetEditor(
                 onUpdate = onUpdate,
                 onOpenWebSearchSettings = onOpenWebSearchSettings,
                 onSaveModelConfig = onSaveModelConfig,
-                onModalVisibilityChange = { toolModalOpen = it },
+                onRefreshModels = onRefreshModels,
             )
             AgentPresetEditorTab.Regex -> AgentPresetRegexTab(
                 rules = preset.regexRules,

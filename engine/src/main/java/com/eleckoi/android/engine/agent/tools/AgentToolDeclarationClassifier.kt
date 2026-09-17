@@ -140,7 +140,7 @@ internal fun classifyAgentToolDeclaration(element: JsonElement): AgentToolGroupS
         in CollaborationTools -> builtInToolGroup(
             AgentToolRequestPolicy.BuiltInCollaboration,
             "多代理协作",
-            "创建和管理并行子任务；普通角色通常不需要",
+            "创建和管理并行子任务，用于并行检索、设定整理与复杂任务处理",
             listOf(member),
         )
         // Never surfaced as a switch; see AgentToolRequestPolicy.HiddenGroupIds.
@@ -162,7 +162,7 @@ private fun namespaceGroup(
         return builtInToolGroup(
             id = AgentToolRequestPolicy.BuiltInCollaboration,
             name = "多代理协作",
-            description = "创建和管理并行子任务；普通角色通常不需要",
+            description = "创建和管理并行子任务，用于并行检索、设定整理与复杂任务处理",
             members = members,
         )
     }

@@ -1,5 +1,7 @@
 package com.eleckoi.android.foundation.design.components
 
+import android.view.WindowManager
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -17,11 +19,23 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.foundation.design.overlayScrim
 
@@ -79,6 +93,43 @@ fun MobileBottomSheetOverlay(
                 }
                 content()
             }
+        }
+    }
+}
+
+/** Window-level host for sheets opened below nested screen content such as tabs or lists. */
+@Composable
+fun MobileBottomSheetDialog(
+    appearance: AppearanceTheme,
+    onDismiss: () -> Unit,
+    sheetModifier: Modifier = Modifier,
+    showHandle: Boolean = true,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false,
+        ),
+    ) {
+        val window = (LocalView.current.parent as? DialogWindowProvider)?.window
+        SideEffect {
+            window?.setDimAmount(0f)
+            window?.setWindowAnimations(0)
+            window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
+        }
+        var visible by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) { visible = true }
+        CompositionLocalProvider(LocalContentColor provides appearance.mobileText) {
+            MobileBottomSheetOverlay(
+                visible = visible,
+                appearance = appearance,
+                onDismiss = onDismiss,
+                sheetModifier = sheetModifier,
+                showHandle = showHandle,
+                content = content,
+            )
         }
     }
 }
