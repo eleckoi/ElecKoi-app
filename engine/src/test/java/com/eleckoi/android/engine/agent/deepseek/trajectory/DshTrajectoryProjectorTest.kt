@@ -127,24 +127,27 @@ class DshTrajectoryProjectorTest {
         val events = listOf(
             event("""{"type":"turn/start","seq":0,"time":100,"data":{"turn":1}}"""),
             event("""{"type":"step/start","seq":1,"time":110,"data":{"turn":1,"step":1}}"""),
-            event("""{"type":"assistant/message","seq":2,"time":120,"data":{"turn":1,"step":1,"message":{"content":[{"type":"text","text":"first"}]}}}"""),
-            event("""{"type":"step/start","seq":3,"time":130,"data":{"turn":1,"step":2}}"""),
-            event("""{"type":"assistant/message","seq":4,"time":140,"data":{"turn":1,"step":2,"message":{"content":[{"type":"text","text":"second"}]}}}"""),
-            event("""{"type":"session/end-seed","seq":5,"time":150,"data":{}}"""),
-            event("""{"type":"turn/start","seq":6,"time":200,"data":{"turn":2}}"""),
-            event("""{"type":"compaction/start","seq":7,"time":210,"data":{"turn":2,"compactionId":"compact-2"}}"""),
-            event("""{"type":"compaction/end","seq":8,"time":220,"data":{"turn":2,"compactionId":"compact-2"}}"""),
-            event("""{"type":"step/start","seq":9,"time":230,"data":{"turn":2,"step":1}}"""),
-            event("""{"type":"assistant/message","seq":10,"time":250,"data":{"turn":2,"step":1,"message":{"content":[{"type":"text","text":"fourth"}]}}}"""),
+            event("""{"type":"request/header","seq":2,"time":115,"data":{"turn":1,"step":1,"reason":"initial","header":{"tools":[],"config":{"model":"test"}}}}"""),
+            event("""{"type":"assistant/message","seq":3,"time":120,"data":{"turn":1,"step":1,"message":{"content":[{"type":"text","text":"first"}]}}}"""),
+            event("""{"type":"step/start","seq":4,"time":130,"data":{"turn":1,"step":2}}"""),
+            event("""{"type":"request/header","seq":5,"time":135,"data":{"turn":1,"step":2,"reason":"continue","header":{"tools":[],"config":{"model":"test"}}}}"""),
+            event("""{"type":"assistant/message","seq":6,"time":140,"data":{"turn":1,"step":2,"message":{"content":[{"type":"text","text":"second"}]}}}"""),
+            event("""{"type":"session/end-seed","seq":7,"time":150,"data":{}}"""),
+            event("""{"type":"turn/start","seq":8,"time":200,"data":{"turn":2}}"""),
+            event("""{"type":"compaction/start","seq":9,"time":210,"data":{"turn":2,"compactionId":"compact-2"}}"""),
+            event("""{"type":"compaction/end","seq":10,"time":220,"data":{"turn":2,"compactionId":"compact-2"}}"""),
+            event("""{"type":"step/start","seq":11,"time":230,"data":{"turn":2,"step":1}}"""),
+            event("""{"type":"request/header","seq":12,"time":235,"data":{"turn":2,"step":1,"reason":"initial","header":{"tools":[],"config":{"model":"test"}}}}"""),
+            event("""{"type":"assistant/message","seq":13,"time":250,"data":{"turn":2,"step":1,"message":{"content":[{"type":"text","text":"fourth"}]}}}"""),
         )
 
         val firstRead = DshTrajectoryProjector.project(events)
         val resumedRead = DshTrajectoryProjector.project(events.shuffled(kotlin.random.Random(7)))
         val expected = listOf(
             Triple(1L, 1, 1),
-            Triple(3L, 2, 2),
-            Triple(7L, 3, null),
-            Triple(9L, 4, 1),
+            Triple(4L, 2, 2),
+            Triple(9L, 3, null),
+            Triple(11L, 4, 1),
         )
         fun numbered(projection: DshTrajectoryProjection) = projection.records
             .flatMap(DshTrajectoryRecord::requests)
@@ -153,6 +156,28 @@ class DshTrajectoryProjectorTest {
         assertEquals(expected, numbered(firstRead))
         assertEquals(expected, numbered(resumedRead))
         assertEquals(listOf(3, 4), firstRead.records.takeLast(2).flatMap { it.requests }.map { it.number })
+    }
+
+    @Test
+    fun excludesHeaderlessConstructorSeedStepsFromRequestNumbers() {
+        val projection = DshTrajectoryProjector.project(
+            listOf(
+                event("""{"type":"turn/start","seq":0,"time":1000,"data":{"turn":1}}"""),
+                event("""{"type":"step/start","seq":1,"time":1010,"data":{"turn":1,"step":1}}"""),
+                event("""{"type":"assistant/message","seq":2,"time":1020,"data":{"turn":1,"step":1,"message":{"content":[{"type":"text","text":"seed history"}]}}}"""),
+                event("""{"type":"turn/end","seq":3,"time":1030,"data":{"turn":1}}"""),
+                event("""{"type":"session/end-seed","seq":4,"time":1040,"data":{}}"""),
+                event("""{"type":"turn/start","seq":5,"time":1050,"data":{"turn":2}}"""),
+                event("""{"type":"step/start","seq":6,"time":1060,"data":{"turn":2,"step":1}}"""),
+                event("""{"type":"request/header","seq":7,"time":1070,"data":{"turn":2,"step":1,"reason":"initial","header":{"tools":[],"config":{"model":"test"}}}}"""),
+                event("""{"type":"assistant/message","seq":8,"time":1080,"data":{"turn":2,"step":1,"message":{"content":[{"type":"text","text":"real response"}]}}}"""),
+            ),
+        )
+
+        assertEquals(
+            listOf(emptyList<Int>(), listOf(1)),
+            projection.records.map { record -> record.requests.map { request -> request.number } },
+        )
     }
 
     @Test

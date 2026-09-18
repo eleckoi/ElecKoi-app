@@ -28,8 +28,12 @@ object DshTrajectoryProjector {
         header: JsonObject = JsonObject(emptyMap()),
     ): DshTrajectoryProjection {
         val events = input.mapIndexed(::normalizeEvent).sortedBy(NormalizedEvent::seq)
+        val syntheticSeedStepSeqs = findSyntheticSeedStepSeqs(events)
         val requestNumbers = events
-            .filter { event -> event.type == "step/start" || event.type == "compaction/start" }
+            .filter { event ->
+                event.type == "compaction/start" ||
+                    (event.type == "step/start" && event.seq !in syntheticSeedStepSeqs)
+            }
             .mapIndexed { index, event -> event.seq to index + 1 }
             .toMap()
         val records = mutableListOf<MutableRecord>()
@@ -79,7 +83,7 @@ object DshTrajectoryProjector {
                     activeStep = eventStep
                     val turn = activeTurn
                     val step = activeStep
-                    if (turn != null && step != null) {
+                    if (turn != null && step != null && event.seq !in syntheticSeedStepSeqs) {
                         if (time != null) stepStarts[stepKey(turn, step)] = time
                         val headerValue = currentRequestHeader
                         pendingRequests += PendingRequest(
@@ -657,6 +661,29 @@ private fun pretty(value: JsonElement): String =
         .getOrDefault(value.toString())
 
 private fun stepKey(turn: Int, step: Int): String = "$turn\u0000$step"
+
+/**
+ * Constructor seeds reproduce historical assistant/tool surfaces with step lifecycle events, but
+ * they do not call a model and therefore have no request/header anywhere before end-seed. Keep
+ * genuine persisted requests in seeded sessions when that segment does contain request headers.
+ */
+private fun findSyntheticSeedStepSeqs(events: List<NormalizedEvent>): Set<Long> {
+    val syntheticStepSeqs = mutableSetOf<Long>()
+    var segmentStart = 0
+
+    events.forEachIndexed { index, event ->
+        if (event.type != "session/end-seed") return@forEachIndexed
+        val segment = events.subList(segmentStart, index)
+        if (segment.none { it.type == "request/header" }) {
+            segment
+                .filter { it.type == "step/start" }
+                .forEach { syntheticStepSeqs += it.seq }
+        }
+        segmentStart = index + 1
+    }
+
+    return syntheticStepSeqs
+}
 
 private fun JsonObject.objectValue(key: String): JsonObject = this[key] as? JsonObject ?: JsonObject(emptyMap())
 private fun JsonObject.withoutKey(key: String): JsonObject = buildJsonObject {
