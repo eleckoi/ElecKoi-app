@@ -14,6 +14,22 @@ Distribution-specific notices are retained in:
 - runtime/licenses/
 
 ------------------------------------------------------------------------------
+975 Yuan (975Yuan)
+------------------------------------------------------------------------------
+
+The bundled 975 Yuan typeface is licensed under the SIL Open Font License 1.1.
+
+  Project: https://github.com/lxgw/975Yuan
+  License: feature/appfont/src/main/assets/fonts/lxgw-975yuan-OFL.txt
+
+Used in:
+  feature/appfont/src/main/assets/fonts/lxgw-975yuan-sc.ttf
+    - Default interface font for new installations and users without a saved
+      font choice
+    - Android's system font and other installed fonts remain selectable in
+      Settings > Personalization > Font
+
+------------------------------------------------------------------------------
 Gradle Wrapper
 ------------------------------------------------------------------------------
 

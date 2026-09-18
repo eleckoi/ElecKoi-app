@@ -38,7 +38,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -50,13 +49,11 @@ import com.eleckoi.android.foundation.design.PhosphorRegular
 import com.eleckoi.android.foundation.design.components.FilledSvgIcon
 import com.eleckoi.android.foundation.design.components.QuietBackButton
 import com.eleckoi.android.feature.appfont.data.AppFontCatalog
-import com.eleckoi.android.feature.appfont.data.AppFontCatalogEntry
 import com.eleckoi.android.feature.appfont.data.AppFontDownloader
 import com.eleckoi.android.feature.appfont.data.AppFontRepository
 import com.eleckoi.android.feature.appfont.data.AppFontScope
 import com.eleckoi.android.feature.appfont.data.AppFontSelection
 import kotlinx.coroutines.launch
-import java.io.File
 
 private const val FontPreviewSample = "她安静地站在原地，等你伸手环住她。“路上辛苦了。”"
 
@@ -140,7 +137,7 @@ fun FontSettingsPage(
             // The font names below are each drawn in their own typeface, but a name is four
             // characters — not enough to judge a paragraph. This shows the selected font on the kind
             // of sentence the app actually renders.
-            val activeFamily = rememberFontFamily(repository.fileFor(selection.fontId), installRevision)
+            val activeFamily = rememberFontFamily(repository.typefaceFor(selection.fontId), installRevision)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -167,9 +164,25 @@ fun FontSettingsPage(
                     .clip(RoundedCornerShape(14.dp))
                     .background(appearance.mobileSurface),
             ) {
+                val defaultEntry = AppFontCatalog.entryFor(AppFontCatalog.DefaultFontId)!!
+                FontRow(
+                    name = defaultEntry.name,
+                    note = "${defaultEntry.note} · 应用内置",
+                    selected = selection.fontId == defaultEntry.id,
+                    appearance = appearance,
+                    nameFontFamily = rememberFontFamily(
+                        repository.typefaceFor(defaultEntry.id),
+                        installRevision,
+                    ),
+                    onClick = { scope.launch { repository.selectFont(defaultEntry.id) } },
+                )
+                HorizontalDivider(
+                    modifier = Modifier.padding(start = 14.dp),
+                    color = appearance.mobileLine,
+                )
                 FontRow(
                     name = "系统默认",
-                    note = "跟随手机设置",
+                    note = "跟随 Android 与手机厂商设置",
                     selected = selection.fontId.isBlank(),
                     appearance = appearance,
                     onClick = { scope.launch { repository.selectFont(AppFontCatalog.SystemFontId) } },
@@ -184,7 +197,7 @@ fun FontSettingsPage(
                     .clip(RoundedCornerShape(14.dp))
                     .background(appearance.mobileSurface),
             ) {
-                AppFontCatalog.entries.forEachIndexed { index, entry ->
+                AppFontCatalog.downloadableEntries.forEachIndexed { index, entry ->
                     if (index > 0) {
                         HorizontalDivider(
                             modifier = Modifier.padding(start = 14.dp),
@@ -193,7 +206,7 @@ fun FontSettingsPage(
                     }
                     val installed = remember(entry.id, installRevision) { repository.isInstalled(entry.id) }
                     val family = rememberFontFamily(
-                        file = if (installed) repository.fileFor(entry.id) else null,
+                        typeface = if (installed) repository.typefaceFor(entry.id) else null,
                         revision = installRevision,
                     )
                     val isDownloading = downloadingId == entry.id
@@ -233,7 +246,7 @@ fun FontSettingsPage(
                     .background(appearance.mobileSurface),
             ) {
                 imported.forEach { fontId ->
-                    val family = rememberFontFamily(repository.fileFor(fontId), installRevision)
+                    val family = rememberFontFamily(repository.typefaceFor(fontId), installRevision)
                     FontRow(
                         name = fontId,
                         note = null,
@@ -317,22 +330,12 @@ fun FontSettingsPage(
     }
 }
 
-private suspend fun downloadFont(
-    repository: AppFontRepository,
-    entry: AppFontCatalogEntry,
-    setDownloading: (String?) -> Unit,
-) {
-    setDownloading(entry.id)
-    repository.download(entry)
-        .onSuccess { repository.selectFont(entry.id) }
-    setDownloading(null)
-}
-
 @Composable
-private fun rememberFontFamily(file: File?, revision: Int): FontFamily? = remember(file?.path, revision) {
-    file ?: return@remember null
-    runCatching { FontFamily(Font(file = file)) }.getOrNull()
-}
+private fun rememberFontFamily(typeface: android.graphics.Typeface?, revision: Int): FontFamily? =
+    remember(typeface, revision) {
+        typeface ?: return@remember null
+        FontFamily(typeface)
+    }
 
 @Composable
 private fun FontSectionLabel(text: String, appearance: AppearanceTheme) {

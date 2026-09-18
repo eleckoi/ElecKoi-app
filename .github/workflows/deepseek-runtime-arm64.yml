@@ -1,17 +1,6 @@
 name: DeepSeek Runtime ARM64
 
 on:
-  push:
-    branches:
-      - main
-      - 'codex/**'
-    paths:
-      - '.github/workflows/deepseek-runtime-arm64.yml'
-      - 'runtime/deepseek/**'
-      - 'runtime/catalog/runtime-catalog.json'
-      - 'runtime/compile-deepseek-harness-arm64.ps1'
-      - 'runtime/package-deepseek-runtime.ps1'
-      - 'runtime/test-deepseek-runtime.ps1'
   workflow_dispatch:
     inputs:
       force_compile:

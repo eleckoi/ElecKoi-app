@@ -1,9 +1,7 @@
 package com.eleckoi.android.feature.appfont.data
 
-// Nothing ships inside the APK: a full Chinese typeface is 14-25 MB because it carries twenty
-// thousand glyphs, and most users only ever want one of them. The default is the system font,
-// which on current Android phones is already a modern sans, and everything else is fetched on
-// demand.
+// 975 Yuan ships inside the APK because it is ElecKoi's product default. The other full Chinese
+// typefaces remain optional downloads: each carries twenty thousand glyphs and costs 15-25 MB.
 //
 // Every entry here is SIL Open Font License, which is what makes it legal for us to host and hand
 // the file to a user. Vendor "free for commercial use" fonts (MiSans, HarmonyOS Sans, the Alibaba
@@ -19,12 +17,14 @@ data class AppFontCatalogEntry(
     val sizeBytes: Long,
     val url: String,
     val license: String = "SIL Open Font License 1.1",
+    val bundledAssetPath: String? = null,
 ) {
     val fileName: String get() = "$id.ttf"
 }
 
 object AppFontCatalog {
     const val SystemFontId = ""
+    const val DefaultFontId = "lxgw-975yuan-sc"
 
     // Verified 2026-07-26: every URL returns 200 and the byte counts are the real asset sizes.
     val entries = listOf(
@@ -34,6 +34,7 @@ object AppFontCatalog {
             note = "圆润可爱 · 简体",
             sizeBytes = 14_525_902L,
             url = "https://github.com/lxgw/975Yuan/releases/download/26.07.13/LXGW975YuanSC-400W.ttf",
+            bundledAssetPath = "fonts/lxgw-975yuan-sc.ttf",
         ),
         AppFontCatalogEntry(
             id = "lxgw-yozai",
@@ -57,6 +58,8 @@ object AppFontCatalog {
             url = "https://github.com/lxgw/kose-font/releases/download/v3.126/Xiaolai-Regular.ttf",
         ),
     )
+
+    val downloadableEntries: List<AppFontCatalogEntry> = entries.filter { it.bundledAssetPath == null }
 
     fun entryFor(id: String): AppFontCatalogEntry? = entries.firstOrNull { it.id == id }
 }

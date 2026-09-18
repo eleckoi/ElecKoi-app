@@ -9,13 +9,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import com.eleckoi.android.feature.appfont.data.AppFontDownloader
 import com.eleckoi.android.feature.appfont.data.AppFontRepository
 import com.eleckoi.android.feature.appfont.data.AppFontScope
 import com.eleckoi.android.feature.appfont.data.AppFontSelection
-import java.io.File
 
 // Material3's Text merges LocalTextStyle with whatever the call site passes explicitly. Call sites
 // in this app set fontSize but not fontFamily, so overriding LocalTextStyle here reaches all ~460
@@ -34,8 +32,9 @@ fun ProvideAppFont(
     // chat opens — so every chat entry pushed a null typeface for a frame, resetting the engine and
     // laying out whatever was on screen in the default font before the real value arrived.
     val selection by repository.selectionFlow.collectAsState(initial = null)
-    val fontFile = remember(selection?.fontId) {
-        selection?.let { repository.fileFor(it.fontId) }
+    val installRevision by AppFontDownloader.completions.collectAsState()
+    val typeface = remember(selection?.fontId, installRevision) {
+        selection?.let { repository.typefaceFor(it.fontId) }
     }
 
     // If the process was killed mid-download the staging file outlives it, and the settings page
@@ -44,15 +43,12 @@ fun ProvideAppFont(
 
     // Canvas-based text renderers can opt in without making this reusable font runtime depend on
     // a particular feature's rendering engine.
-    LaunchedEffect(selection != null, fontFile?.path, onTypefaceChanged) {
+    LaunchedEffect(selection != null, typeface, onTypefaceChanged) {
         if (selection == null) return@LaunchedEffect
-        val typeface = fontFile?.let { file ->
-            runCatching { Typeface.createFromFile(file) }.getOrNull()
-        }
         onTypefaceChanged?.invoke(typeface)
     }
 
-    val fontFamily = rememberAppFontFamily(fontFile, selection, chatSubtree)
+    val fontFamily = rememberAppFontFamily(typeface, selection, chatSubtree)
 
     if (fontFamily == null) {
         content()
@@ -66,7 +62,7 @@ fun ProvideAppFont(
 
 @Composable
 private fun rememberAppFontFamily(
-    fontFile: File?,
+    typeface: Typeface?,
     selection: AppFontSelection?,
     chatSubtree: Boolean,
 ): FontFamily? {
@@ -75,10 +71,8 @@ private fun rememberAppFontFamily(
         AppFontScope.ChatOnly -> chatSubtree
         null -> false
     }
-    return remember(fontFile?.path, applies) {
-        if (!applies || fontFile == null) return@remember null
-        // A file can be present but unloadable if it was replaced or truncated out from under us;
-        // falling back to the system font beats crashing every Text in the tree.
-        runCatching { FontFamily(Font(file = fontFile)) }.getOrNull()
+    return remember(typeface, applies) {
+        if (!applies || typeface == null) return@remember null
+        FontFamily(typeface)
     }
 }

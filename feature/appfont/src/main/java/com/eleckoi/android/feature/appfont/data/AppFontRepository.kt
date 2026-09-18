@@ -17,6 +17,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
 
 private val Context.appFontDataStore by preferencesDataStore(name = "app_font")
 
@@ -31,9 +32,12 @@ enum class AppFontScope {
 }
 
 data class AppFontSelection(
-    val fontId: String = AppFontCatalog.SystemFontId,
+    val fontId: String = AppFontCatalog.DefaultFontId,
     val scope: AppFontScope = AppFontScope.All,
 )
+
+internal fun resolveSelectedFontId(storedFontId: String?): String =
+    storedFontId ?: AppFontCatalog.DefaultFontId
 
 class AppFontRepository(private val context: Context) {
 
@@ -47,7 +51,10 @@ class AppFontRepository(private val context: Context) {
 
     val selectionFlow: Flow<AppFontSelection> = context.appFontDataStore.data.map { preferences ->
         AppFontSelection(
-            fontId = preferences[SelectedFontId].orEmpty(),
+            // A missing key means the user has never chosen a font and receives the product
+            // default. An explicitly stored empty string means they deliberately chose Android's
+            // system font, so it must survive upgrades and restores.
+            fontId = resolveSelectedFontId(preferences[SelectedFontId]),
             scope = AppFontScope.fromKey(preferences[SelectedScope]),
         )
     }
@@ -90,12 +97,27 @@ class AppFontRepository(private val context: Context) {
     fun fileFor(fontId: String): File? {
         if (fontId.isBlank()) return null
         AppFontCatalog.entryFor(fontId)?.let { entry ->
+            if (entry.bundledAssetPath != null) return null
             return File(downloadedDirectory, entry.fileName).takeIf(File::exists)
         }
         return File(importedDirectory, fontId).takeIf(File::exists)
     }
 
-    fun isInstalled(fontId: String): Boolean = fileFor(fontId) != null
+    fun typefaceFor(fontId: String): Typeface? {
+        if (fontId.isBlank()) return null
+        AppFontCatalog.entryFor(fontId)?.bundledAssetPath?.let { assetPath ->
+            BundledTypefaces[assetPath]?.let { return it }
+            val loaded = runCatching { Typeface.createFromAsset(context.assets, assetPath) }.getOrNull()
+                ?: return null
+            return BundledTypefaces.putIfAbsent(assetPath, loaded) ?: loaded
+        }
+        return fileFor(fontId)?.let { file ->
+            runCatching { Typeface.createFromFile(file) }.getOrNull()
+        }
+    }
+
+    fun isInstalled(fontId: String): Boolean =
+        AppFontCatalog.entryFor(fontId)?.bundledAssetPath != null || fileFor(fontId) != null
 
     fun importedFonts(): List<String> = importedDirectory
         .listFiles()
@@ -217,5 +239,6 @@ class AppFontRepository(private val context: Context) {
     private companion object {
         val SelectedFontId = stringPreferencesKey("selected_font_id")
         val SelectedScope = stringPreferencesKey("selected_font_scope")
+        val BundledTypefaces = ConcurrentHashMap<String, Typeface>()
     }
 }
