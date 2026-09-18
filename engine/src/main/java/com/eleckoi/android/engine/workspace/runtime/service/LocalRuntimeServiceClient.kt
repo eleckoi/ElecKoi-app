@@ -200,14 +200,14 @@ class LocalRuntimeServiceClient(context: Context) : LocalRuntimeGateway {
                 putString(RuntimeIpc.KeyWorkspaceProjectPath, launchSpec.workspaceProjectPath)
                 putString(RuntimeIpc.KeyProviderBaseUrl, launchSpec.providerBaseUrl)
                 putString(RuntimeIpc.KeyModel, launchSpec.model)
-                launchSpec.modelContextWindow?.let { putInt(RuntimeIpc.KeyModelContextWindow, it) }
+                putInt(RuntimeIpc.KeyModelContextWindow, launchSpec.modelContextWindow)
                 launchSpec.autoCompactTokenLimit?.let {
                     putInt(RuntimeIpc.KeyAutoCompactTokenLimit, it)
                 }
                 launchSpec.maxTokens?.let { putInt(RuntimeIpc.KeyMaxTokens, it) }
-                putString(RuntimeIpc.KeySystemPrompt, launchSpec.systemPrompt)
                 putBoolean(RuntimeIpc.KeyEphemeral, launchSpec.ephemeral)
-                putString(RuntimeIpc.KeyHostToolCatalogJson, launchSpec.hostToolCatalogJson)
+                putString(RuntimeIpc.KeyDeepSeekModelsJson, launchSpec.deepSeekModelsJson)
+                putString(RuntimeIpc.KeyPiAiProvidersJson, launchSpec.piAiProvidersJson)
                 putBoolean(RuntimeIpc.KeyWorkspaceToolsEnabled, launchSpec.workspaceToolsEnabled)
                 putBoolean(RuntimeIpc.KeyWorkflowToolsEnabled, launchSpec.workflowToolsEnabled)
                 putBoolean(

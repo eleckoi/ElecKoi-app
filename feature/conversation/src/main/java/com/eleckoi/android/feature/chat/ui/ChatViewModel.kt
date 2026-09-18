@@ -44,7 +44,7 @@ class ChatViewModel(
     initialAppearance: AppearanceTheme = AppearanceTheme(),
     private val isSettingLibraryToolEnabled: (characterId: String) -> Boolean = { true },
     private val enableSettingLibraryTool: suspend (characterId: String) -> Unit = {},
-    private val readDshTrajectory: (String, DshTrajectoryReadOptions) -> DshTrajectoryPage =
+    private val readDshTrajectory: suspend (String, DshTrajectoryReadOptions) -> DshTrajectoryPage =
         { runtimeThreadId, _ -> DshTrajectoryPage.empty(runtimeThreadId) },
 ) : ViewModel(), AuthorChatGateway {
     private val _uiState = MutableStateFlow(
@@ -638,7 +638,7 @@ class ChatViewModel(
             initialAppearance: AppearanceTheme = AppearanceTheme(),
             isSettingLibraryToolEnabled: (characterId: String) -> Boolean = { true },
             enableSettingLibraryTool: suspend (characterId: String) -> Unit = {},
-            readDshTrajectory: (String, DshTrajectoryReadOptions) -> DshTrajectoryPage =
+            readDshTrajectory: suspend (String, DshTrajectoryReadOptions) -> DshTrajectoryPage =
                 { runtimeThreadId, _ -> DshTrajectoryPage.empty(runtimeThreadId) },
         ): ViewModelProvider.Factory {
             return object : ViewModelProvider.Factory {

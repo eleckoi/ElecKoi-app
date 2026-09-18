@@ -53,10 +53,34 @@ internal object AdapterUpstreamClient {
                 modelConfig.baseUrl,
                 modelConfig.provider,
                 modelConfig.model,
+                stream = true,
             )
         },
         format = format,
         protocolHeaders = protocolHeaders,
+    )
+
+    /** Uses the same endpoint, authentication, proxy and custom-header rules as a DSH request. */
+    fun openNativeJsonCall(
+        payload: ByteArray,
+        modelConfig: ModelConfig,
+        format: ProviderWireFormat,
+    ): Call = openCall(
+        payload = payload,
+        modelConfig = modelConfig,
+        endpoint = when (format) {
+            ProviderWireFormat.Responses -> resolveResponsesEndpoint(modelConfig.baseUrl, modelConfig.provider)
+            ProviderWireFormat.ChatCompletions -> resolveChatEndpoint(modelConfig.baseUrl, modelConfig.provider)
+            ProviderWireFormat.AnthropicMessages -> resolveAnthropicEndpoint(modelConfig.baseUrl, modelConfig.provider)
+            ProviderWireFormat.GoogleGemini -> resolveGoogleEndpoint(
+                modelConfig.baseUrl,
+                modelConfig.provider,
+                modelConfig.model,
+                stream = false,
+            )
+        },
+        format = format,
+        accept = "application/json",
     )
 
     private fun openCall(
@@ -65,6 +89,7 @@ internal object AdapterUpstreamClient {
         endpoint: URL,
         format: ProviderWireFormat? = null,
         protocolHeaders: Map<String, String> = emptyMap(),
+        accept: String = "text/event-stream",
     ): Call {
         val proxy = StrictProxyParser.parse(modelConfig.proxyUrl)
         require(!endpoint.protocol.equals("http", ignoreCase = true) || proxy == null) {
@@ -94,7 +119,7 @@ internal object AdapterUpstreamClient {
                     -> header("Authorization", "Bearer ${modelConfig.apiKey.trim()}")
                 }
             }
-            .header("Accept", "text/event-stream")
+            .header("Accept", accept)
             .post(payload.toRequestBody(JsonMediaType))
             .build()
         return client.newCall(request)
@@ -162,6 +187,7 @@ internal object AdapterUpstreamClient {
         configuredBaseUrl: String,
         provider: String,
         model: String,
+        stream: Boolean,
     ): URL {
         val base = resolvedBaseUrl(configuredBaseUrl, provider)
             .removeSuffix("/v1beta")
@@ -174,10 +200,11 @@ internal object AdapterUpstreamClient {
             }
         }
         require(GoogleModelPath.matches(modelPath)) { "Google Gemini 模型名无效" }
+        val operation = if (stream) "streamGenerateContent?alt=sse" else "generateContent"
         return validateEndpoint(
-            "$base/v1beta/$modelPath:streamGenerateContent?alt=sse",
+            "$base/v1beta/$modelPath:$operation",
             "Google Gemini",
-            allowQuery = true,
+            allowQuery = stream,
         )
     }
 

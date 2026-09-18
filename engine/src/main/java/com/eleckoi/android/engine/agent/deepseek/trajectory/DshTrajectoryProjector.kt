@@ -26,14 +26,12 @@ object DshTrajectoryProjector {
     fun project(
         input: List<JsonObject>,
         header: JsonObject = JsonObject(emptyMap()),
-    ): DshTrajectoryProjection = project(input, header, emptyList())
-
-    internal fun project(
-        input: List<JsonObject>,
-        header: JsonObject = JsonObject(emptyMap()),
-        contextActivations: List<DshTrajectoryContextActivation>,
     ): DshTrajectoryProjection {
-        val events = input.mapIndexed(::normalizeEvent)
+        val events = input.mapIndexed(::normalizeEvent).sortedBy(NormalizedEvent::seq)
+        val requestNumbers = events
+            .filter { event -> event.type == "step/start" || event.type == "compaction/start" }
+            .mapIndexed { index, event -> event.seq to index + 1 }
+            .toMap()
         val records = mutableListOf<MutableRecord>()
         val stepStarts = mutableMapOf<String, Long>()
         val toolRecords = mutableMapOf<String, MutableRecord>()
@@ -41,7 +39,6 @@ object DshTrajectoryProjector {
         val compactionRecords = mutableMapOf<String, MutableRecord>()
         val approvalRecords = mutableMapOf<String, MutableRecord>()
         val pendingRequests = mutableListOf<PendingRequest>()
-        var requestCount = 0
         var currentRequestHeader: RequestHeader? = null
         var activeTurn: Int? = null
         var activeStep: Int? = null
@@ -87,7 +84,7 @@ object DshTrajectoryProjector {
                         val headerValue = currentRequestHeader
                         pendingRequests += PendingRequest(
                             request = MutableRequest(
-                                number = ++requestCount,
+                                number = requestNumbers.getValue(event.seq),
                                 seq = event.seq,
                                 turn = turn,
                                 step = step,
@@ -150,8 +147,26 @@ object DshTrajectoryProjector {
 
                 "user/message" -> {
                     val message = messageFrom(data)
-                    val sourceKind = message.objectValue("source").text("kind")
+                    val messageSource = message.objectValue("source")
+                    if (messageSource.text("plugin") in ElecKoiInternalContextPlugins) return@forEach
+                    val sourceKind = messageSource.text("kind")
                     val content = contentText(message["content"])
+                    val checkpointCompactionId = messageSource.text("compactionId")
+                        .takeIf {
+                            sourceKind == "plugin" &&
+                                messageSource.text("plugin") == DshCompactionCheckpointPlugin
+                        }
+                    if (checkpointCompactionId != null) {
+                        val compaction = compactionRecords[checkpointCompactionId]
+                        if (compaction != null) {
+                            // DSH persists the completed summary twice on purpose: once as the
+                            // compaction lifecycle result and once as the checkpoint user message
+                            // that replaces the compacted surface. They are one logical operation,
+                            // so retain the checkpoint as raw provenance instead of a second row.
+                            compaction.rawJson = appendRaw(compaction.rawJson, event.raw)
+                            return@forEach
+                        }
+                    }
                     val kind = if (sourceKind.isBlank() || sourceKind == "user") {
                         DshTrajectoryRecordKind.User
                     } else {
@@ -326,6 +341,20 @@ object DshTrajectoryProjector {
                         step = step,
                         status = DshTrajectoryRecordStatus.Running,
                     )
+                    item.requests += MutableRequest(
+                        number = requestNumbers.getValue(event.seq),
+                        seq = event.seq,
+                        turn = turn,
+                        step = null,
+                        status = DshTrajectoryRecordStatus.Running,
+                        reason = "compaction",
+                        provider = "",
+                        model = "",
+                        detail = pretty(data),
+                        rawJson = pretty(event.raw),
+                        timeMillis = time,
+                        durationMillis = null,
+                    )
                     compactionRecords[id] = item
                     records += item
                 }
@@ -349,6 +378,12 @@ object DshTrajectoryProjector {
                         item.durationMillis = duration(item.timeMillis, time)
                         item.detail = pretty(data)
                         item.rawJson = appendRaw(item.rawJson, event.raw)
+                        item.requests.forEach { request ->
+                            request.status = item.status
+                            request.durationMillis = item.durationMillis
+                            request.detail = item.detail
+                            request.rawJson = item.rawJson
+                        }
                     }
                 }
 
@@ -387,106 +422,13 @@ object DshTrajectoryProjector {
             }
         }
 
-        val orderedRecords = mergeContextActivations(records, contextActivations)
         val times = events.mapNotNull(NormalizedEvent::time)
         val createdAt = header.nonnegativeLong("createdAt")
         return DshTrajectoryProjection(
-            records = orderedRecords.mapIndexed { index, item -> item.toModel(index + 1) },
+            records = records.mapIndexed { index, item -> item.toModel(index + 1) },
             startedAtMillis = createdAt ?: times.firstOrNull(),
             completedAtMillis = times.lastOrNull() ?: createdAt,
         )
-    }
-
-    private fun mergeContextActivations(
-        source: List<MutableRecord>,
-        activations: List<DshTrajectoryContextActivation>,
-    ): List<MutableRecord> {
-        if (source.isEmpty() || activations.isEmpty()) return source
-        val knownTurns = source.mapNotNullTo(hashSetOf(), MutableRecord::turn)
-
-        val result = source.toMutableList()
-        activations.sortedBy(DshTrajectoryContextActivation::capturedAtMillis).forEach { activation ->
-            val turn = activation.turn.takeIf(knownTurns::contains) ?: return@forEach
-            val turnStep = result.firstOrNull { it.turn == turn }?.step
-            val contextRecords = activation.entries.mapIndexed { index, entry ->
-                val raw = buildJsonObject {
-                    put("type", "eleckoi/context")
-                    put("time", activation.capturedAtMillis)
-                    put("data", buildJsonObject {
-                        put("id", entry.id)
-                        put("title", entry.title)
-                        put("source", entry.source)
-                        put("anchor", entry.anchor)
-                        put("role", entry.role)
-                        put("content", entry.content)
-                    })
-                }
-                MutableRecord(
-                    id = "eleckoi/context:${activation.capturedAtMillis}:${entry.key}",
-                    seq = Long.MIN_VALUE + index,
-                    type = "eleckoi/context",
-                    kind = DshTrajectoryRecordKind.Context,
-                    title = entry.title,
-                    preview = preview(entry.content),
-                    source = entry.source,
-                    input = entry.content,
-                    output = "",
-                    detail = pretty(raw.objectValue("data")),
-                    rawJson = pretty(raw),
-                    timeMillis = activation.capturedAtMillis,
-                    durationMillis = null,
-                    turn = turn,
-                    step = turnStep,
-                    status = DshTrajectoryRecordStatus.Complete,
-                )
-            }
-            insertContextRecords(result, turn, contextRecords, activation.entries)
-        }
-        return result
-    }
-
-    private fun insertContextRecords(
-        records: MutableList<MutableRecord>,
-        turn: Int,
-        contexts: List<MutableRecord>,
-        entries: List<DshTrajectoryContextEntry>,
-    ) {
-        val grouped = contexts.zip(entries).groupBy { (_, entry) ->
-            when (entry.anchor) {
-                "afterHistory", "beforeLatestUserInput" -> ContextPlacement.BeforeUser
-                "afterLatestUserInput", "beforeToolFlow" -> ContextPlacement.AfterUser
-                "afterToolFlow" -> ContextPlacement.AfterTools
-                else -> ContextPlacement.BeforeDialogue
-            }
-        }
-        fun insert(placement: ContextPlacement, index: Int) {
-            val values = grouped[placement].orEmpty().map { it.first }
-            if (values.isNotEmpty()) records.addAll(index.coerceIn(0, records.size), values)
-        }
-
-        val firstTurnIndex = records.indexOfFirst { it.turn == turn }.takeIf { it >= 0 } ?: return
-        insert(ContextPlacement.BeforeDialogue, firstTurnIndex)
-
-        val currentUserIndex = records.indexOfLast {
-            it.turn == turn && it.kind == DshTrajectoryRecordKind.User
-        }.takeIf { it >= 0 } ?: firstTurnIndex
-        insert(ContextPlacement.BeforeUser, currentUserIndex)
-
-        val lastUserIndex = records.indexOfLast { it.turn == turn && it.kind == DshTrajectoryRecordKind.User }
-            .takeIf { it >= 0 }
-            ?: records.indexOfLast { it.turn == turn && it.kind == DshTrajectoryRecordKind.Context }
-                .takeIf { it >= 0 }
-            ?: firstTurnIndex
-        insert(ContextPlacement.AfterUser, lastUserIndex + 1)
-
-        val lastToolIndex = records.indexOfLast { it.turn == turn && it.kind == DshTrajectoryRecordKind.Tool }
-            .takeIf { it >= 0 }
-            ?: records.indexOfLast {
-                it.turn == turn &&
-                    (it.kind == DshTrajectoryRecordKind.User || it.kind == DshTrajectoryRecordKind.Context)
-            }.takeIf { it >= 0 }
-            ?: firstTurnIndex
-        insert(ContextPlacement.AfterTools, lastToolIndex + 1)
     }
 
     private fun normalizeEvent(index: Int, event: JsonObject) = NormalizedEvent(
@@ -528,13 +470,6 @@ object DshTrajectoryProjector {
         step = step,
         status = status,
     )
-}
-
-private enum class ContextPlacement {
-    BeforeDialogue,
-    BeforeUser,
-    AfterUser,
-    AfterTools,
 }
 
 private data class NormalizedEvent(
@@ -582,6 +517,7 @@ private data class MutableRequest(
         model = model,
         detail = detail,
         rawJson = rawJson,
+        context = emptyList(),
         timeMillis = timeMillis,
         durationMillis = durationMillis,
     )
@@ -630,6 +566,11 @@ private data class MutableRecord(
 
 private val PrettyJson = Json { prettyPrint = true; prettyPrintIndent = "  " }
 private val CompactWhitespace = Regex("\\s+")
+private val ElecKoiInternalContextPlugins = setOf(
+    "eleckoi-agent-session-bridge",
+    "eleckoi-request-projection",
+)
+private const val DshCompactionCheckpointPlugin = "compact"
 
 private fun messageFrom(data: JsonObject): JsonObject = data["message"] as? JsonObject ?: data
 

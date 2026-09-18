@@ -6,6 +6,7 @@ import com.eleckoi.android.engine.agent.api.AgentWorkStatus
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -143,28 +144,80 @@ class DeepSeekHarnessEventMapperTest {
     }
 
     @Test
-    fun `completed assistant snapshot keeps reasoning on the reasoning event path`() {
+    fun `completed assistant snapshot projects reasoning separately from visible text`() {
         map("""{"type":"turn/start","seq":0,"time":100,"data":{"turn":1}}""")
 
         val reasoningOnly = map(
             """{"type":"assistant/message","seq":1,"time":101,"data":{"turn":1,"step":1,"message":{"id":"message-1","role":"assistant","content":[{"type":"reasoning","text":"reasoning detail"},{"type":"tool-call","id":"call-1","name":"bash","arguments":"{}"}]}}}""",
         )
+        val reasoningSnapshot = reasoningOnly
+            .filterIsInstance<AgentSessionEvent.ReasoningTextDelta>()
+            .single()
+        assertEquals("reasoning detail", reasoningSnapshot.delta)
+        assertEquals(0, reasoningSnapshot.contentIndex)
+        assertEquals(1, reasoningSnapshot.step)
+        assertEquals(101L, reasoningSnapshot.observedAtMillis)
+        assertTrue(reasoningSnapshot.completeSnapshot)
         val reasoningBoundary = reasoningOnly
             .filterIsInstance<AgentSessionEvent.WorkItemCompleted>()
-            .single()
+            .single { it.type == AgentWorkItemType.AssistantMessage }
         assertEquals(AgentWorkItemType.AssistantMessage, reasoningBoundary.type)
         assertTrue(reasoningBoundary.summary.isBlank())
+        assertEquals(
+            AgentWorkStatus.Completed,
+            reasoningOnly.filterIsInstance<AgentSessionEvent.WorkItemCompleted>()
+                .single { it.type == AgentWorkItemType.Reasoning }
+                .status,
+        )
         assertTrue(reasoningOnly.none { it is AgentSessionEvent.ModelHistoryItemCompleted })
 
         val mixed = map(
             """{"type":"assistant/message","seq":2,"time":102,"data":{"turn":1,"step":2,"message":{"id":"message-2","role":"assistant","content":[{"type":"reasoning","text":"more reasoning detail"},{"type":"text","text":"<FINAL>visible answer</FINAL>"}]}}}""",
         )
-        val completed = mixed.filterIsInstance<AgentSessionEvent.WorkItemCompleted>().single()
+        val mixedReasoning = mixed.filterIsInstance<AgentSessionEvent.ReasoningTextDelta>().single()
+        assertEquals("more reasoning detail", mixedReasoning.delta)
+        assertTrue(mixedReasoning.completeSnapshot)
+        val completed = mixed.filterIsInstance<AgentSessionEvent.WorkItemCompleted>()
+            .single { it.type == AgentWorkItemType.AssistantMessage }
         assertEquals(AgentWorkItemType.AssistantMessage, completed.type)
         assertEquals("<FINAL>visible answer</FINAL>", completed.summary)
         val history = mixed.filterIsInstance<AgentSessionEvent.ModelHistoryItemCompleted>().single()
         assertTrue(history.responseItemJson.contains("visible answer"))
         assertTrue(!history.responseItemJson.contains("reasoning detail"))
+    }
+
+    @Test
+    fun `completed assistant reasoning remains an authoritative snapshot after streamed deltas`() {
+        map("""{"type":"turn/start","seq":0,"time":100,"data":{"turn":1}}""")
+        val streamed = map(
+            """{"type":"assistant/chunk","seq":1,"time":101,"data":{"turn":1,"step":1,"chunk":{"type":"reasoning-delta","index":0,"text":"partial "}}}""",
+        ).single() as AgentSessionEvent.ReasoningTextDelta
+        assertTrue(!streamed.completeSnapshot)
+
+        val completed = map(
+            """{"type":"assistant/message","seq":2,"time":102,"data":{"turn":1,"step":1,"message":{"id":"message-1","role":"assistant","content":[{"type":"reasoning","text":"partial complete"},{"type":"text","text":"answer"}]}}}""",
+        ).filterIsInstance<AgentSessionEvent.ReasoningTextDelta>().single()
+
+        assertEquals(streamed.itemId, completed.itemId)
+        assertEquals("partial complete", completed.delta)
+        assertTrue(completed.completeSnapshot)
+    }
+
+    @Test
+    fun `completed reasoning keeps the DSH stream block index`() {
+        map("""{"type":"turn/start","seq":0,"time":100,"data":{"turn":1}}""")
+        assertTrue(
+            map(
+                """{"type":"assistant/chunk","seq":1,"time":101,"data":{"turn":1,"step":1,"chunk":{"type":"block-end","index":7,"block":{"type":"reasoning","text":"final only"}}}}""",
+            ).isEmpty(),
+        )
+
+        val completed = map(
+            """{"type":"assistant/message","seq":2,"time":102,"data":{"turn":1,"step":1,"message":{"id":"message-1","role":"assistant","content":[{"type":"reasoning","text":"final only"},{"type":"text","text":"answer"}]}}}""",
+        ).filterIsInstance<AgentSessionEvent.ReasoningTextDelta>().single()
+
+        assertEquals(7, completed.contentIndex)
+        assertTrue(completed.itemId.endsWith("-7"))
     }
 
     @Test
@@ -217,6 +270,86 @@ class DeepSeekHarnessEventMapperTest {
         assertEquals(marker, event.delta)
     }
 
+    @Test
+    fun `live assistant stream emits text once and ignores revision changes`() {
+        map("""{"type":"turn/start","seq":0,"time":100,"data":{"turn":1}}""")
+        val start = mapNotification(
+            AssistantStreamMethod,
+            """{"sessionId":"session","frame":{"type":"start","attemptId":"attempt-1","revision":1,"turn":1,"step":1,"time":101}}""",
+        )
+        assertTrue(start.isEmpty())
+
+        val first = mapNotification(
+            AssistantStreamMethod,
+            """{"sessionId":"session","frame":{"type":"chunk","attemptId":"attempt-1","revision":2,"time":102,"chunk":{"type":"text-delta","index":0,"text":"<FI"}}}""",
+        ).single() as AgentSessionEvent.AssistantDelta
+        val second = mapNotification(
+            AssistantStreamMethod,
+            """{"sessionId":"session","frame":{"type":"chunk","attemptId":"attempt-1","revision":9,"time":103,"chunk":{"type":"text-delta","index":0,"text":"NAL>正文"}}}""",
+        ).single() as AgentSessionEvent.AssistantDelta
+        assertEquals("<FI", first.delta)
+        assertEquals("NAL>正文", second.delta)
+        assertEquals(first.itemId, second.itemId)
+
+        assertTrue(
+            map(
+                """{"type":"assistant/chunk","seq":1,"time":104,"data":{"turn":1,"step":1,"chunk":{"type":"text-delta","index":0,"text":"<FINAL>正文"}}}""",
+            ).isEmpty(),
+        )
+    }
+
+    @Test
+    fun `abandoned live attempt interrupts only its running reasoning`() {
+        map("""{"type":"turn/start","seq":0,"time":100,"data":{"turn":2}}""")
+        mapNotification(
+            AssistantStreamMethod,
+            """{"sessionId":"session","frame":{"type":"start","attemptId":"attempt-2","turn":2,"step":3,"time":101}}""",
+        )
+        val reasoning = mapNotification(
+            AssistantStreamMethod,
+            """{"sessionId":"session","frame":{"type":"chunk","attemptId":"attempt-2","revision":4,"time":102,"chunk":{"type":"reasoning-delta","index":7,"text":"检查"}}}""",
+        ).single() as AgentSessionEvent.ReasoningTextDelta
+
+        val cancelled = mapNotification(
+            AssistantStreamMethod,
+            """{"sessionId":"session","frame":{"type":"end","attemptId":"attempt-2","revision":5,"time":103,"outcome":{"kind":"abandoned"}}}""",
+        ).single() as AgentSessionEvent.WorkItemCompleted
+        assertEquals(reasoning.itemId, cancelled.itemId)
+        assertEquals(AgentWorkItemType.Reasoning, cancelled.type)
+        assertEquals(AgentWorkStatus.Interrupted, cancelled.status)
+    }
+
+    @Test
+    fun `final assistant message completes final-only reasoning`() {
+        map("""{"type":"turn/start","seq":0,"time":100,"data":{"turn":4}}""")
+
+        val events = map(
+            """{"type":"assistant/message","seq":1,"time":104,"data":{"turn":4,"step":1,"message":{"role":"assistant","content":[{"type":"reasoning","text":"先分析"},{"type":"text","text":"最终答案"}]}}}""",
+        )
+
+        val reasoning = events.filterIsInstance<AgentSessionEvent.ReasoningTextDelta>().single()
+        val completed = events.filterIsInstance<AgentSessionEvent.WorkItemCompleted>()
+            .single { it.type == AgentWorkItemType.Reasoning }
+        assertEquals(reasoning.itemId, completed.itemId)
+        assertEquals(AgentWorkStatus.Completed, completed.status)
+    }
+
+    @Test
+    fun `replayed and orphan tool results do not manufacture generic work items`() {
+        map("""{"type":"turn/start","seq":0,"time":100,"data":{"turn":3}}""")
+        map(
+            """{"type":"tool/call","seq":1,"time":101,"data":{"turn":3,"step":1,"callId":"call-1","name":"read","arguments":"{}"}}""",
+        )
+        val result =
+            """{"type":"tool/result","seq":2,"time":102,"data":{"turn":3,"step":1,"message":{"role":"user","content":[{"type":"tool-result","toolCallId":"call-1","content":[{"type":"text","text":"ok"}]}],"source":{"kind":"tool","callId":"call-1"}}}}"""
+        assertFalse(map(result).isEmpty())
+        assertTrue(map(result).isEmpty())
+
+        val orphan =
+            """{"type":"tool/result","seq":3,"time":103,"data":{"turn":3,"step":1,"message":{"role":"user","content":[{"type":"tool-result","toolCallId":"missing","content":[{"type":"text","text":"late"}]}],"source":{"kind":"tool","callId":"missing"}}}}"""
+        assertTrue(map(orphan).isEmpty())
+    }
+
     private fun map(eventJson: String): List<AgentSessionEvent> = mapper.map(
         DeepSeekNotification(
             method = "session.event",
@@ -225,4 +358,16 @@ class DeepSeekHarnessEventMapperTest {
             ).jsonObject,
         ),
     )
+
+    private fun mapNotification(method: String, paramsJson: String): List<AgentSessionEvent> =
+        mapper.map(
+            DeepSeekNotification(
+                method = method,
+                params = Json.parseToJsonElement(paramsJson).jsonObject,
+            ),
+        )
+
+    private companion object {
+        const val AssistantStreamMethod = "agent.assistant-stream"
+    }
 }

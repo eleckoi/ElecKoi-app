@@ -75,6 +75,16 @@ internal fun ModelParamsPage(
     var reasoningEffort by rememberSaveable(selectedConfig?.id, selectedModel, option?.reasoningEffort) {
         mutableStateOf(option?.reasoningEffort)
     }
+    var reasoningEfforts by remember(selectedConfig?.id, selectedModel, option?.reasoningEfforts) {
+        mutableStateOf(option?.reasoningEfforts)
+    }
+    var reasoningThinkingFormat by remember(
+        selectedConfig?.id,
+        selectedModel,
+        option?.reasoningThinkingFormat,
+    ) {
+        mutableStateOf(option?.reasoningThinkingFormat)
+    }
     var supportsImageInput by rememberSaveable(selectedConfig?.id, selectedModel, option?.supportsImageInput) {
         mutableStateOf(option?.supportsImageInput == true)
     }
@@ -82,11 +92,16 @@ internal fun ModelParamsPage(
     val officialDeepSeekVision = remember(selectedConfig, selectedModel) {
         selectedConfig?.copy(model = selectedModel)?.isOfficialDeepSeekVisionModel() == true
     }
-    val reasoningVariants = remember(selectedConfig, option) {
-        if (selectedConfig == null || option == null) {
+    val capabilityOption = option?.copy(
+        reasoningEffort = reasoningEffort,
+        reasoningEfforts = reasoningEfforts,
+        reasoningThinkingFormat = reasoningThinkingFormat,
+    )
+    val reasoningVariants = remember(selectedConfig, capabilityOption) {
+        if (selectedConfig == null || capabilityOption == null) {
             emptyList()
         } else {
-            DshReasoningEfforts.forModel(selectedConfig, option)
+            DshReasoningEfforts.forModel(selectedConfig, capabilityOption)
         }
     }
 
@@ -125,6 +140,8 @@ internal fun ModelParamsPage(
             temperatureValue != option.temperature ||
             topPValue != option.topP ||
             reasoningEffort != option.reasoningEffort ||
+            reasoningEfforts != option.reasoningEfforts ||
+            reasoningThinkingFormat != option.reasoningThinkingFormat ||
             (!officialDeepSeekVision && supportsImageInput != option.supportsImageInput)
         )
 
@@ -138,6 +155,8 @@ internal fun ModelParamsPage(
         temperatureValue,
         topPValue,
         reasoningEffort,
+        reasoningEfforts,
+        reasoningThinkingFormat,
         supportsImageInput,
         officialDeepSeekVision,
     ) {
@@ -153,6 +172,8 @@ internal fun ModelParamsPage(
             temperature = temperatureValue,
             topP = topPValue,
             reasoningEffort = reasoningEffort,
+            reasoningEfforts = reasoningEfforts,
+            reasoningThinkingFormat = reasoningThinkingFormat,
             supportsImageInput = if (officialDeepSeekVision) {
                 current.supportsImageInput
             } else {
@@ -243,11 +264,15 @@ internal fun ModelParamsPage(
             ParamsGroupLabel("推理", appearance)
             SheetGroupCard(appearance) {
                 ModelReasoningSelector(
+                    config = selectedConfig,
+                    option = capabilityOption ?: option,
                     variants = reasoningVariants,
-                    selectedVariant = reasoningEffort,
                     appearance = appearance,
-                    onSelect = { reasoningEffort = it },
-                )
+                ) { updated ->
+                    reasoningEffort = updated.reasoningEffort
+                    reasoningEfforts = updated.reasoningEfforts
+                    reasoningThinkingFormat = updated.reasoningThinkingFormat
+                }
             }
             Text(
                 "档位由 DSH/pi-ai 按当前接口格式转换；默认不覆盖上游。",

@@ -213,6 +213,10 @@ class RoomConversationLedger(
         dao.deleteBranchTurnsFrom(conversation.activeBranchId, ref.sequence + 1)
         dao.deleteUnreferencedTurns(conversationId)
         dao.deleteUnreferencedContentParts(conversationId)
+        // Regeneration changes the active branch. A retained response may still point at the old
+        // whole-conversation DSH thread, so make that invalidation durable before rebuilding the
+        // display cache. Otherwise an immediate cancellation can reload and expose the old trace.
+        dao.clearRuntimeAssociations(conversationId)
         finishMutation(conversationId, updatedAt)
     }
 
@@ -338,6 +342,22 @@ class RoomConversationLedger(
         val turnId = turn?.id ?: response?.turnId ?: return null
         val ref = dao.branchTurn(conversation.activeBranchId, turnId) ?: return null
         return materialize(listOf(ref)).firstOrNull { it.id == sourceMessageId }
+    }
+
+    /** Resolves a public user/assistant message to its stable user turn on the active branch. */
+    fun owningUserMessageId(conversationId: String, sourceMessageId: String): String? {
+        val conversation = dao.conversation(conversationId) ?: return null
+        val directTurn = dao.turnBySourceMessageId(conversationId, sourceMessageId)
+        val response = if (directTurn == null) {
+            dao.responseBySourceMessageId(conversationId, sourceMessageId)
+        } else {
+            null
+        }
+        val ownerTurn = directTurn ?: response?.let { reply ->
+            dao.turns(listOf(reply.turnId)).singleOrNull()
+        } ?: return null
+        if (dao.branchTurn(conversation.activeBranchId, ownerTurn.id) == null) return null
+        return ownerTurn.sourceMessageId.takeIf(String::isNotBlank)
     }
 
     fun page(

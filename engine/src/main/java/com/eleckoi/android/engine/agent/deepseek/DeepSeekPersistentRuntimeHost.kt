@@ -1,28 +1,33 @@
 package com.eleckoi.android.engine.agent.deepseek
 
-import com.eleckoi.android.engine.agent.adapter.LoopbackResponsesAdapterServer
+import com.eleckoi.android.engine.agent.adapter.DshHostBridgeServer
 import com.eleckoi.android.engine.agent.adapter.AdapterContextPressure
 import com.eleckoi.android.engine.agent.adapter.request.AgentHistoryProjection
 import com.eleckoi.android.engine.agent.adapter.request.AgentTurnRequestContext
 import com.eleckoi.android.engine.agent.api.AgentContextInjection
 import com.eleckoi.android.engine.agent.api.AgentDynamicTool
 import com.eleckoi.android.engine.agent.api.AgentHistoryItem
-import com.eleckoi.android.engine.agent.api.AgentHistoryPolicy
 import com.eleckoi.android.engine.agent.api.AgentSessionOptions
 import com.eleckoi.android.engine.agent.api.AgentToolContextBlockIds
-import com.eleckoi.android.engine.agent.api.AgentToolDefinition
 import com.eleckoi.android.engine.agent.deepseek.protocol.DeepSeekHarnessJsonRpcClient
 import com.eleckoi.android.engine.agent.deepseek.protocol.LocalRuntimeDeepSeekTransport
-import com.eleckoi.android.engine.agent.deepseek.trajectory.DshTrajectoryContextStore
+import com.eleckoi.android.engine.agent.deepseek.trajectory.DshSessionInspection
 import com.eleckoi.android.engine.generation.model.ModelConfig
+import com.eleckoi.android.engine.generation.reasoning.DshPiAiProviderCatalog
+import com.eleckoi.android.engine.generation.reasoning.DshResolvedModelCapabilities
+import com.eleckoi.android.engine.generation.reasoning.DshModelCapabilities
+import com.eleckoi.android.engine.generation.reasoning.usesDshDeepSeekOfficialRoute
 import com.eleckoi.android.engine.generation.model.configuredAutoCompactTokenLimit
 import com.eleckoi.android.engine.generation.model.configuredContextWindowTokens
 import com.eleckoi.android.engine.generation.model.configuredMaxOutputTokens
+import com.eleckoi.android.engine.generation.model.defaultContextWindowTokens
+import com.eleckoi.android.engine.generation.model.supportsImageInput
 import com.eleckoi.android.engine.workspace.runtime.RuntimePaths
 import com.eleckoi.android.engine.workspace.runtime.model.DeepSeekRuntimeLaunchSpec
 import com.eleckoi.android.engine.workspace.runtime.model.LocalRuntimeGateway
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
+import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -58,12 +63,13 @@ class DeepSeekPersistentRuntimeHost(
     private val runtime: LocalRuntimeGateway,
     private val runtimePaths: RuntimePaths,
     private val modelConfigProvider: suspend (String?) -> ModelConfig,
-    private val toolRequestFilter: (Set<String>, JsonObject) -> JsonObject,
+    private val modelCatalogProvider: suspend () -> List<ModelConfig>,
 ) : DeepSeekSessionBackendFactory, AutoCloseable {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val lifecycleMutex = Mutex()
-    private val trajectoryContextStore = DshTrajectoryContextStore(runtimePaths)
-    private val toolDefinitions = linkedMapOf<String, AgentToolDefinition>()
+    private val agentPresetMaterializer = DshAgentPresetMaterializer(runtimePaths)
+    private val sessionSnapshots = DshSessionSnapshotMaterializer(runtimePaths)
+    private val deepSeekModels = linkedMapOf<String, DeepSeekCatalogModel>()
     private var running: RunningHost? = null
 
     override suspend fun prepare(
@@ -74,11 +80,6 @@ class DeepSeekPersistentRuntimeHost(
         val selectedModel = options.model?.trim().orEmpty().ifBlank { storedConfig.model.trim() }
         require(selectedModel.isNotBlank()) { "模型配置缺少模型名" }
         val routeConfig = storedConfig.copy(model = selectedModel)
-        val host = ensureStarted(
-            requiredTools = options.dynamicTools,
-            contextWindow = routeConfig.configuredContextWindowTokens(),
-            autoCompactTokenLimit = routeConfig.configuredAutoCompactTokenLimit(),
-        )
         val subagentConfig = options.subagentModelConfigId
             ?.trim()
             ?.takeIf(String::isNotBlank)
@@ -93,26 +94,51 @@ class DeepSeekPersistentRuntimeHost(
             }
         val effectiveSubagentConfig = subagentConfig ?: routeConfig
         require(effectiveSubagentConfig.model.isNotBlank()) { "子 Agent 模型配置缺少模型名" }
+        val contextWindow = routeConfig.configuredContextWindowTokens()
         val runtimeWorkspacePath = runtimePaths.persistentGuestWorkspacePath(
             options.workspaceId,
             options.workspaceProjectPath,
+        )
+        val systemInstructions = buildDeepSeekSessionSystemInstructions(options, runtimeWorkspacePath)
+        val agentPreset = agentPresetMaterializer.materialize(
+            options = options,
+            systemInstructions = systemInstructions,
+            contextWindow = contextWindow,
+            autoCompactTokenLimit = routeConfig.configuredAutoCompactTokenLimit(),
+        )
+        val runtimeModelConfigs = runtimeModelCatalog(routeConfig, subagentConfig)
+        val modelProvider = if (routeConfig.usesDshDeepSeekOfficialRoute()) {
+            DshModelCapabilities.DeepSeekOfficialWireProfile
+        } else {
+            DshPiAiProviderCatalog.providerRoute(routeConfig, runtimeModelConfigs)
+        }
+        val subagentProvider = if (effectiveSubagentConfig.usesDshDeepSeekOfficialRoute()) {
+            DshModelCapabilities.DeepSeekOfficialWireProfile
+        } else {
+            DshPiAiProviderCatalog.providerRoute(effectiveSubagentConfig, runtimeModelConfigs)
+        }
+        val host = ensureStarted(
+            contextWindow = contextWindow,
+            modelConfigs = runtimeModelConfigs,
         )
         val route = SessionProviderRoute(
             adapter = host.adapter,
             modelConfig = routeConfig,
             subagentModelConfig = subagentConfig,
-            systemInstructions = buildDeepSeekSessionSystemInstructions(options, runtimeWorkspacePath),
-            enabledToolGroupIds = options.enabledToolGroupIds,
             dynamicTools = options.dynamicTools,
             requestCaptureWorkspaceId = options.workspaceId,
             requestCaptureConversationId = options.conversationId,
             captureProviderRequests = options.captureProviderRequests,
             sessionExists = runtimePaths::persistentDeepSeekSessionExists,
-            historyPolicy = options.historyPolicy,
-            historyCompactionInstructions = options.historyCompactionInstructions,
+            initialHistory = options.initialHistoryItems,
+            mountedPresetId = agentPreset,
+            modelProvider = modelProvider,
+            subagentProvider = subagentProvider,
+            snapshotMaterializer = sessionSnapshots,
         )
         return PreparedDeepSeekBackend(
-            model = PersistentRoutingModel,
+            model = routeConfig.model,
+            provider = modelProvider,
             subagentModel = effectiveSubagentConfig.model,
             maxTokens = routeConfig.configuredMaxOutputTokens(),
             sessionCwd = runtimeWorkspacePath,
@@ -131,43 +157,54 @@ class DeepSeekPersistentRuntimeHost(
     }
 
     private suspend fun ensureStarted(
-        requiredTools: List<AgentDynamicTool>,
         contextWindow: Int,
-        autoCompactTokenLimit: Int?,
+        modelConfigs: List<ModelConfig>,
     ): RunningHost =
         lifecycleMutex.withLock {
-            val catalogChanged = mergeToolDefinitions(requiredTools)
+            val deepSeekCatalogChanged = refreshDeepSeekModels(modelConfigs)
+            val piAiCatalogKey = DshPiAiProviderCatalog.providersJson(
+                modelConfigs,
+                CatalogFingerprintBaseUrl,
+            )
             running?.takeIf {
                 it.alive.get() &&
-                    !catalogChanged &&
-                    it.contextWindow == contextWindow &&
-                    it.autoCompactTokenLimit == autoCompactTokenLimit
+                    !deepSeekCatalogChanged &&
+                    it.piAiCatalogKey == piAiCatalogKey
             }?.let { return@withLock it }
             running?.let { stale -> stopHost(stale) }
             running = null
 
-            val adapter = LoopbackResponsesAdapterServer(
-                modelConfig = ModelConfig(
-                    apiKey = UnusedRouteCredential,
-                    model = PersistentRoutingModel,
-                ),
+            val adapter = DshHostBridgeServer(
                 scope = scope,
-                toolRequestFilter = toolRequestFilter,
                 deepSeekFileUploadIndex = runtimePaths.deepSeekFileUploadIndex,
-                recordTrajectoryContext = trajectoryContextStore::recordTurn,
             )
             val endpoint = adapter.start()
+            val providerRoot = endpoint.baseUrl.removeSuffix("/").removeSuffix("/v1")
+            val bootstrapConfig = modelConfigs.first()
+            val bootstrapProvider = if (bootstrapConfig.usesDshDeepSeekOfficialRoute()) {
+                DshModelCapabilities.DeepSeekOfficialWireProfile
+            } else {
+                DshPiAiProviderCatalog.providerRoute(bootstrapConfig, modelConfigs)
+            }
+            val bootstrapModel = if (bootstrapConfig.usesDshDeepSeekOfficialRoute()) {
+                bootstrapConfig.model.trim()
+            } else {
+                DshPiAiProviderCatalog.runtimeModelId(bootstrapConfig)
+            }
             val transport = LocalRuntimeDeepSeekTransport(
                 runtime = runtime,
                 launchSpec = DeepSeekRuntimeLaunchSpec(
                     workspaceId = runtimePaths.persistentDeepSeekWorkspaceId,
                     providerBaseUrl = endpoint.baseUrl,
-                    model = PersistentRoutingModel,
+                    model = bootstrapModel,
                     modelContextWindow = contextWindow,
-                    autoCompactTokenLimit = autoCompactTokenLimit,
-                    systemPrompt = SharedSystemPrompt,
+                    autoCompactTokenLimit = null,
                     ephemeral = false,
-                    hostToolCatalogJson = hostToolCatalogJson(),
+                    deepSeekModelsJson = deepSeekModelsJson(),
+                    piAiProvidersJson = DshPiAiProviderCatalog.providersJson(
+                        modelConfigs,
+                        providerRoot,
+                    ),
                     // Registration is process-wide. Request visibility remains route-scoped by
                     // AgentToolCatalogStore, and each DSH agent has an independent session id.
                     workspaceToolsEnabled = true,
@@ -180,8 +217,8 @@ class DeepSeekPersistentRuntimeHost(
             try {
                 client.start(
                     cwd = RuntimeWorkspace,
-                    provider = ProviderRoute,
-                    model = PersistentRoutingModel,
+                    provider = bootstrapProvider,
+                    model = bootstrapModel,
                     maxTokens = null,
                 )
                 val alive = AtomicBoolean(true)
@@ -213,8 +250,7 @@ class DeepSeekPersistentRuntimeHost(
                     alive = alive,
                     notificationJob = notificationJob,
                     failureJob = failureJob,
-                    contextWindow = contextWindow,
-                    autoCompactTokenLimit = autoCompactTokenLimit,
+                    piAiCatalogKey = piAiCatalogKey,
                 ).also { running = it }
             } catch (error: Throwable) {
                 withContext(NonCancellable) {
@@ -225,33 +261,100 @@ class DeepSeekPersistentRuntimeHost(
             }
         }
 
-    private fun mergeToolDefinitions(requiredTools: List<AgentDynamicTool>): Boolean {
-        var changed = false
-        requiredTools.forEach { tool ->
-            val definition = tool.definition
-            val existing = toolDefinitions[definition.name]
-            require(existing == null || existing == definition) {
-                "Android 动态工具 ${definition.name} 在不同会话中使用了不一致的协议"
-            }
-            if (existing == null) {
-                toolDefinitions[definition.name] = definition
-                changed = true
-            }
-        }
-        return changed
+    private suspend fun runtimeModelCatalog(vararg selected: ModelConfig?): List<ModelConfig> {
+        return DshRuntimeModelCatalog.merge(modelCatalogProvider(), selected.filterNotNull())
     }
 
-    private fun hostToolCatalogJson(): String = buildJsonObject {
-        put("tools", buildJsonArray {
-            toolDefinitions.values.forEach { definition ->
-                add(buildJsonObject {
-                    put("name", definition.name)
-                    put("description", definition.description)
-                    put("parameters", definition.parameters)
-                })
+    private fun refreshDeepSeekModels(configs: List<ModelConfig>): Boolean {
+        val nextModels = DefaultDeepSeekModels.associateByTo(linkedMapOf()) { it.id }
+        configs
+            .filter(ModelConfig::usesDshDeepSeekOfficialRoute)
+            .forEach { config ->
+                val optionsById = config.modelOptions.associateBy { it.id.trim() }
+                (config.modelOptions.map { it.id } + config.model)
+                    .map(String::trim)
+                    .filter(String::isNotBlank)
+                    .distinct()
+                    .forEach modelLoop@{ id ->
+                        if (!config.copy(model = id).usesDshDeepSeekOfficialRoute()) return@modelLoop
+                        val option = optionsById[id]
+                        val existing = nextModels[id]
+                        val next = DeepSeekCatalogModel(
+                            id = id,
+                            name = option?.name?.trim()?.takeIf { it.isNotBlank() && it != id }
+                                ?: existing?.name,
+                            contextWindow = option?.contextWindowTokens ?: existing?.contextWindow
+                                ?: config.defaultContextWindowTokens(),
+                            maxTokens = option?.maxOutputTokens ?: existing?.maxTokens,
+                            supportsImage = existing?.supportsImage == true || config.supportsImageInput(id),
+                            systemPromptInHistory = existing?.systemPromptInHistory == true,
+                        )
+                        nextModels[id] = next
+                    }
             }
-        })
+        if (deepSeekModels == nextModels) return false
+        deepSeekModels.clear()
+        deepSeekModels.putAll(nextModels)
+        return true
+    }
+
+    private fun deepSeekModelsJson(): String = buildJsonArray {
+        deepSeekModels.values.forEach { model ->
+            add(buildJsonObject {
+                put("id", model.id)
+                model.name?.let { put("name", it) }
+                put("contextWindow", model.contextWindow)
+                model.maxTokens?.let { put("maxTokens", it) }
+                put("inputModalities", buildJsonArray {
+                    add(kotlinx.serialization.json.JsonPrimitive("text"))
+                    if (model.supportsImage) add(kotlinx.serialization.json.JsonPrimitive("image"))
+                })
+                if (model.systemPromptInHistory) put("systemPromptUpdate", "in-history")
+            })
+        }
     }.toString()
+
+    /** Reads the backend-decoded current session artifact; Kotlin never interprets physical JSONL rows. */
+    suspend fun inspectSession(sessionId: String): DshSessionInspection? {
+        val active = lifecycleMutex.withLock { running?.takeIf { it.alive.get() } }
+        val host = active ?: run {
+            val storedConfig = modelConfigProvider(null)
+            require(storedConfig.model.isNotBlank()) { "模型配置缺少模型名" }
+            ensureStarted(
+                contextWindow = storedConfig.configuredContextWindowTokens(),
+                modelConfigs = runtimeModelCatalog(storedConfig),
+            )
+        }
+        return host.client.inspectSession(sessionId)
+    }
+
+    /** Resolves selectable capabilities through the same registered DSH adapter used for requests. */
+    suspend fun resolveModelCapabilities(
+        config: ModelConfig,
+        modelIds: List<String>,
+    ): Map<String, DshResolvedModelCapabilities> {
+        val ids = modelIds.map(String::trim).filter(String::isNotBlank).distinct()
+        if (ids.isEmpty()) return emptyMap()
+        val routeConfig = config.copy(model = config.model.trim().ifBlank { ids.first() })
+        val runtimeModelConfigs = runtimeModelCatalog(routeConfig)
+        val host = ensureStarted(
+            contextWindow = routeConfig.configuredContextWindowTokens(),
+            modelConfigs = runtimeModelConfigs,
+        )
+        val provider = if (routeConfig.usesDshDeepSeekOfficialRoute()) {
+            DshModelCapabilities.DeepSeekOfficialWireProfile
+        } else {
+            DshPiAiProviderCatalog.providerRoute(routeConfig, runtimeModelConfigs)
+        }
+        return ids.associateWith { modelId ->
+            val runtimeModelId = if (routeConfig.usesDshDeepSeekOfficialRoute()) {
+                modelId
+            } else {
+                DshPiAiProviderCatalog.runtimeModelId(routeConfig.copy(model = modelId))
+            }
+            host.client.resolveModel(provider, runtimeModelId)
+        }
+    }
 
     suspend fun shutdown() = lifecycleMutex.withLock {
         val active = running ?: return@withLock
@@ -273,28 +376,37 @@ class DeepSeekPersistentRuntimeHost(
     }
 
     private data class RunningHost(
-        val adapter: LoopbackResponsesAdapterServer,
+        val adapter: DshHostBridgeServer,
         val client: DeepSeekHarnessJsonRpcClient,
         val alive: AtomicBoolean,
         val notificationJob: Job,
         val failureJob: Job,
-        val contextWindow: Int,
-        val autoCompactTokenLimit: Int?,
+        val piAiCatalogKey: String,
+    )
+
+    private data class DeepSeekCatalogModel(
+        val id: String,
+        val name: String? = null,
+        val contextWindow: Int = 1_000_000,
+        val maxTokens: Int? = null,
+        val supportsImage: Boolean = false,
+        val systemPromptInHistory: Boolean = false,
     )
 
     private class SessionProviderRoute(
-        private val adapter: LoopbackResponsesAdapterServer,
+        private val adapter: DshHostBridgeServer,
         private val modelConfig: ModelConfig,
         private val subagentModelConfig: ModelConfig?,
-        private val systemInstructions: String,
-        private val enabledToolGroupIds: Set<String>,
         private val dynamicTools: List<AgentDynamicTool>,
         private val requestCaptureWorkspaceId: String,
         private val requestCaptureConversationId: String,
         private val captureProviderRequests: Boolean,
         private val sessionExists: (String) -> Boolean,
-        private val historyPolicy: AgentHistoryPolicy,
-        private val historyCompactionInstructions: String?,
+        private val initialHistory: List<AgentHistoryItem>,
+        private val mountedPresetId: String,
+        private val modelProvider: String,
+        private val subagentProvider: String,
+        private val snapshotMaterializer: DshSessionSnapshotMaterializer,
     ) {
         private val binding = AtomicReference<Binding?>(null)
         private val _turnFailures = MutableSharedFlow<String>(extraBufferCapacity = 4)
@@ -313,9 +425,6 @@ class DeepSeekPersistentRuntimeHost(
                 routeKey = sessionId,
                 routeModelConfig = modelConfig,
                 routeSubagentModelConfig = subagentModelConfig,
-                routeSystemInstructions = systemInstructions,
-                routeHistoryCompactionInstructions = historyCompactionInstructions,
-                routeEnabledToolGroupIds = enabledToolGroupIds,
                 routeDynamicTools = dynamicTools,
                 routeRequestCaptureWorkspaceId = requestCaptureWorkspaceId,
                 routeRequestCaptureConversationId = requestCaptureConversationId,
@@ -327,13 +436,23 @@ class DeepSeekPersistentRuntimeHost(
                 Binding(
                     sessionId = sessionId,
                     ownerToken = ownerToken,
-                    historyProjection = when {
-                        historyPolicy == AgentHistoryPolicy.ProductDialogue ->
-                            AgentHistoryProjection.ReplacePreviousTurns
-                        !sessionExists(sessionId) -> AgentHistoryProjection.SeedProductHistory
-                        else -> AgentHistoryProjection.Native
+                    historyProjection = if (sessionExists(sessionId)) {
+                        AgentHistoryProjection.Native
+                    } else {
+                        AgentHistoryProjection.SeedProductHistory
                     },
                 ),
+            )
+            val projection = binding.get()?.historyProjection ?: AgentHistoryProjection.Native
+            snapshotMaterializer.write(
+                sessionId = sessionId,
+                turnToken = "bound-${UUID.randomUUID()}",
+                mountedPresetId = mountedPresetId,
+                model = modelConfig,
+                modelProvider = modelProvider,
+                subagentModel = subagentModelConfig ?: modelConfig,
+                subagentProvider = subagentProvider,
+                turnContext = snapshotMaterializer.emptyContext(initialHistory, projection),
             )
         }
 
@@ -343,16 +462,27 @@ class DeepSeekPersistentRuntimeHost(
             contextInjections: List<AgentContextInjection>,
         ): String {
             val current = requireNotNull(binding.get()) { "DSH session 尚未绑定模型路由" }
+            val turnContext = AgentTurnRequestContext(
+                userMessage = userMessage,
+                history = history,
+                injections = contextInjections,
+                historyProjection = current.historyProjection,
+            )
+            snapshotMaterializer.write(
+                sessionId = current.sessionId,
+                turnToken = UUID.randomUUID().toString(),
+                mountedPresetId = mountedPresetId,
+                model = modelConfig,
+                modelProvider = modelProvider,
+                subagentModel = subagentModelConfig ?: modelConfig,
+                subagentProvider = subagentProvider,
+                turnContext = turnContext,
+            )
             return adapter.beginSessionTurn(
                 routeKey = current.sessionId,
                 ownerToken = current.ownerToken,
                 userMessage = userMessage,
-                turnContext = AgentTurnRequestContext(
-                    userMessage = userMessage,
-                    history = history,
-                    injections = contextInjections,
-                    historyProjection = current.historyProjection,
-                ),
+                turnContext = turnContext,
             )
         }
 
@@ -382,15 +512,30 @@ class DeepSeekPersistentRuntimeHost(
             pressureTokens = pressureTokens,
             projectedTokens = projectedTokens,
             contextWindow = contextWindow,
+            systemTokens = systemTokens,
+            toolsTokens = toolsTokens,
+            messageTokens = messageTokens,
         )
     }
 
     private companion object {
-        const val PersistentRoutingModel = "eleckoi-dsh-route"
-        const val ProviderRoute = "eleckoi-bridge"
         const val RuntimeWorkspace = "/workspace"
-        const val UnusedRouteCredential = "unused-local-route"
-        const val SharedSystemPrompt = ""
+        const val CatalogFingerprintBaseUrl = "http://127.0.0.1:1/catalog00"
+        val DefaultDeepSeekModels = listOf(
+            DeepSeekCatalogModel(
+                id = "deepseek-flash",
+                name = "DeepSeek-V41-Flash",
+                supportsImage = true,
+                systemPromptInHistory = true,
+            ),
+            DeepSeekCatalogModel(id = "deepseek-v4-flash", name = "DeepSeek-V4-Flash"),
+            DeepSeekCatalogModel(id = "deepseek-v4-pro", name = "DeepSeek-V4-Pro"),
+            DeepSeekCatalogModel(
+                id = "deepseek-v4-flash-vision-exp",
+                name = "DeepSeek-V4-Flash-Vision-Exp",
+                supportsImage = true,
+            ),
+        )
     }
 }
 

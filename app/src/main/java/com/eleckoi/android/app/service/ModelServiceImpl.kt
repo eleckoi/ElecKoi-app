@@ -50,7 +50,7 @@ internal class ModelServiceImpl(
         return settings.deleteModelConfig(configId)
     }
 
-    override fun fetchModelOptions(config: ModelConfig): ModelConfig = settings.fetchModelOptions(config)
+    override suspend fun fetchModelOptions(config: ModelConfig): ModelConfig = settings.fetchModelOptions(config)
 
     override suspend fun testModelConnection(config: ModelConfig) = settings.testConnection(config)
 }

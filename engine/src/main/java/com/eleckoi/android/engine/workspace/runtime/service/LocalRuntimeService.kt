@@ -2,12 +2,14 @@ package com.eleckoi.android.engine.workspace.runtime.service
 
 import android.app.Service
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.Message
 import android.os.Messenger
+import android.util.Log
 import com.eleckoi.android.engine.workspace.runtime.AndroidRuntimeCapabilityProbe
 import com.eleckoi.android.engine.workspace.runtime.AndroidDnsConfigWriter
 import com.eleckoi.android.engine.workspace.runtime.DeepSeekPluginCompositionManager
@@ -84,7 +86,21 @@ class LocalRuntimeService : Service() {
             hostTempDirectory = paths.hostTemp,
         )
     }
-    private val supervisor by lazy { ProcessSupervisor(serviceScope, ipc::broadcastProcessEvent) }
+    private val processDiagnostics by lazy {
+        RuntimeProcessDiagnosticLogger(
+            enabled = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0,
+            sink = { line -> Log.w(DshDiagnosticTag, line) },
+        )
+    }
+    private val supervisor by lazy {
+        ProcessSupervisor(
+            scope = serviceScope,
+            onEvent = { event ->
+                processDiagnostics.record(event)
+                ipc.broadcastProcessEvent(event)
+            },
+        )
+    }
     private val inputSpool by lazy { RuntimeInputSpool.create(applicationContext) }
     private val incomingMessenger by lazy { Messenger(IncomingHandler()) }
     private val installationLock = Any()
@@ -216,11 +232,14 @@ class LocalRuntimeService : Service() {
                         paths.workspaceDeepSeekHome(launchSpec.workspaceId)
                     }
                     try {
-                        val harnessConfig = deepSeekPluginCompositionManager.prepare(
+                        val harnessComposition = deepSeekPluginCompositionManager.prepare(
                             packagedConfig = activeRuntime.requireHarnessConfig("deepseek"),
                             deepSeekHome = deepSeekHome,
-                            modelContextWindow = launchSpec.modelContextWindow,
-                            autoCompactTokenLimit = launchSpec.autoCompactTokenLimit,
+                            deepSeekProviderBaseUrl = launchSpec.providerBaseUrl
+                                .removeSuffix("/")
+                                .removeSuffix("/v1") + "/provider-wire/deepseek/v1",
+                            deepSeekModelsJson = launchSpec.deepSeekModelsJson,
+                            piAiProvidersJson = launchSpec.piAiProvidersJson,
                         )
                         supervisor.start(
                             deepSeekProcessSpecFactory.create(
@@ -228,7 +247,7 @@ class LocalRuntimeService : Service() {
                                 activeRuntime = activeRuntime,
                                 workspace = workspace,
                                 deepSeekHome = deepSeekHome,
-                                harnessConfig = harnessConfig,
+                                harnessPatches = harnessComposition.patches,
                                 launchSpec = launchSpec,
                                 hostResolverConfig = dnsConfigWriter.refresh(),
                                 sessionHome = scratch.home,
@@ -255,15 +274,14 @@ class LocalRuntimeService : Service() {
         workspaceProjectPath = data.getString(RuntimeIpc.KeyWorkspaceProjectPath).orEmpty(),
         providerBaseUrl = data.getString(RuntimeIpc.KeyProviderBaseUrl).orEmpty(),
         model = data.getString(RuntimeIpc.KeyModel).orEmpty(),
-        modelContextWindow = data.takeIf { it.containsKey(RuntimeIpc.KeyModelContextWindow) }
-            ?.getInt(RuntimeIpc.KeyModelContextWindow),
+        modelContextWindow = data.getInt(RuntimeIpc.KeyModelContextWindow),
         autoCompactTokenLimit = data.takeIf {
             it.containsKey(RuntimeIpc.KeyAutoCompactTokenLimit)
         }?.getInt(RuntimeIpc.KeyAutoCompactTokenLimit),
         maxTokens = data.takeIf { it.containsKey(RuntimeIpc.KeyMaxTokens) }?.getInt(RuntimeIpc.KeyMaxTokens),
-        systemPrompt = data.getString(RuntimeIpc.KeySystemPrompt).orEmpty(),
         ephemeral = data.getBoolean(RuntimeIpc.KeyEphemeral),
-        hostToolCatalogJson = data.getString(RuntimeIpc.KeyHostToolCatalogJson).orEmpty(),
+        deepSeekModelsJson = data.getString(RuntimeIpc.KeyDeepSeekModelsJson).orEmpty(),
+        piAiProvidersJson = data.getString(RuntimeIpc.KeyPiAiProvidersJson).orEmpty(),
         workspaceToolsEnabled = data.getBoolean(RuntimeIpc.KeyWorkspaceToolsEnabled),
         workflowToolsEnabled = data.getBoolean(RuntimeIpc.KeyWorkflowToolsEnabled),
         collaborationToolsEnabled = data.getBoolean(RuntimeIpc.KeyCollaborationToolsEnabled),
@@ -432,6 +450,7 @@ class LocalRuntimeService : Service() {
     }
 
     private companion object {
+        const val DshDiagnosticTag = "ElecKoiDsh"
         val CommandId = Regex("^[A-Za-z0-9_-]{1,100}$")
         const val HarnessSurfaceHandoffMillis = 1_500L
         const val MinimumRuntimeFreeSpaceBytes = 256L * 1024L * 1024L

@@ -31,8 +31,8 @@ dependencies {
 // stays in Room's JSON export; every SQLite client gets the same business tables and views.
 val exportSqliteSchema by tasks.registering {
     dependsOn("kspDebugKotlin")
-    val roomSchema = file("schemas/com.eleckoi.android.foundation.storage.room.ElecKoiDatabase/3.json")
-    val sqlFile = file("schemas/eleckoi-common-schema-v3.sql")
+    val roomSchema = file("schemas/com.eleckoi.android.foundation.storage.room.ElecKoiDatabase/4.json")
+    val sqlFile = file("schemas/eleckoi-common-schema-v4.sql")
     inputs.file(roomSchema)
     outputs.file(sqlFile)
     doLast {

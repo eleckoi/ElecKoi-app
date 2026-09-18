@@ -4,14 +4,16 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** One-time v2 -> v3 repair for hidden-tool timeline positions stored before prompt positions existed. */
+/** Repairs the built-in hidden-tool timeline's default named position without touching user positions. */
 internal object HiddenToolTimelinePositionMigration {
     private const val HiddenTimelineEntryId = "built-in-hidden-tool-timeline"
     private const val HiddenTimelinePositionId = "hidden-tool-timeline"
     private const val HiddenTimelinePositionName = "隐藏工具时间线"
     private const val LegacyAnchor = "after_latest_user_input"
-    private const val DefaultAnchor = "insert_point_4"
-    private const val DefaultSide = "before_setting_position"
+    private const val PreviousDefaultAnchor = "insert_point_4"
+    private const val PreviousDefaultSide = "before_setting_position"
+    private const val DefaultAnchor = "insert_point_5"
+    private const val DefaultSide = "after_setting_position"
     private const val PromptPositionsKind = "prompt_positions"
 
     internal data class MigratedPayloads(
@@ -40,11 +42,12 @@ internal object HiddenToolTimelinePositionMigration {
         promptPositionsJson: String?,
     ): MigratedPayloads? {
         val entry = parseObject(entryPayloadJson, "隐藏工具时间线条目")
-        if (
-            !entry.optBoolean("enabled", true) ||
-            entry.optString("prompt_position_id").isNotBlank() ||
-            entry.optString("position") != LegacyAnchor
-        ) {
+        val currentPromptPositionId = entry.optString("prompt_position_id")
+        val needsInitialPosition = entry.optBoolean("enabled", true) &&
+            currentPromptPositionId.isBlank() &&
+            entry.optString("position") == LegacyAnchor
+        val usesBuiltInPosition = currentPromptPositionId == HiddenTimelinePositionId
+        if (!needsInitialPosition && !usesBuiltInPosition) {
             return null
         }
 
@@ -52,6 +55,13 @@ internal object HiddenToolTimelinePositionMigration {
         val existingPosition = (0 until positions.length())
             .mapNotNull(positions::optJSONObject)
             .firstOrNull { it.optString("id") == HiddenTimelinePositionId }
+        val positionUsesPreviousDefault = existingPosition?.optString("anchor") == PreviousDefaultAnchor &&
+            existingPosition.optString("side", PreviousDefaultSide) == PreviousDefaultSide
+        if (positionUsesPreviousDefault) {
+            existingPosition.put("anchor", DefaultAnchor)
+            existingPosition.put("side", DefaultSide)
+            existingPosition.put("order", 1)
+        }
         val anchor = existingPosition?.optString("anchor")?.takeIf(String::isNotBlank) ?: DefaultAnchor
         val migratedPositions = if (existingPosition == null) {
             JSONArray().apply {
@@ -61,8 +71,10 @@ internal object HiddenToolTimelinePositionMigration {
         } else {
             positions
         }
+        val entryChanged = entry.optString("position") != anchor || !usesBuiltInPosition
         entry.put("position", anchor)
         entry.put("prompt_position_id", HiddenTimelinePositionId)
+        if (!entryChanged && existingPosition != null && !positionUsesPreviousDefault) return null
         return MigratedPayloads(
             entryPayloadJson = entry.toString(),
             promptPositionsJson = migratedPositions.toString(),

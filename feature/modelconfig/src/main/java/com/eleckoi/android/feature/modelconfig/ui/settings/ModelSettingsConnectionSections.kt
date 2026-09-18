@@ -14,6 +14,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.eleckoi.android.engine.generation.model.ModelApiFormat
 import com.eleckoi.android.engine.generation.model.ModelConfig
 import com.eleckoi.android.feature.modelconfig.ui.components.ModelActionButton
 import com.eleckoi.android.feature.modelconfig.ui.displayName
@@ -50,10 +51,16 @@ internal fun ModelConnectionSection(
     ModelSectionHeader("连接", appearance, actions = {})
     ModelFieldGroup(appearance) {
         if (!isImageProvider) {
+            val officialDeepSeek = form.provider.trim().equals("deepseek", ignoreCase = true)
             ModelStackedNavigationField(
                 label = "接口格式",
-                value = form.apiFormat.displayName,
+                value = when {
+                    !officialDeepSeek -> form.apiFormat.displayName
+                    form.apiFormat == ModelApiFormat.ChatCompletions -> "Chat Completions · DSH DeepSeek"
+                    else -> "Responses API · DSH/pi-ai"
+                },
                 appearance = appearance,
+                enabled = true,
                 onClick = onOpenApiFormat,
             )
             ModelFieldDivider(appearance)

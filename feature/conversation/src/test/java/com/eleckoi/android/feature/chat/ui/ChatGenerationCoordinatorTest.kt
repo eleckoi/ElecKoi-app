@@ -136,6 +136,7 @@ class ChatGenerationCoordinatorTest {
             prompt = user.content,
             config = config,
             pendingMessageId = oldReply.id,
+            userMessageId = user.id,
         )
         val modelTurnStarted = CountDownLatch(1)
         val releaseModelTurn = CountDownLatch(1)
@@ -150,7 +151,7 @@ class ChatGenerationCoordinatorTest {
                     releaseModelTurn.await(2, TimeUnit.SECONDS)
                     ChatSendResult(truncatedDraft)
                 }
-                "cancelActiveStream" -> Unit
+                "cancelStream" -> true
                 "isStreamCancelled" -> true
                 else -> error("Unexpected ChatService call in test: ${method.name}")
             }
@@ -210,7 +211,7 @@ class ChatGenerationCoordinatorTest {
             when (method.name) {
                 "sendMessage" -> {
                     @Suppress("UNCHECKED_CAST")
-                    val persistedCallback = args!![4] as (ChatDraft, String) -> Unit
+                    val persistedCallback = args!![5] as (ChatDraft, String) -> Unit
                     persistedCallback(persisted, user.id)
                     releaseModel.await(2, TimeUnit.SECONDS)
                     ChatSendResult(persisted)
@@ -259,6 +260,7 @@ class ChatGenerationCoordinatorTest {
         val prepared = PreparedChatRegeneration(
             truncatedDraft = truncated, session = truncated.session,
             prompt = editedUser.content, config = ModelConfig(), pendingMessageId = "new-reply-1",
+            userMessageId = editedUser.id,
         )
         val modelStarted = CountDownLatch(1)
         val releaseModel = CountDownLatch(1)
@@ -329,6 +331,7 @@ class ChatGenerationCoordinatorTest {
             prompt = user.content,
             config = config,
             pendingMessageId = pendingReply.id,
+            userMessageId = user.id,
         )
         val preparationStarted = CountDownLatch(1)
         val releasePreparation = CountDownLatch(1)
@@ -348,7 +351,7 @@ class ChatGenerationCoordinatorTest {
                     modelTurnStarted.set(true)
                     error("停止后不应启动模型")
                 }
-                "cancelActiveStream" -> Unit
+                "cancelStream" -> true
                 "isStreamCancelled" -> true
                 else -> error("Unexpected ChatService call in test: ${method.name}")
             }

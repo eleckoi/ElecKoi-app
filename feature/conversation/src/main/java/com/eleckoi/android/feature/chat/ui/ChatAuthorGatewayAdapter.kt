@@ -461,14 +461,15 @@ private fun ChatGenerationMetrics.toAuthorStatsJson(message: ChatMessage) = buil
     })
     put("contextPressure", buildJsonObject {
         message.contextWindowUsage?.let { usage ->
-            put("pressureTokens", usage.latestTokens)
-            put("projectedTokens", usage.totalTokens)
+            put("projectedTokens", usage.latestTokens)
             usage.modelContextWindow?.let { put("contextWindow", it) }
         }
     })
     put("contextBreakdown", buildJsonObject {
-        put("systemTokens", 0)
-        put("toolsTokens", 0)
-        put("messageTokens", 0)
+        message.contextWindowUsage?.let { usage ->
+            usage.systemTokens?.let { put("systemTokens", it) }
+            usage.toolsTokens?.let { put("toolsTokens", it) }
+            usage.messageTokens?.let { put("messageTokens", it) }
+        }
     })
 }

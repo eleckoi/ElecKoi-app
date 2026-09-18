@@ -3,6 +3,8 @@ package com.eleckoi.android.feature.chat.ui.trajectory
 import com.eleckoi.android.engine.agent.deepseek.trajectory.DshTrajectoryRecord
 import com.eleckoi.android.engine.agent.deepseek.trajectory.DshTrajectoryRecordKind
 import com.eleckoi.android.engine.agent.deepseek.trajectory.DshTrajectoryRecordStatus
+import com.eleckoi.android.engine.agent.deepseek.trajectory.DshRequestContextKind
+import com.eleckoi.android.engine.agent.deepseek.trajectory.DshRequestContextRole
 import com.eleckoi.android.engine.agent.deepseek.trajectory.DshTrajectoryRequest
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -21,10 +23,19 @@ internal sealed interface DshTrajectorySelection {
 
 internal enum class DshTrajectoryDetailTab(val label: String) {
     Summary("摘要"),
+    Context("上下文"),
     Preview("预览"),
     Raw("原始"),
     Source("来源"),
 }
+
+internal fun DshRequestContextRole.label(): String = when (this) {
+    DshRequestContextRole.System -> "系统"
+    DshRequestContextRole.User -> "用户"
+    DshRequestContextRole.Assistant -> "AI"
+}
+
+internal fun DshRequestContextKind.isToolResult(): Boolean = this == DshRequestContextKind.Tool
 
 internal fun groupTrajectoryByTurn(records: List<DshTrajectoryRecord>): List<DshTrajectoryTurnGroup> =
     records.groupBy { record -> record.turn }

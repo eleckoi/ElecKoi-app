@@ -7,6 +7,7 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.S
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPromptPosition
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPromptPositionSide
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryTriggerMode
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.hiddenToolTimelinePromptPosition
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -96,6 +97,18 @@ class SettingLibraryPlacementLogicTest {
 
         assertEquals(true, beforeIndex < slotIndex)
         assertEquals(true, slotIndex < afterIndex)
+    }
+
+    @Test
+    fun `hidden tool timeline is an independent row below insertion point five`() {
+        val position = hiddenToolTimelinePromptPosition()
+        val rows = placementGuideRows(listOf(position))
+        val slotIndex = rows.indexOf(PlacementGuideRow.Slot(PlacementSlot.Five))
+        val timelineIndex = rows.indexOfFirst {
+            it is PlacementGuideRow.Custom && it.position.id == position.id
+        }
+
+        assertEquals(slotIndex + 1, timelineIndex)
     }
 
     @Test

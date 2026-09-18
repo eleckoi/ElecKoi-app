@@ -115,4 +115,56 @@ function Get-DeepSeekCatalogEntry {
     }
 }
 
-Export-ModuleMember -Function Get-DeepSeekRuntimeBuildDefinition, Get-DeepSeekCatalogEntry
+function Assert-DeepSeekRuntimeBaseBundleCompatible {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]$Definition,
+        [Parameter(Mandatory)][string]$BundlePath
+    )
+
+    $resolvedBundle = [IO.Path]::GetFullPath($BundlePath)
+    if (-not (Test-Path -LiteralPath $resolvedBundle -PathType Leaf)) {
+        throw "DeepSeek 基础 Runtime 不存在：$resolvedBundle"
+    }
+
+    $entries = @(& tar -tzf $resolvedBundle)
+    if ($LASTEXITCODE -ne 0 -or $entries.Count -eq 0) {
+        throw "DeepSeek 基础 Runtime 不是有效的 tar.gz：$resolvedBundle"
+    }
+    foreach ($rawEntry in $entries) {
+        $entry = ([string]$rawEntry).Replace('\', '/').TrimEnd('/')
+        if ([string]::IsNullOrWhiteSpace($entry) -or $entry -in @('.', './') -or
+            $entry.StartsWith('/') -or $entry -match '^[A-Za-z]:' -or
+            @($entry -split '/') -contains '..') {
+            throw "DeepSeek 基础 Runtime 包含不安全路径：$rawEntry"
+        }
+    }
+
+    $encodedPackage = & tar -xOf $resolvedBundle 'deepseek-harness-package.json'
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($encodedPackage -join "`n"))) {
+        throw 'DeepSeek 基础 Runtime 缺少构建身份元数据'
+    }
+    $package = $encodedPackage | ConvertFrom-Json
+    $expectedIdentity = [ordered]@{
+        version = $Definition.HarnessVersion
+        sourceCommit = $Definition.SourceCommit
+        sourcePatchSha256 = $Definition.SourcePatchSha256
+        buildNodeVersion = $Definition.BuildNodeVersion
+        packagedNodeVersion = $Definition.PackagedNodeVersion
+        pnpmVersion = $Definition.PnpmVersion
+        pkgVersion = $Definition.PkgVersion
+        ripgrepPackageVersion = $Definition.RipgrepPackageVersion
+        ripgrepBinarySha256 = $Definition.RipgrepBinarySha256
+    }
+    foreach ($identity in $expectedIdentity.GetEnumerator()) {
+        if ([string]$package.($identity.Key) -ne [string]$identity.Value) {
+            throw "DeepSeek 基础 Runtime 构建身份不匹配：$($identity.Key)"
+        }
+    }
+    return $package
+}
+
+Export-ModuleMember -Function `
+    Get-DeepSeekRuntimeBuildDefinition, `
+    Get-DeepSeekCatalogEntry, `
+    Assert-DeepSeekRuntimeBaseBundleCompatible

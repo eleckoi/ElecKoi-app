@@ -5,7 +5,6 @@ import com.eleckoi.android.engine.agent.api.AgentContextAnchor
 import com.eleckoi.android.engine.agent.api.AgentContextInjection
 import com.eleckoi.android.engine.agent.api.AgentContextRole
 import com.eleckoi.android.engine.agent.api.AgentFileAccessScope
-import com.eleckoi.android.engine.agent.api.AgentHistoryPolicy
 import com.eleckoi.android.engine.agent.api.AgentSessionOptions
 import com.eleckoi.android.engine.agent.api.AgentThreadStart
 import com.eleckoi.android.engine.agent.api.AgentVirtualFileSearch
@@ -61,6 +60,7 @@ internal class CharacterAgentTurnPreparer(
     private val virtualFileSearch: AgentVirtualFileSearch,
     private val toolContextSnapshot: (Set<String>) -> AgentToolContextSnapshot,
     private val activeAgentPreset: suspend () -> AgentPreset,
+    private val generationAttempts: GenerationAttemptRepository,
     private val captureProviderRequests: Boolean,
 ) {
     suspend fun prepare(
@@ -189,7 +189,7 @@ internal class CharacterAgentTurnPreparer(
                                 id = "author-roleplay-plan-items",
                                 anchor = AgentContextAnchor.BeforeToolContext,
                                 role = AgentContextRole.System,
-                                activation = AgentContextActivation.Immediate,
+                                activation = AgentContextActivation.FirstModelRequest,
                                 content = planInstructions,
                                 order = activeToolContext.orderOf(
                                     AgentToolRequestPolicy.BuiltInRoleplayWorkflow,
@@ -254,11 +254,12 @@ internal class CharacterAgentTurnPreparer(
             // from the retained Room history and persist the returned id on the replacement.
             AgentThreadStart.Fresh
         } else {
-            session.messages.asReversed()
-                .firstOrNull { it.role == MessageRole.Assistant && it.runtimeThreadId.isNotBlank() }
-                ?.runtimeThreadId
-                ?.let(AgentThreadStart::Resume)
-                ?: AgentThreadStart.BoundOrNew
+            continuationThreadStart(
+                conversationId = session.id,
+                messages = session.messages,
+            ) { conversationId, messageId ->
+                generationAttempts.latestReplyForMessage(conversationId, messageId)?.state
+            }
         }
         return CharacterAgentTurnPreparation(
             options = AgentSessionOptions(
@@ -279,7 +280,6 @@ internal class CharacterAgentTurnPreparer(
                 discardThreadIds = obsoleteRuntimeThreadIds,
                 ephemeral = false,
                 initialHistoryItems = roomHistoryItems,
-                historyPolicy = AgentHistoryPolicy.ProductDialogue,
                 historyCompactionInstructions = agentPreset.historyCompactionInstructions(),
                 captureProviderRequests = captureProviderRequests,
                 permissionMode = session.permissionMode,
@@ -291,6 +291,26 @@ internal class CharacterAgentTurnPreparer(
             imageConfig = imageConfig,
             variableTurnState = variableTurnState,
         )
+    }
+}
+
+/**
+ * Viewing a trace may use the latest attempted thread, but continuation may resume only a
+ * successfully committed reply. A failed or cancelled latest thread is abandoned so late DSH
+ * events cannot enter the next turn.
+ */
+internal fun continuationThreadStart(
+    conversationId: String,
+    messages: List<com.eleckoi.android.feature.chat.model.ChatMessage>,
+    attemptState: (conversationId: String, outputMessageId: String) -> GenerationAttemptState?,
+): AgentThreadStart {
+    val latestRuntimeReply = messages.asReversed().firstOrNull { message ->
+        message.role == MessageRole.Assistant && message.runtimeThreadId.isNotBlank()
+    } ?: return AgentThreadStart.BoundOrNew
+    return if (attemptState(conversationId, latestRuntimeReply.id) == GenerationAttemptState.Succeeded) {
+        AgentThreadStart.Resume(latestRuntimeReply.runtimeThreadId)
+    } else {
+        AgentThreadStart.Fresh
     }
 }
 

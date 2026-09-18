@@ -2,6 +2,8 @@ package com.eleckoi.android.engine.agent.deepseek.protocol
 
 import android.util.Base64
 import com.eleckoi.android.engine.agent.api.AgentInputImage
+import com.eleckoi.android.engine.agent.deepseek.trajectory.DshSessionInspection
+import com.eleckoi.android.engine.generation.reasoning.DshResolvedModelCapabilities
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
@@ -21,7 +23,9 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 
@@ -106,7 +110,7 @@ internal class DeepSeekHarnessJsonRpcClient(
                     put("sessionId", sessionId)
                     put("mode", mode.wireValue)
                     put("cwd", cwd)
-                    put("content", buildJsonArray {
+                    put("contentBlocks", buildJsonArray {
                         if (text.isNotBlank()) {
                             add(buildJsonObject {
                                 put("type", "text")
@@ -121,7 +125,7 @@ internal class DeepSeekHarnessJsonRpcClient(
                             }
                             add(buildJsonObject {
                                 put("type", "image")
-                                put("mediaType", image.mediaType)
+                                put("mimeType", image.mediaType)
                                 put("data", Base64.encodeToString(file.readBytes(), Base64.NO_WRAP))
                                 image.name.takeIf(String::isNotBlank)?.let { put("name", it) }
                             })
@@ -146,6 +150,69 @@ internal class DeepSeekHarnessJsonRpcClient(
         }.jsonObject
         return result["accepted"]?.jsonPrimitive?.contentOrNull?.toBooleanStrictOrNull()
             ?: throw DeepSeekProtocolException("DeepSeek Harness 没有返回有效的取消确认")
+    }
+
+    suspend fun inspectSession(sessionId: String): DshSessionInspection {
+        val result = withDeepSeekProtocolTimeout(
+            timeoutMillis = PromptAcceptanceTimeoutMillis,
+            operation = "读取 DeepSeek Harness 会话轨迹",
+        ) {
+            request(
+                method = "session/inspect",
+                params = buildJsonObject { put("sessionId", sessionId) },
+            )
+        }.jsonObject
+        val header = result["header"] as? JsonObject
+            ?: throw DeepSeekProtocolException("DeepSeek Harness 没有返回有效的会话头")
+        val inheritedEventCount = result["inheritedEventCount"]?.jsonPrimitive?.intOrNull
+            ?: throw DeepSeekProtocolException("DeepSeek Harness 没有返回有效的继承事件数量")
+        val events = result["events"]?.jsonArray?.map { event ->
+            event as? JsonObject
+                ?: throw DeepSeekProtocolException("DeepSeek Harness 返回了无效的会话事件")
+        } ?: throw DeepSeekProtocolException("DeepSeek Harness 没有返回会话事件")
+        return DshSessionInspection(
+            header = header,
+            inheritedEventCount = inheritedEventCount,
+            events = events,
+        )
+    }
+
+    suspend fun resolveModel(provider: String, model: String): DshResolvedModelCapabilities {
+        val result = withDeepSeekProtocolTimeout(
+            timeoutMillis = PromptAcceptanceTimeoutMillis,
+            operation = "读取 DeepSeek Harness 模型能力",
+        ) {
+            request(
+                method = "model/resolve",
+                params = buildJsonObject {
+                    put("provider", provider)
+                    put("model", model)
+                },
+            )
+        }.jsonObject
+        val reasoningEffortIds = (result["reasoning"] as? JsonObject)
+            ?.get("efforts")
+            ?.jsonArray
+            ?.map { effort ->
+                effort.jsonObject["id"]?.jsonPrimitive?.contentOrNull
+                    ?.takeIf(String::isNotBlank)
+                    ?: throw DeepSeekProtocolException("DeepSeek Harness 返回了无效的推理档位")
+            }
+            .orEmpty()
+        val contextWindow = (result["context"] as? JsonObject)
+            ?.get("contextWindow")
+            ?.jsonPrimitive
+            ?.intOrNull
+        val maxTokens = result["defaultMaxTokens"]?.jsonPrimitive?.intOrNull
+        val modalities = result["inputModalities"]?.jsonArray?.mapNotNull { modality ->
+            modality.jsonPrimitive.contentOrNull
+        }
+        return DshResolvedModelCapabilities(
+            reasoningEffortIds = reasoningEffortIds,
+            contextWindowTokens = contextWindow,
+            maxOutputTokens = maxTokens,
+            supportsImageInput = modalities?.let { "image" in it },
+        )
     }
 
     suspend fun setPermission(

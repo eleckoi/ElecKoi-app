@@ -13,12 +13,18 @@ class SqliteSchemaContractTest {
     private val directory = File(requireNotNull(System.getProperty("eleckoi.schemaDirectory")))
     private val storageSources = File(requireNotNull(System.getProperty("eleckoi.storageSourceDirectory")))
     private val schema = JSONObject(File(directory,
-        "com.eleckoi.android.foundation.storage.room.ElecKoiDatabase/3.json").readText()).getJSONObject("database")
+        "com.eleckoi.android.foundation.storage.room.ElecKoiDatabase/4.json").readText()).getJSONObject("database")
     private val version1Schema = JSONObject(File(directory,
         "com.eleckoi.android.foundation.storage.room.ElecKoiDatabase/1.json").readText()).getJSONObject("database")
 
     @Test fun `version 2 to 3 is data-only and preserves the complete schema`() {
         sqliteDatabase("eleckoi-common-schema-v2.sql") { db ->
+            assertEquals(freshSchemaStructure(), db.schemaStructure())
+        }
+    }
+
+    @Test fun `version 3 to 4 is data-only and preserves the complete schema`() {
+        sqliteDatabase("eleckoi-common-schema-v3.sql") { db ->
             assertEquals(freshSchemaStructure(), db.schemaStructure())
         }
     }
@@ -633,7 +639,7 @@ class SqliteSchemaContractTest {
     }
 
     private fun database(block: (Connection) -> Unit) {
-        sqliteDatabase("eleckoi-common-schema-v3.sql", block)
+        sqliteDatabase("eleckoi-common-schema-v4.sql", block)
     }
 
     private fun sqliteDatabase(schemaFileName: String, block: (Connection) -> Unit) {
@@ -714,7 +720,7 @@ class SqliteSchemaContractTest {
 
     private fun freshSchemaStructure(): DatabaseStructure {
         lateinit var structure: DatabaseStructure
-        sqliteDatabase("eleckoi-common-schema-v3.sql") { db ->
+        sqliteDatabase("eleckoi-common-schema-v4.sql") { db ->
             structure = db.schemaStructure()
         }
         return structure

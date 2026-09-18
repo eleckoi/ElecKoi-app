@@ -88,15 +88,14 @@ internal class ChatSessionImageCoordinator(
                     this[imageIndex] = next
                 },
             )
-            val user = messages.subList(0, messageIndex)
-                .lastOrNull { it.role == MessageRole.User }
+            val userMessageId = room.ledger.owningUserMessageId(sessionId, message.id)
                 ?: return@runInTransaction
             val updatedAt = nowIso()
             room.dao.touchSession(sessionId, updatedAt)
             room.ledger.upsertResponseInTransaction(
                 conversationId = sessionId,
                 updatedAt = updatedAt,
-                turnSourceMessageId = user.id,
+                turnSourceMessageId = userMessageId,
                 response = updated.toLedgerMessage(
                     entity.session.characterId,
                     entity.session.characterName,

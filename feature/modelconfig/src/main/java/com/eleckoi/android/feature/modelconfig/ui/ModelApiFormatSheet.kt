@@ -29,7 +29,7 @@ val ModelApiFormat.displayName: String
     get() = when (this) {
         ModelApiFormat.ChatCompletions -> "Chat Completions"
         ModelApiFormat.Responses -> "Responses API"
-        ModelApiFormat.AnthropicMessages -> "Messages API"
+        ModelApiFormat.AnthropicMessages -> "Anthropic Messages"
         ModelApiFormat.GoogleGemini -> "Generate Content API"
     }
 
@@ -39,6 +39,7 @@ fun ModelApiFormatSheet(
     appearance: AppearanceTheme,
     inherited: ModelApiFormat? = null,
     allowInherited: Boolean = false,
+    formats: List<ModelApiFormat> = ModelApiFormat.entries,
     onClose: () -> Unit,
     onSelect: (ModelApiFormat?) -> Unit,
 ) {
@@ -85,7 +86,7 @@ fun ModelApiFormatSheet(
                     }
                 }
             }
-            ModelApiFormat.entries.forEach { format ->
+            formats.forEach { format ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -109,3 +110,14 @@ fun ModelApiFormatSheet(
         }
     }
 }
+
+internal fun apiFormatsForProvider(providerId: String): List<ModelApiFormat> =
+    if (providerId.trim().equals("deepseek", ignoreCase = true)) {
+        listOf(
+            ModelApiFormat.ChatCompletions,
+            ModelApiFormat.Responses,
+            ModelApiFormat.AnthropicMessages,
+        )
+    } else {
+        ModelApiFormat.entries
+    }

@@ -43,6 +43,38 @@ class ChatAgentProcessSheetTest {
     }
 
     @Test
+    fun `back from an auto opened lone compaction returns directly to process`() {
+        val payload = CreationDetailPayload(
+            title = "详情",
+            items = listOf(
+                timelineItem("compact-1").copy(
+                    workItemType = AgentWorkItemType.ContextCompaction,
+                ),
+            ),
+        )
+
+        assertNull(
+            chatProcessDetailPathAfterBack(
+                payload = payload,
+                selectedPath = payload.initialSelectedItemPath(),
+            ),
+        )
+    }
+
+    @Test
+    fun `back from a nested detail returns to its payload root before closing`() {
+        val child = timelineItem("child")
+        val parent = timelineItem("parent").copy(childTimeline = listOf(child))
+        val payload = CreationDetailPayload(title = "详情", items = listOf(parent))
+
+        assertEquals(
+            listOf("parent"),
+            chatProcessDetailPathAfterBack(payload, listOf("parent", "child")),
+        )
+        assertNull(chatProcessDetailPathAfterBack(payload, emptyList()))
+    }
+
+    @Test
     fun `accepted final body auto completes only the structural final plan item`() {
         val plan = AgentPlanUpdatePresentation(
             explanation = "",

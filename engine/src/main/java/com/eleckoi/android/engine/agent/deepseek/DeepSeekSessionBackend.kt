@@ -17,10 +17,14 @@ internal data class DeepSeekContextPressure(
     val pressureTokens: Long?,
     val projectedTokens: Long?,
     val contextWindow: Long?,
+    val systemTokens: Long?,
+    val toolsTokens: Long?,
+    val messageTokens: Long?,
 )
 
 class PreparedDeepSeekBackend internal constructor(
     val model: String,
+    val provider: String = "deepseek-official",
     val subagentModel: String = model,
     val maxTokens: Int?,
     val sessionCwd: String = "/workspace",

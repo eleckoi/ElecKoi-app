@@ -1,6 +1,6 @@
 {
   "schemaVersion": 5,
-  "runtimeVersion": "ubuntu-24.04.4_dsh-0.1.1-rc.2-e7_arm64",
+  "runtimeVersion": "ubuntu-24.04.4_dsh-0.1.5-rc.2-e3_arm64",
   "architecture": "arm64-v8a",
   "rootfs": {
     "kind": "ubuntu-base",
@@ -13,12 +13,12 @@
   "harnesses": {
     "deepseek": {
       "kind": "deepseek-harness-single-executable",
-      "version": "0.1.1-rc.2",
-      "sourceCommit": "b150a551b8d465e31e418e1b2eaf5e79bbb7d28e",
+      "version": "0.1.5-rc.2",
+      "sourceCommit": "fb2c4b9e698e30edb738bca4cf0618587db7d203",
       "url": "",
-      "sha256": "2f7c80c183f4fb9ce9c2c8a7aef22e5f5bb5e85690c6b38df1c488629574dd0f",
-      "archiveBytesLimit": 70000000,
-      "assetPath": "deepseek-harness-0.1.1-rc.2-eleckoi.7-arm64.egruntime",
+      "sha256": "ca5c76ed90fbf61e7132697d7cfbeb908b052b93888c64891152f87e6a2d33dc",
+      "archiveBytesLimit": 100000000,
+      "assetPath": "deepseek-harness-0.1.5-rc.2-eleckoi.3-arm64.egruntime",
       "entrypoint": "bin/dsh-jsonrpc-agent",
       "configPath": "etc/deepseek/cordis.yml",
       "healthCheckArgs": [],

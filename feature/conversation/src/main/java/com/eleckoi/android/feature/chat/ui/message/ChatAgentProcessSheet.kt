@@ -151,10 +151,15 @@ internal fun ChatAgentProcessSheet(
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
         BackHandler(enabled = detailPayload != null) {
-            if (selectedDetailItemPath.isNotEmpty()) {
-                selectedDetailItemPath = selectedDetailItemPath.dropLast(1)
-            } else {
+            val nextPath = chatProcessDetailPathAfterBack(
+                payload = detailPayload ?: return@BackHandler,
+                selectedPath = selectedDetailItemPath,
+            )
+            if (nextPath == null) {
+                selectedDetailItemPath = emptyList()
                 detailPayload = null
+            } else {
+                selectedDetailItemPath = nextPath
             }
         }
         // This timeline is rendered in a separate dialog window, not inside the conversation's
@@ -212,10 +217,16 @@ internal fun ChatAgentProcessSheet(
                                 if (detailPayload != null) {
                                     IconButton(
                                         onClick = {
-                                            if (selectedDetailItemPath.isNotEmpty()) {
-                                                selectedDetailItemPath = selectedDetailItemPath.dropLast(1)
-                                            } else {
+                                            val payload = detailPayload ?: return@IconButton
+                                            val nextPath = chatProcessDetailPathAfterBack(
+                                                payload = payload,
+                                                selectedPath = selectedDetailItemPath,
+                                            )
+                                            if (nextPath == null) {
+                                                selectedDetailItemPath = emptyList()
                                                 detailPayload = null
+                                            } else {
+                                                selectedDetailItemPath = nextPath
                                             }
                                         },
                                         modifier = Modifier.align(Alignment.CenterStart),
@@ -426,3 +437,18 @@ private fun RoleplayProtocolResultSection(
 }
 
 private val IgnoreStaticListExpansion: (Any, Boolean) -> Unit = { _, _ -> }
+
+/**
+ * Returns the parent detail path, or null when Back should leave detail entirely.
+ *
+ * A lone compaction deliberately opens at its summary. That selected item is the detail root, not
+ * a child page, so Back must return to the processing timeline without exposing a synthetic
+ * one-item list in between.
+ */
+internal fun chatProcessDetailPathAfterBack(
+    payload: CreationDetailPayload,
+    selectedPath: List<String>,
+): List<String>? {
+    val rootDepth = payload.initialSelectedItemPath().size
+    return if (selectedPath.size > rootDepth) selectedPath.dropLast(1) else null
+}

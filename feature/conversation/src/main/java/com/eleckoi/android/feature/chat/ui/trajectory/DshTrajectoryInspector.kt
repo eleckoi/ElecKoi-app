@@ -27,6 +27,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -52,6 +56,7 @@ internal fun DshTrajectoryInspector(
 ) {
     val record = (selection as? DshTrajectorySelection.Record)?.value
     val request = (selection as? DshTrajectorySelection.Request)?.value
+    var expandedContextItems by remember(request?.seq) { mutableStateOf(emptySet<String>()) }
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -75,7 +80,9 @@ internal fun DshTrajectoryInspector(
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            DshTrajectoryDetailTab.entries.forEach { entry ->
+            DshTrajectoryDetailTab.entries
+                .filter { entry -> request != null || entry != DshTrajectoryDetailTab.Context }
+                .forEach { entry ->
                 val selected = entry == tab
                 Surface(
                     color = if (selected) appearance.mobileBlue.copy(alpha = 0.13f) else Color.Transparent,
@@ -115,6 +122,19 @@ internal fun DshTrajectoryInspector(
                         if (request != null) RequestSummary(request, appearance)
                         if (record != null) RecordSummary(record, appearance)
                     }
+                    DshTrajectoryDetailTab.Context -> RequestContext(
+                        request = request,
+                        expandedItems = expandedContextItems,
+                        onToggle = { key ->
+                            expandedContextItems = if (key in expandedContextItems) {
+                                expandedContextItems - key
+                            } else {
+                                expandedContextItems + key
+                            }
+                        },
+                        appearance = appearance,
+                        compact = compact,
+                    )
                     DshTrajectoryDetailTab.Preview -> InspectorCode(
                         value = request?.detail
                             ?: record?.output?.takeIf(String::isNotBlank)

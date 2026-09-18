@@ -14,6 +14,7 @@ internal class CharacterAgentTurnCommitter(
     suspend fun commitActive(
         lease: GenerationLeaseRegistry.Lease,
         session: ChatSession,
+        userMessageId: String,
         terminalAttemptId: String? = null,
         terminalAttemptState: GenerationAttemptState? = null,
         terminalAttemptError: String = "",
@@ -26,6 +27,7 @@ internal class CharacterAgentTurnCommitter(
             attemptAccepted = true
             persistCompletedTail(
                 session = session,
+                userMessageId = userMessageId,
                 terminalAttemptId = terminalAttemptId,
                 terminalAttemptState = terminalAttemptState,
                 terminalAttemptError = terminalAttemptError,
@@ -40,6 +42,7 @@ internal class CharacterAgentTurnCommitter(
 
     fun persistCompletedTail(
         session: ChatSession,
+        userMessageId: String,
         terminalAttemptId: String? = null,
         terminalAttemptState: GenerationAttemptState? = null,
         terminalAttemptError: String = "",
@@ -50,10 +53,10 @@ internal class CharacterAgentTurnCommitter(
             finishAttempt(terminalAttemptId, terminalAttemptState, terminalAttemptError)
             return
         }
-        val responseIndex = session.messages.lastIndex
-        val user = session.messages.subList(0, responseIndex)
-            .lastOrNull { it.role == MessageRole.User }
-        if (user == null) {
+        val userExists = session.messages.any { message ->
+            message.id == userMessageId && message.role == MessageRole.User
+        }
+        if (!userExists) {
             // Opening/system-only snapshots are import/bootstrap concerns, not generated turns.
             sessions.updateMetadata(session)
             finishAttempt(terminalAttemptId, terminalAttemptState, terminalAttemptError)
@@ -61,7 +64,7 @@ internal class CharacterAgentTurnCommitter(
         }
         sessions.commitAssistantResponse(
             session = session,
-            userMessageId = user.id,
+            userMessageId = userMessageId,
             response = response,
             terminalAttemptId = terminalAttemptId,
             terminalAttemptState = terminalAttemptState,

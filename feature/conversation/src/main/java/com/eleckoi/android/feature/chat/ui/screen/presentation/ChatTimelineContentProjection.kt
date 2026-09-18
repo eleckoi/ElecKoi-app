@@ -14,6 +14,7 @@ import com.eleckoi.android.feature.chat.ui.ChatUiState
 import com.eleckoi.android.feature.chat.ui.ChatVisibleMessageWindowCache
 import com.eleckoi.android.feature.chat.ui.ChatVisualReplyKey
 import com.eleckoi.android.feature.chat.ui.chatPresentationContentRevision
+import com.eleckoi.android.feature.chat.ui.composer.retainVisibleGenerationMetrics
 import com.eleckoi.android.feature.chat.ui.generationVisualReplyKey
 import com.eleckoi.android.feature.chat.ui.presentationSignature
 import com.eleckoi.android.feature.chat.ui.rememberChatPresentationReadiness
@@ -35,6 +36,22 @@ internal data class ChatTimelineContentProjection(
     val latestRegenerableMessage: ChatMessage?,
     val presentationReadiness: ChatPresentationReadinessState,
 )
+
+private class ChatGenerationStatsPresentationCache {
+    var metrics: ChatGenerationMetrics = ChatGenerationMetrics()
+        private set
+
+    var contextWindowUsage: ContextWindowUsage? = null
+        private set
+
+    fun commit(
+        metrics: ChatGenerationMetrics,
+        contextWindowUsage: ContextWindowUsage?,
+    ) {
+        this.metrics = metrics
+        this.contextWindowUsage = contextWindowUsage
+    }
+}
 
 @Composable
 internal fun rememberChatTimelineContentProjection(
@@ -115,20 +132,32 @@ internal fun rememberChatTimelineContentProjection(
         allowCachedReveal = !roleplayWebActive,
     )
     val sessionGenerationStats = state.draft?.session?.generationStats
-    val contextWindowUsage = sessionGenerationStats?.contextWindowUsage?.let { usage ->
+    val nextGenerationMetrics = sessionGenerationStats?.metrics ?: ChatGenerationMetrics()
+    val nextContextWindowUsage = sessionGenerationStats?.contextWindowUsage?.let { usage ->
         ContextWindowUsage(
             latestTokens = usage.latestTokens,
             totalTokens = usage.totalTokens,
             modelContextWindow = usage.modelContextWindow,
+            systemTokens = usage.systemTokens,
+            toolsTokens = usage.toolsTokens,
+            messageTokens = usage.messageTokens,
         )
     }
-    val latestRegenerableMessage = latestMessage?.takeIf {
-        when (it.role) {
-            MessageRole.User -> it.content.isNotBlank()
-            MessageRole.Assistant -> it.id != OpeningMessageId
-            MessageRole.System -> false
-        }
+    val generationStatsPresentationCache = remember(sessionId) {
+        ChatGenerationStatsPresentationCache()
     }
+    val generationMetrics = retainVisibleGenerationMetrics(
+        previous = generationStatsPresentationCache.metrics,
+        next = nextGenerationMetrics,
+    )
+    val contextWindowUsage = nextContextWindowUsage ?: generationStatsPresentationCache.contextWindowUsage
+    SideEffect {
+        generationStatsPresentationCache.commit(
+            metrics = generationMetrics,
+            contextWindowUsage = contextWindowUsage,
+        )
+    }
+    val latestRegenerableMessage = latestMessage?.takeIf(ChatMessage::isRegenerableMessage)
     return ChatTimelineContentProjection(
         presentedMessages = presentedMessages,
         visibleMessages = visibleMessages,
@@ -137,11 +166,17 @@ internal fun rememberChatTimelineContentProjection(
         latestMessage = latestMessage,
         generationReplyKey = generationReplyKey,
         markdownCacheScopeKey = markdownCacheScopeKey,
-        generationMetrics = sessionGenerationStats?.metrics ?: ChatGenerationMetrics(),
+        generationMetrics = generationMetrics,
         contextWindowUsage = contextWindowUsage,
         latestRegenerableMessage = latestRegenerableMessage,
         presentationReadiness = presentationReadiness,
     )
+}
+
+internal fun ChatMessage.isRegenerableMessage(): Boolean = when (role) {
+    MessageRole.User -> content.isNotBlank() || inputImageAttachments.isNotEmpty()
+    MessageRole.Assistant -> id != OpeningMessageId
+    MessageRole.System -> false
 }
 
 private val EmptyChatTimelinePresentation = ChatTimelinePresentation(

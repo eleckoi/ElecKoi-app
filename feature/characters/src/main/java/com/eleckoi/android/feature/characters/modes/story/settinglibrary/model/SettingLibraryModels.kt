@@ -61,6 +61,27 @@ const val HiddenToolTimelineEntryTitle: String = "隐藏工具时间线"
 const val HiddenToolTimelineEntryId: String = "built-in-hidden-tool-timeline"
 const val HiddenToolTimelinePromptPositionId: String = "hidden-tool-timeline"
 const val HiddenToolTimelinePromptPositionTitle: String = "隐藏工具时间线"
+private const val LegacyDefaultHiddenToolTimelineContent: String = """<roleplay_output_protocol>
+tool_phase:
+  setting_library:
+    preflight: "若设定库工具可用，最终回复前先用 eleckoi_glob_setting_files 浏览设定文件，并用 eleckoi_read_setting_files 读取结果中的 required_entries"
+    search: "按本轮扮演需要使用 eleckoi_grep_setting_files 检索角色与世界设定；允许按需继续搜索"
+    empty_result: "没有可用设定时停止查询，直接进入最终回复"
+    no_repeat: "不得用相同条件重复无结果的查询"
+  plot_variables:
+    empty_result: "未发现变量时忽略并继续；不得反复查询"
+  visible_output: "仅允许原生 Tool Call"
+  forbidden:
+    - "角色对白"
+    - "叙事"
+    - "动作描写"
+    - "过程说明"
+    - "其他可见文字"
+final_phase:
+  format: "<FINAL>本轮完整的最终扮演回复</FINAL>"
+  before_final: "禁止输出任何可见文字"
+  after_final: "禁止再调用原生工具"
+</roleplay_output_protocol>"""
 const val DefaultHiddenToolTimelineContent: String = """<roleplay_output_protocol>
 tool_phase:
   setting_library:
@@ -78,6 +99,7 @@ tool_phase:
     - "过程说明"
     - "其他可见文字"
 final_phase:
+  mandatory: "最终可见回复必须且只能使用一对 <FINAL> 与 </FINAL> 标签完整包裹；缺少任一标签、使用多对标签或把任何正文写在标签外，都不符合本协议"
   format: "<FINAL>本轮完整的最终扮演回复</FINAL>"
   before_final: "禁止输出任何可见文字"
   after_final: "禁止再调用原生工具"
@@ -254,7 +276,7 @@ fun settingLibraryHiddenToolTimelineEntry(existing: SettingLibraryEntry? = null)
         content = DefaultHiddenToolTimelineContent,
         kind = SettingLibraryEntryKind.HiddenToolTimeline,
         triggerMode = SettingLibraryTriggerMode.Always,
-        position = SettingLibraryPosition.InsertPoint4,
+        position = SettingLibraryPosition.InsertPoint5,
         promptPositionId = HiddenToolTimelinePromptPositionId,
         insertRole = SettingLibraryInsertRole.User,
         order = 1,
@@ -263,6 +285,11 @@ fun settingLibraryHiddenToolTimelineEntry(existing: SettingLibraryEntry? = null)
         id = HiddenToolTimelineEntryId,
         kind = SettingLibraryEntryKind.HiddenToolTimeline,
         groupId = "",
+        content = if (source.content.trim() == LegacyDefaultHiddenToolTimelineContent.trim()) {
+            DefaultHiddenToolTimelineContent
+        } else {
+            source.content
+        },
         treeViewOrder = Int.MIN_VALUE + 1,
     )
 }
@@ -270,8 +297,8 @@ fun settingLibraryHiddenToolTimelineEntry(existing: SettingLibraryEntry? = null)
 fun hiddenToolTimelinePromptPosition(): SettingLibraryPromptPosition = SettingLibraryPromptPosition(
     id = HiddenToolTimelinePromptPositionId,
     name = HiddenToolTimelinePromptPositionTitle,
-    anchor = SettingLibraryPosition.InsertPoint4,
-    side = SettingLibraryPromptPositionSide.BeforeSettingPosition,
+    anchor = SettingLibraryPosition.InsertPoint5,
+    side = SettingLibraryPromptPositionSide.AfterSettingPosition,
     order = 1,
 )
 

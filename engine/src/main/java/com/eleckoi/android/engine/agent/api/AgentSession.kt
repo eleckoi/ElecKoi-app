@@ -33,8 +33,6 @@ data class AgentSessionOptions(
     val ephemeral: Boolean = false,
     /** Authoritative product dialogue available to a Harness for native seeding or request projection. */
     val initialHistoryItems: List<AgentHistoryItem> = emptyList(),
-    /** Controls whether prior native Agent events or product-owned dialogue form the next request. */
-    val historyPolicy: AgentHistoryPolicy = AgentHistoryPolicy.NativeSession,
     /** Optional directive used only by a Harness-owned history compaction request. */
     val historyCompactionInstructions: String? = null,
     /** Emits each native model-history item so the host can commit it to Room. */
@@ -55,14 +53,6 @@ data class AgentSessionOptions(
     /** Request-visible Agent context blocks controlled by the same capability switches as tools. */
     val toolContextBlocks: List<AgentToolContextBlock> = emptyList(),
 )
-
-/** Backend-neutral policy for projecting history into provider requests. */
-enum class AgentHistoryPolicy {
-    /** Keep the Harness's complete native history, including tool calls and results. */
-    NativeSession,
-    /** Use product dialogue between turns while retaining all native events in the active turn. */
-    ProductDialogue,
-}
 
 /** Backend-neutral envelope around one provider-native history item. */
 data class AgentHistoryItem(
@@ -203,9 +193,10 @@ data class AgentContextInjection(
 )
 
 sealed interface AgentContextActivation {
-    /** Applies only to the first provider request made inside this turn. */
+    /** Frozen when the turn starts, then projected into every model request made by that turn. */
     data object FirstModelRequest : AgentContextActivation
 
+    /** Re-evaluated for every provider request; intended for DSH system-prompt contributions. */
     data object Immediate : AgentContextActivation
 
     data class AfterToolCall(

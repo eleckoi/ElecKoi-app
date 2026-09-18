@@ -51,6 +51,9 @@ data class CreationContextWindowUsage(
     val latestTokens: Long,
     val totalTokens: Long,
     val modelContextWindow: Long?,
+    val systemTokens: Long? = null,
+    val toolsTokens: Long? = null,
+    val messageTokens: Long? = null,
 )
 
 data class AiCreationAssistantUiState(

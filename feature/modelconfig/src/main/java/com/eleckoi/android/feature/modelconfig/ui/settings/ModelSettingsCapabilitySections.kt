@@ -45,6 +45,7 @@ internal fun ModelCapabilitySections(
     onUpdate: (ModelConfig) -> Unit,
 ) {
     val activeModelOption = form.modelOptions.firstOrNull { it.id == form.model.trim() }
+        ?: form.model.trim().takeIf(String::isNotBlank)?.let(::ModelOption)
     val reasoningVariants = activeModelOption
         ?.let { DshReasoningEfforts.forModel(form, it) }
         .orEmpty()
@@ -53,16 +54,15 @@ internal fun ModelCapabilitySections(
     if (form.model.isNotBlank()) {
         ModelSectionHeader("推理", appearance, actions = {})
         ModelFieldGroup(appearance) {
-            ModelReasoningSelector(
-                variants = reasoningVariants,
-                selectedVariant = activeModelOption?.reasoningEffort,
-                appearance = appearance,
-            ) { selected ->
-                onUpdate(
-                    form.updateActiveModelOption { option ->
-                        option.copy(reasoningEffort = selected)
-                    },
-                )
+            activeModelOption?.let { option ->
+                ModelReasoningSelector(
+                    config = form,
+                    option = option,
+                    variants = reasoningVariants,
+                    appearance = appearance,
+                ) { updated ->
+                    onUpdate(form.updateActiveModelOption { updated })
+                }
             }
         }
     }

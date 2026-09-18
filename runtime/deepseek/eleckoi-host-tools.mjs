@@ -12,13 +12,13 @@ const MAX_DESCRIPTION_CHARS = 8 * 1024
 
 export function apply(ctx, config = {}) {
   const baseUrl = requireLoopbackUrl(config.baseUrl)
-  const catalog = parseCatalog(process.env.ELECKOI_HOST_TOOL_CATALOG)
-  if (!catalog || !Array.isArray(catalog.tools) || catalog.tools.length > MAX_CATALOG_TOOLS) {
+  const tools = config.tools
+  if (!Array.isArray(tools) || tools.length > MAX_CATALOG_TOOLS) {
     throw new Error('ElecKoi host tool catalog is invalid')
   }
 
   const seen = new Set()
-  for (const candidate of catalog.tools) {
+  for (const candidate of tools) {
     const definition = requireToolDefinition(candidate)
     if (seen.has(definition.name)) {
       throw new Error(`ElecKoi host tool is duplicated: ${definition.name}`)
@@ -70,17 +70,6 @@ function requireSessionId(exec) {
     throw new Error('ElecKoi host tool call has no valid DSH session identity')
   }
   return sessionId
-}
-
-function parseCatalog(value) {
-  if (typeof value !== 'string' || value.length === 0 || value.length > 512 * 1024) {
-    throw new Error('ElecKoi host tool catalog is missing or too large')
-  }
-  try {
-    return JSON.parse(value)
-  } catch {
-    throw new Error('ElecKoi host tool catalog is not valid JSON')
-  }
 }
 
 function requireLoopbackUrl(value) {

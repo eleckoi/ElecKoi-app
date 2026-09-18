@@ -1,12 +1,17 @@
 package com.eleckoi.android.engine.workspace.runtime
 
 import android.content.Context
+import com.github.luben.zstd.ZstdInputStreamNoFinalizer
 import java.io.File
 import java.nio.file.FileVisitResult
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.SimpleFileVisitor
 import java.nio.file.attribute.BasicFileAttributes
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 
 /** App-private filesystem layout for the DSH-only runtime. */
 class RuntimePaths(context: Context) {
@@ -20,7 +25,6 @@ class RuntimePaths(context: Context) {
     val hostResolverConfig: File = File(hostNetworkRoot, "resolv.conf")
     val nativeLibraryRoot: File = File(requireNotNull(context.applicationInfo.nativeLibraryDir))
     private val runtimeSessionsRoot = File(runtimeRoot, "sessions")
-    private val deepSeekTrajectoryContextRoot = File(runtimeRoot, "state/dsh_trajectory_context")
     private val workspaceDeepSeekHomesRoot = File(runtimeRoot, "state/workspace_dsh_homes")
     private val creatorWorkspaceStorageRoot = File(context.filesDir, "creator_workspaces")
     val persistentDeepSeekWorkspaceId: String = PersistentHarnessWorkspaceId
@@ -34,7 +38,6 @@ class RuntimePaths(context: Context) {
             hostTemp,
             hostNetworkRoot,
             runtimeSessionsRoot,
-            deepSeekTrajectoryContextRoot,
         ).forEach(File::mkdirs)
     }
 
@@ -100,27 +103,20 @@ class RuntimePaths(context: Context) {
     fun persistentDeepSeekSessionLog(sessionId: String): File? {
         require(DeepSeekSessionId.matches(sessionId)) { "DSH session 编号无效" }
         val sessions = File(workspaceDeepSeekHome(persistentDeepSeekWorkspaceId), "sessions").canonicalFile
-        if (!sessions.isDirectory || Files.isSymbolicLink(sessions.toPath())) return null
-        projectLoop@ for (projectEntry in sessions.listFiles().orEmpty()) {
-            if (!projectEntry.isDirectory || Files.isSymbolicLink(projectEntry.toPath())) continue
-            val project = projectEntry.canonicalFile
-            if (project.parentFile != sessions) continue
-            val unresolvedSession = File(project, sessionId)
-            if (!unresolvedSession.isDirectory || Files.isSymbolicLink(unresolvedSession.toPath())) continue
-            val session = unresolvedSession.canonicalFile
-            if (session.parentFile != project) continue
-            resolvePersistentDshSessionLog(session)?.let { return it }
-        }
-        return null
+        return findPersistentDshSessionLog(sessions, sessionId)
     }
 
-    /** App-owned context activations that DSH cannot persist because they are projected later. */
-    fun persistentDeepSeekTrajectoryContextLog(sessionId: String): File {
+    /** Exact provider-facing context captured by the DSH request pipeline for one session. */
+    fun persistentDeepSeekRequestContextLog(sessionId: String): File {
         require(DeepSeekSessionId.matches(sessionId)) { "DSH session 编号无效" }
-        val root = deepSeekTrajectoryContextRoot.canonicalFile
-        require(root.isDirectory || root.mkdirs()) { "无法创建 DSH 上下文轨迹目录" }
-        val target = File(root, "$sessionId.jsonl").canonicalFile
-        require(target.parentFile == root) { "DSH 上下文轨迹路径越界" }
+        val root = File(
+            workspaceDeepSeekHome(persistentDeepSeekWorkspaceId),
+            "eleckoi/request-context",
+        ).canonicalFile
+        require(root.isDirectory || root.mkdirs()) { "无法创建 DSH Request 上下文目录" }
+        val filename = sessionId.replace(UnsafeRequestContextFileChar, "_").take(160).ifBlank { "default" }
+        val target = File(root, "$filename.jsonl").canonicalFile
+        require(target.parentFile == root) { "DSH Request 上下文路径越界" }
         return target
     }
 
@@ -129,49 +125,14 @@ class RuntimePaths(context: Context) {
         if (sessionIds.isEmpty()) return
         sessionIds.forEach { sessionId ->
             require(DeepSeekSessionId.matches(sessionId)) { "DSH session 编号无效" }
-            val contextLog = persistentDeepSeekTrajectoryContextLog(sessionId)
+            val contextLog = persistentDeepSeekRequestContextLog(sessionId)
             if (contextLog.exists()) {
-                require(!Files.isSymbolicLink(contextLog.toPath())) { "DSH 上下文轨迹文件不能是符号链接" }
+                require(!Files.isSymbolicLink(contextLog.toPath())) { "DSH Request 上下文文件不能是符号链接" }
                 Files.deleteIfExists(contextLog.toPath())
             }
         }
         val sessions = File(workspaceDeepSeekHome(persistentDeepSeekWorkspaceId), "sessions").canonicalFile
-        if (!sessions.isDirectory) return
-        sessions.listFiles().orEmpty().forEach { projectEntry ->
-            val project = projectEntry.canonicalFile
-            if (!projectEntry.isDirectory || project.parentFile != sessions) return@forEach
-            sessionIds.forEach { sessionId ->
-                val unresolved = File(project, sessionId)
-                if (!Files.exists(unresolved.toPath()) || Files.isSymbolicLink(unresolved.toPath())) {
-                    Files.deleteIfExists(unresolved.toPath())
-                    return@forEach
-                }
-                val target = unresolved.canonicalFile
-                require(target.parentFile == project) { "DSH session 清理路径越界" }
-                deleteTreeWithoutFollowingLinks(target)
-            }
-        }
-    }
-
-    private fun deleteTreeWithoutFollowingLinks(root: File) {
-        Files.walkFileTree(root.toPath(), object : SimpleFileVisitor<java.nio.file.Path>() {
-            override fun visitFile(
-                file: java.nio.file.Path,
-                attrs: BasicFileAttributes,
-            ): FileVisitResult {
-                Files.deleteIfExists(file)
-                return FileVisitResult.CONTINUE
-            }
-
-            override fun postVisitDirectory(
-                directory: java.nio.file.Path,
-                error: java.io.IOException?,
-            ): FileVisitResult {
-                error?.let { throw it }
-                Files.deleteIfExists(directory)
-                return FileVisitResult.CONTINUE
-            }
-        })
+        deletePersistentDshSessionDirectories(sessions, sessionIds)
     }
 
     fun prepareSessionScratch(commandId: String): RuntimeSessionScratch {
@@ -227,28 +188,107 @@ class RuntimePaths(context: Context) {
         private val NativeHostName = Regex("^lib[A-Za-z0-9_-]+\\.so$")
         private val CommandId = Regex("^[A-Za-z0-9_-]{1,100}$")
         private val DeepSeekSessionId = Regex("^[A-Za-z0-9._:-]{1,160}$")
+        private val UnsafeRequestContextFileChar = Regex("[^A-Za-z0-9_-]")
     }
 }
 
+internal fun findPersistentDshSessionLog(sessionsDirectory: File, sessionId: String): File? {
+    val sessions = runCatching { sessionsDirectory.canonicalFile }.getOrNull() ?: return null
+    if (!sessions.isDirectory || Files.isSymbolicLink(sessions.toPath())) return null
+    for (projectEntry in sessions.listFiles().orEmpty()) {
+        if (!projectEntry.isDirectory || Files.isSymbolicLink(projectEntry.toPath())) continue
+        val project = projectEntry.canonicalFile
+        if (project.parentFile != sessions) continue
+        for (sessionEntry in project.listFiles().orEmpty()) {
+            if (!sessionEntry.isDirectory || Files.isSymbolicLink(sessionEntry.toPath())) continue
+            val session = sessionEntry.canonicalFile
+            if (session.parentFile != project) continue
+            val log = resolvePersistentDshSessionLog(session) ?: continue
+            if (readPersistentDshSessionHeaderId(log) == sessionId) return log
+        }
+    }
+    return null
+}
+
+internal fun deletePersistentDshSessionDirectories(sessionsDirectory: File, sessionIds: Set<String>) {
+    val sessions = runCatching { sessionsDirectory.canonicalFile }.getOrNull() ?: return
+    if (!sessions.isDirectory || Files.isSymbolicLink(sessions.toPath())) return
+    sessions.listFiles().orEmpty().forEach projectLoop@ { projectEntry ->
+        if (!projectEntry.isDirectory || Files.isSymbolicLink(projectEntry.toPath())) return@projectLoop
+        val project = projectEntry.canonicalFile
+        if (project.parentFile != sessions) return@projectLoop
+        project.listFiles().orEmpty().forEach sessionLoop@ { sessionEntry ->
+            if (!sessionEntry.isDirectory || Files.isSymbolicLink(sessionEntry.toPath())) return@sessionLoop
+            val target = sessionEntry.canonicalFile
+            if (target.parentFile != project) return@sessionLoop
+            val log = resolvePersistentDshSessionLog(target) ?: return@sessionLoop
+            if (readPersistentDshSessionHeaderId(log) in sessionIds) deleteTree(target)
+        }
+    }
+}
+
+private fun deleteTree(root: File) {
+    Files.walkFileTree(root.toPath(), object : SimpleFileVisitor<java.nio.file.Path>() {
+        override fun visitFile(file: java.nio.file.Path, attrs: BasicFileAttributes): FileVisitResult {
+            Files.deleteIfExists(file)
+            return FileVisitResult.CONTINUE
+        }
+
+        override fun postVisitDirectory(directory: java.nio.file.Path, error: java.io.IOException?): FileVisitResult {
+            error?.let { throw it }
+            Files.deleteIfExists(directory)
+            return FileVisitResult.CONTINUE
+        }
+    })
+}
+
 /**
- * DSH's log2sqlite backend atomically rotates the logical session log through one or more
- * symlinks. Preserve the logical filename so readers can identify the compression format,
- * but accept it only when the fully resolved regular file stays inside this exact session.
+ * Selects DSH's newest persisted format generation while preserving the logical filename.
+ * Symlinked logs are accepted only when their resolved file stays inside this exact session.
  */
 internal fun resolvePersistentDshSessionLog(sessionDirectory: File): File? {
     val session = runCatching { sessionDirectory.toPath().toRealPath() }.getOrNull() ?: return null
     if (!Files.isDirectory(session, LinkOption.NOFOLLOW_LINKS)) return null
-    return listOf("session.jsonl.zstd", "session.jsonl").firstNotNullOfOrNull { name ->
-        val logicalLog = session.resolve(name)
-        val resolvedLog = runCatching { logicalLog.toRealPath() }.getOrNull()
-            ?: return@firstNotNullOfOrNull null
-        if (Files.isRegularFile(resolvedLog, LinkOption.NOFOLLOW_LINKS) && resolvedLog.parent == session) {
-            logicalLog.toFile().absoluteFile
-        } else {
-            null
+    return session.toFile().listFiles().orEmpty()
+        .mapNotNull { candidate ->
+            val generation = persistentDshSessionLogGeneration(candidate.name) ?: return@mapNotNull null
+            generation to candidate
         }
-    }
+        .sortedWith(compareByDescending<Pair<Long, File>> { it.first }.thenByDescending { it.second.name.endsWith(".zstd") })
+        .firstNotNullOfOrNull { (_, candidate) ->
+            val logicalLog = candidate.toPath()
+            val resolvedLog = runCatching { logicalLog.toRealPath() }.getOrNull()
+                ?: return@firstNotNullOfOrNull null
+            if (Files.isRegularFile(resolvedLog, LinkOption.NOFOLLOW_LINKS) && resolvedLog.parent == session) {
+                logicalLog.toFile().absoluteFile
+            } else {
+                null
+            }
+        }
 }
+
+internal fun readPersistentDshSessionHeaderId(log: File): String? = runCatching {
+    val raw = log.inputStream().buffered()
+    val input = if (log.name.endsWith(".zstd")) {
+        ZstdInputStreamNoFinalizer(raw).setContinuous(true)
+    } else {
+        raw
+    }
+    input.bufferedReader(Charsets.UTF_8).use { reader ->
+        val header = Json.parseToJsonElement(reader.readLine().orEmpty()) as? JsonObject
+            ?: return@use null
+        if (header["type"]?.jsonPrimitive?.contentOrNull != "session") return@use null
+        header["id"]?.jsonPrimitive?.contentOrNull?.takeIf(String::isNotBlank)
+    }
+}.getOrNull()
+
+private fun persistentDshSessionLogGeneration(filename: String): Long? {
+    if (filename == "session.jsonl" || filename == "session.jsonl.zstd") return 0L
+    val match = SessionGenerationLog.matchEntire(filename) ?: return null
+    return match.groupValues[1].toLongOrNull()?.takeIf { it > 0L }
+}
+
+private val SessionGenerationLog = Regex("^session\\.v([1-9][0-9]*)\\.jsonl(?:\\.zstd)?$")
 
 data class RuntimeSessionScratch(
     val root: File,

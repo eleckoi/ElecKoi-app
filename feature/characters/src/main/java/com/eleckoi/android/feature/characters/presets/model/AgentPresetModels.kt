@@ -5,6 +5,7 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.S
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryGroup
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPosition
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPromptPosition
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPromptPositionSide
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryTriggerMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.HiddenToolTimelinePromptPositionId
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.hiddenToolTimelinePromptPosition
@@ -214,13 +215,28 @@ fun AgentPreset.withRequiredBuiltIns(): AgentPreset {
     val hiddenTimelineEntry = settingLibraryHiddenToolTimelineEntry(
         entries.firstOrNull(SettingLibraryEntry::isHiddenToolTimelineEntry),
     )
+    val positionsWithMigratedHiddenTimelineDefault = promptPositions.map { position ->
+        if (
+            position.id == HiddenToolTimelinePromptPositionId &&
+            position.anchor == SettingLibraryPosition.InsertPoint4 &&
+            position.side == SettingLibraryPromptPositionSide.BeforeSettingPosition
+        ) {
+            hiddenToolTimelinePromptPosition().copy(
+                name = position.name,
+                createdAt = position.createdAt,
+                updatedAt = position.updatedAt,
+            )
+        } else {
+            position
+        }
+    }
     val positionsWithHiddenTimelineDefault = if (
         hiddenTimelineEntry.promptPositionId == HiddenToolTimelinePromptPositionId &&
-        promptPositions.none { it.id == HiddenToolTimelinePromptPositionId }
+        positionsWithMigratedHiddenTimelineDefault.none { it.id == HiddenToolTimelinePromptPositionId }
     ) {
-        promptPositions + hiddenToolTimelinePromptPosition().copy(order = 0)
+        positionsWithMigratedHiddenTimelineDefault + hiddenToolTimelinePromptPosition().copy(order = 0)
     } else {
-        promptPositions
+        positionsWithMigratedHiddenTimelineDefault
     }
     val normalizedPromptPositions = positionsWithHiddenTimelineDefault
         .distinctBy(SettingLibraryPromptPosition::id)

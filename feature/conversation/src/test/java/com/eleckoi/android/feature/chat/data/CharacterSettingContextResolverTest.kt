@@ -14,6 +14,8 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.S
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPromptPosition
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPromptPositionSide
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryTriggerMode
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.hiddenToolTimelinePromptPosition
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.settingLibraryHiddenToolTimelineEntry
 import com.eleckoi.android.feature.chat.model.ChatMessage
 import com.eleckoi.android.feature.chat.model.MessageRole
 import org.junit.Assert.assertEquals
@@ -98,7 +100,14 @@ class CharacterSettingContextResolverTest {
             resolved.map { it.role },
         )
         assertEquals(
-            List(positions.size) { AgentContextActivation.Immediate },
+            listOf(
+                AgentContextActivation.Immediate,
+                AgentContextActivation.FirstModelRequest,
+                AgentContextActivation.FirstModelRequest,
+                AgentContextActivation.FirstModelRequest,
+                AgentContextActivation.FirstModelRequest,
+                AgentContextActivation.FirstModelRequest,
+            ),
             resolved.map { it.activation },
         )
     }
@@ -368,6 +377,22 @@ class CharacterSettingContextResolverTest {
         assertEquals("custom-entry", resolved.single().id)
         assertEquals("设定 · 未命名设定", resolved.single().traceTitle)
         assertEquals("工具完成后的约束", resolved.single().traceSource)
+    }
+
+    @Test
+    fun `hidden tool timeline enters the request after insertion point five`() {
+        val position = hiddenToolTimelinePromptPosition()
+        val library = SettingLibrary(
+            characterId = "character",
+            promptPositions = listOf(position),
+            entries = listOf(settingLibraryHiddenToolTimelineEntry()),
+        )
+
+        val resolved = CharacterSettingContextResolver.resolve(library, emptyList())
+
+        assertEquals(AgentContextAnchor.AfterToolFlow, resolved.single().anchor)
+        assertEquals(AgentContextActivation.FirstModelRequest, resolved.single().activation)
+        assertEquals("隐藏工具时间线", resolved.single().traceSource)
     }
 
     @Test

@@ -51,6 +51,10 @@ internal fun DshTrajectoryDialog(
     var detailTab by rememberSaveable(runtimeThreadId) {
         mutableStateOf(DshTrajectoryDetailTab.Summary)
     }
+    // The mobile inspector replaces the ledger in the composition. Keep its scroll owner here so
+    // closing an event detail restores the exact row and pixel offset instead of treating the
+    // ledger as a fresh open and jumping to the latest event again.
+    val ledgerState = rememberDshTrajectoryLedgerState(runtimeThreadId)
     val scope = rememberCoroutineScope()
 
     suspend fun refresh() {
@@ -108,7 +112,7 @@ internal fun DshTrajectoryDialog(
     fun selectRequest(request: DshTrajectoryRequest) {
         selectedRecordId = ""
         selectedRequestSeq = request.seq
-        detailTab = DshTrajectoryDetailTab.Summary
+        detailTab = DshTrajectoryDetailTab.Context
     }
 
     Dialog(
@@ -165,7 +169,10 @@ internal fun DshTrajectoryDialog(
                             selectedRecordId = selectedRecordId,
                             actualDuration = actualDuration,
                             appearance = appearance,
-                            onSelect = ::selectRecord,
+                            onSelect = { record ->
+                                if (!wide) ledgerState.preserveViewportForInspector()
+                                selectRecord(record)
+                            },
                         )
                         HorizontalDivider(
                             thickness = 0.5.dp,
@@ -192,6 +199,8 @@ internal fun DshTrajectoryDialog(
                                     records.isNotEmpty() && displayedRecords.isEmpty() ->
                                         DshTrajectoryState("没有匹配的事件", appearance)
                                     else -> DshTrajectoryLedger(
+                                        state = ledgerState,
+                                        latestRecordId = displayedRecords.lastOrNull()?.id.orEmpty(),
                                         groups = turnGroups,
                                         collapsedTurns = collapsedTurns,
                                         selectedId = selection?.id().orEmpty(),
@@ -206,8 +215,14 @@ internal fun DshTrajectoryDialog(
                                                 collapsedTurns + key
                                             }
                                         },
-                                        onSelectRecord = ::selectRecord,
-                                        onSelectRequest = ::selectRequest,
+                                        onSelectRecord = { record ->
+                                            if (!wide) ledgerState.preserveViewportForInspector()
+                                            selectRecord(record)
+                                        },
+                                        onSelectRequest = { request ->
+                                            if (!wide) ledgerState.preserveViewportForInspector()
+                                            selectRequest(request)
+                                        },
                                         onLoadOlder = {
                                             val current = snapshot
                                             if (

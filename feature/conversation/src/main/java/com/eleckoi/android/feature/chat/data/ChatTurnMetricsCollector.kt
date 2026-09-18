@@ -108,6 +108,9 @@ internal class ChatTurnMetricsCollector {
                 modelContextWindow = event.modelContextWindow
                     ?: projectedContextWindow
                     ?: contextWindowUsage?.modelContextWindow,
+                systemTokens = contextWindowUsage?.systemTokens,
+                toolsTokens = contextWindowUsage?.toolsTokens,
+                messageTokens = contextWindowUsage?.messageTokens,
             )
             true
         }
@@ -124,6 +127,9 @@ internal class ChatTurnMetricsCollector {
                     totalTokens = existing?.totalTokens ?: 0L,
                     modelContextWindow = projectedContextWindow
                         ?: existing?.modelContextWindow,
+                    systemTokens = event.systemTokens ?: existing?.systemTokens,
+                    toolsTokens = event.toolsTokens ?: existing?.toolsTokens,
+                    messageTokens = event.messageTokens ?: existing?.messageTokens,
                 )
                 true
             }

@@ -10,13 +10,13 @@ import com.eleckoi.android.feature.chat.model.ChatDraft
 import com.eleckoi.android.feature.chat.model.ChatSession
 import com.eleckoi.android.feature.chat.model.ChatUserImageAttachment
 import com.eleckoi.android.feature.chat.model.MessageRole
-import com.eleckoi.android.foundation.storage.newId
 
 internal class ChatGenerationRunCoordinator(
     private val characterAgent: () -> CharacterAgentGenerationService,
     private val agentRuns: () -> AgentRunManager,
 ) {
     suspend fun sendMessage(
+        runId: String,
         draft: ChatDraft,
         message: String,
         inputImages: List<ChatUserImageAttachment>,
@@ -25,44 +25,49 @@ internal class ChatGenerationRunCoordinator(
     ): ChatSendResult {
         val generation = characterAgent()
         return agentRuns().run(
-            descriptor = draft.session.runDescriptor(detail = "正在生成角色回复"),
-            onStop = { generation.cancelActiveStream() },
+            descriptor = draft.session.runDescriptor(runId, detail = "正在生成角色回复"),
+            onStop = { generation.cancelStream(runId) },
         ) {
             running("正在生成角色回复")
-            val result = generation.sendMessage(draft, message, inputImages, onDelta, onUserTurnPersisted)
+            val result = generation.sendMessage(
+                runId,
+                draft,
+                message,
+                inputImages,
+                onDelta,
+                onUserTurnPersisted,
+            )
             completed(result.notificationSummary())
             result
         }
     }
 
     suspend fun runPreparedRegeneration(
+        runId: String,
         prepared: PreparedChatRegeneration,
         onDelta: (ChatDraft) -> Unit,
     ): ChatSendResult {
         val generation = characterAgent()
         return agentRuns().run(
-            descriptor = prepared.session.runDescriptor(detail = "正在重新生成角色回复"),
-            onStop = { generation.cancelActiveStream() },
+            descriptor = prepared.session.runDescriptor(runId, detail = "正在重新生成角色回复"),
+            onStop = { generation.cancelStream(runId) },
         ) {
             running("正在重新生成角色回复")
-            val result = generation.runPreparedRegeneration(prepared, onDelta)
+            val result = generation.runPreparedRegeneration(runId, prepared, onDelta)
             completed(result.notificationSummary())
             result
         }
     }
 
-    fun cancelActiveStream() {
+    fun cancelStream(runId: String): Boolean {
         val manager = agentRuns()
-        val active = manager.activeRun.value
-        if (active?.descriptor?.surface == AgentRunSurface.CharacterChat) {
-            manager.requestStop(active.descriptor.runId)
-        } else {
-            characterAgent().cancelActiveStream()
-        }
+        val active = manager.activeRun.value ?: return false
+        if (active.descriptor.surface != AgentRunSurface.CharacterChat) return false
+        return manager.requestStop(runId)
     }
 
-    private fun ChatSession.runDescriptor(detail: String): AgentRunDescriptor = AgentRunDescriptor(
-        runId = newId(16),
+    private fun ChatSession.runDescriptor(runId: String, detail: String): AgentRunDescriptor = AgentRunDescriptor(
+        runId = runId,
         surface = AgentRunSurface.CharacterChat,
         workspaceId = workspaceId,
         conversationId = id,

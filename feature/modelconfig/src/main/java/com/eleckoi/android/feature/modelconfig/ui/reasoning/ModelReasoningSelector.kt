@@ -17,6 +17,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.eleckoi.android.engine.generation.model.ModelConfig
+import com.eleckoi.android.engine.generation.model.ModelOption
+import com.eleckoi.android.engine.generation.reasoning.DshModelCapabilities
 import com.eleckoi.android.foundation.design.components.AppIconPaths
 import com.eleckoi.android.foundation.design.components.StrokeSvgIcon
 import com.eleckoi.android.foundation.design.components.noRippleClickable
@@ -26,13 +29,21 @@ import com.eleckoi.android.foundation.design.AppearanceTheme
 
 @Composable
 fun ModelReasoningSelector(
+    config: ModelConfig,
+    option: ModelOption,
     variants: List<DshReasoningEffortOption>,
-    selectedVariant: String?,
     appearance: AppearanceTheme,
-    onSelect: (String?) -> Unit,
+    onChange: (ModelOption) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val current = variants.firstOrNull { it.id == selectedVariant }
+    val usesCustomList = DshModelCapabilities.usesCustomReasoningList(config, option)
+    val availableVariants = if (usesCustomList) DshReasoningEfforts.allOptions else variants
+    val current = availableVariants.firstOrNull { it.id == option.reasoningEffort }
+    val defaultLabel = if (usesCustomList && option.reasoningEfforts == null) {
+        "未声明推理能力"
+    } else {
+        DshReasoningEfforts.label(null)
+    }
     Box(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
@@ -50,7 +61,7 @@ fun ModelReasoningSelector(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    current?.label ?: DshReasoningEfforts.label(null),
+                    current?.label ?: defaultLabel,
                     modifier = Modifier.weight(1f),
                     color = if (current == null) appearance.mobileSoft else appearance.mobileText,
                     fontSize = 15.sp,
@@ -67,21 +78,33 @@ fun ModelReasoningSelector(
             onDismissRequest = { expanded = false },
         ) {
             ReasoningVariantMenuItem(
-                label = DshReasoningEfforts.label(null),
-                selected = selectedVariant.isNullOrBlank() || current == null,
+                label = defaultLabel,
+                selected = option.reasoningEffort.isNullOrBlank() || current == null,
                 appearance = appearance,
             ) {
                 expanded = false
-                onSelect(null)
+                onChange(option.copy(reasoningEffort = null))
             }
-            variants.forEach { variant ->
+            availableVariants.forEach { variant ->
                 ReasoningVariantMenuItem(
                     label = variant.label,
                     selected = variant.id == current?.id,
                     appearance = appearance,
                 ) {
                     expanded = false
-                    onSelect(variant.id)
+                    onChange(
+                        option.copy(
+                            reasoningEffort = variant.id,
+                            reasoningEfforts = if (usesCustomList) {
+                                DshReasoningEfforts.withCustomReasoningEffort(
+                                    option.reasoningEfforts,
+                                    variant.id,
+                                )
+                            } else {
+                                option.reasoningEfforts
+                            },
+                        ),
+                    )
                 }
             }
         }

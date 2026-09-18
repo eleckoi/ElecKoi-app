@@ -92,6 +92,10 @@ class ChatSessionStore(
     /** Complete selected branch used for the next role-chat dialogue projection. */
     fun activeMessages(sessionId: String): List<ChatMessage> = room.activeMessages(sessionId)
 
+    /** Stable active-branch ownership used by regeneration; never infer turns from list adjacency. */
+    fun owningUserMessageId(sessionId: String, messageId: String): String? =
+        ledger.owningUserMessageId(sessionId, messageId)
+
     fun latest(character: CharacterSlot): ChatSession? = dao.latestSession(character.id)
         ?.let(room::sessionFromEntity)
         ?.let(::refreshCharacterPersona)
@@ -143,9 +147,9 @@ class ChatSessionStore(
                 message = message.copy(imageAttachments = recoveredImages)
             }
             if (message == original) return@mapIndexedNotNull null
-            val user = messages.subList(0, index).lastOrNull { it.role == MessageRole.User }
+            val userMessageId = ledger.owningUserMessageId(sessionId, message.id)
                 ?: return@mapIndexedNotNull null
-            user.id to message
+            userMessageId to message
         }
         if (settled.isEmpty()) return false
         database.runInTransaction {
@@ -332,16 +336,16 @@ class ChatSessionStore(
     ): Boolean = images.settleAttempt(sessionId, messageId, completed)
 
     /** Best-effort crash checkpoint. It persists the pending response without publishing UI data. */
-    fun checkpointAssistantResponse(session: ChatSession) {
+    fun checkpointAssistantResponse(session: ChatSession, userMessageId: String) {
         val response = session.messages.lastOrNull()
             ?.takeIf { it.role == MessageRole.Assistant && it.pending }
             ?: return
-        val user = checkpointOwnerUserMessage(session.messages) ?: return
+        if (session.messages.none { it.id == userMessageId && it.role == MessageRole.User }) return
         database.runInTransaction {
             ledger.upsertResponseInTransaction(
                 conversationId = session.id,
                 updatedAt = session.updatedAt,
-                turnSourceMessageId = user.id,
+                turnSourceMessageId = userMessageId,
                 response = response.toLedgerMessage(session),
                 rebuildDisplayCache = false,
             )
@@ -361,12 +365,12 @@ class ChatSessionStore(
         if (index < 0) throw ElecKoiDataException("要更新的消息不存在")
         database.runInTransaction {
             if (message.role == MessageRole.Assistant && index > 0) {
-                val user = all.subList(0, index).lastOrNull { it.role == MessageRole.User }
+                val userMessageId = ledger.owningUserMessageId(session.id, message.id)
                     ?: throw ElecKoiDataException("AI 回复没有对应的用户回合")
                 ledger.upsertResponseInTransaction(
                     conversationId = session.id,
                     updatedAt = session.updatedAt,
-                    turnSourceMessageId = user.id,
+                    turnSourceMessageId = userMessageId,
                     response = message.toLedgerMessage(session),
                 )
             } else {

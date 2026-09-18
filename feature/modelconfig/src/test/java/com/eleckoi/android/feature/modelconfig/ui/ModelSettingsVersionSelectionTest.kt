@@ -12,6 +12,18 @@ import org.junit.Test
 
 class ModelSettingsVersionSelectionTest {
     @Test
+    fun `DeepSeek interface picker exposes all three DSH supported protocols`() {
+        assertEquals(
+            listOf(
+                ModelApiFormat.ChatCompletions,
+                ModelApiFormat.Responses,
+                ModelApiFormat.AnthropicMessages,
+            ),
+            apiFormatsForProvider("deepseek"),
+        )
+    }
+
+    @Test
     fun `Room refresh keeps the version selected inside the editor`() {
         val original = config(id = "config-123", name = "123")
         val selected = config(id = "config-deepseek", name = "DeepSeek", model = "deepseek-v4-flash")

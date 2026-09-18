@@ -74,6 +74,7 @@ data class ChatUiState(
 data class ChatGenerationPresentation(
     val generation: Int,
     val sessionId: String,
+    val runId: String = "",
     val assistantMessageId: String? = null,
 )
 

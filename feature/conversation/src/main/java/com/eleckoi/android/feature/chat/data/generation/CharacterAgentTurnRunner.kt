@@ -54,7 +54,9 @@ internal class CharacterAgentTurnRunner(
     private val activeSession: AtomicReference<AgentSession?>,
 ) {
     suspend fun run(
+        runId: String,
         session: ChatSession,
+        userMessageId: String,
         prompt: AgentPrompt,
         config: ModelConfig,
         replacementMessageId: String?,
@@ -62,7 +64,12 @@ internal class CharacterAgentTurnRunner(
         onDelta: (ChatDraft) -> Unit,
     ): ChatSendResult = coroutineScope {
         val turnScope = this
-        val lease = generations.begin(session.id)
+        require(
+            session.messages.any { message ->
+                message.id == userMessageId && message.role == MessageRole.User
+            },
+        ) { "AI 回复没有对应的用户回合" }
+        val lease = generations.begin(session.id, runId)
         val draftProjection = CharacterAgentTurnDraftProjection(
             initialSession = session,
             config = config,
@@ -71,7 +78,7 @@ internal class CharacterAgentTurnRunner(
         val checkpointWriter = CharacterGenerationCheckpointWriter<CharacterAgentTurnSnapshot>(
             scope = this,
             persist = { snapshot ->
-                sessions.checkpointAssistantResponse(snapshot.materialize())
+                sessions.checkpointAssistantResponse(snapshot.materialize(), userMessageId)
             },
         )
         val pending = pendingAssistantMessage(
@@ -107,13 +114,9 @@ internal class CharacterAgentTurnRunner(
 
         val turnResults = Channel<AgentSessionEvent.TurnCompleted>(Channel.UNLIMITED)
         val terminalFailure = CompletableDeferred<Throwable>()
-        val replyOwnerMessageId = session.messages.asReversed()
-            .firstOrNull { it.role == MessageRole.User }
-            ?.id
-            ?: throw ElecKoiDataException("AI 回复没有对应的用户回合")
         val replyAttempt = generationAttempts.beginReply(
             conversationId = session.id,
-            userMessageId = replyOwnerMessageId,
+            userMessageId = userMessageId,
             outputMessageId = pending.id,
         )
         val imageActions = RoleplayImageActionController(
@@ -270,6 +273,7 @@ internal class CharacterAgentTurnRunner(
             turnCommitter.commitActive(
                 lease = lease,
                 session = finished,
+                userMessageId = userMessageId,
                 terminalAttemptId = replyAttempt.id,
                 terminalAttemptState = GenerationAttemptState.Succeeded,
             )
@@ -291,7 +295,7 @@ internal class CharacterAgentTurnRunner(
                     messages = finished.messages.dropLast(1) + committedAssistant,
                     updatedAt = nowIso(),
                 )
-                turnCommitter.commitActive(lease, finished)
+                turnCommitter.commitActive(lease, finished, userMessageId)
                 finalDraft = draftProjection.project(finished)
                 emitDelta(lease, onDelta, finalDraft)
             }
@@ -325,6 +329,7 @@ internal class CharacterAgentTurnRunner(
                 val committed = generations.commitIfOwned(lease) {
                     turnCommitter.persistCompletedTail(
                         session = stopped,
+                        userMessageId = userMessageId,
                         terminalAttemptId = replyAttempt.id,
                         terminalAttemptState = if (cancelled) {
                             GenerationAttemptState.Cancelled

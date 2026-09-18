@@ -170,6 +170,9 @@ data class ChatContextWindowUsage(
     val latestTokens: Long,
     val totalTokens: Long,
     val modelContextWindow: Long? = null,
+    val systemTokens: Long? = null,
+    val toolsTokens: Long? = null,
+    val messageTokens: Long? = null,
 )
 
 /** DSH session-level execution projection, independent from the paged message window. */

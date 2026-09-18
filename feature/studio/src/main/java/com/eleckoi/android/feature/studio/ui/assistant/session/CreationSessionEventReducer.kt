@@ -116,6 +116,9 @@ internal class CreationSessionEventReducer {
                 totalTokens = event.total.totalTokens.coerceAtLeast(0L),
                 modelContextWindow = event.modelContextWindow
                     ?: state.contextWindowUsage?.modelContextWindow,
+                systemTokens = state.contextWindowUsage?.systemTokens,
+                toolsTokens = state.contextWindowUsage?.toolsTokens,
+                messageTokens = state.contextWindowUsage?.messageTokens,
             ),
         )
         is AgentSessionEvent.ContextWindowUpdated -> {
@@ -131,6 +134,12 @@ internal class CreationSessionEventReducer {
                         totalTokens = state.contextWindowUsage?.totalTokens ?: 0L,
                         modelContextWindow = event.modelContextWindow
                             ?: state.contextWindowUsage?.modelContextWindow,
+                        systemTokens = event.systemTokens
+                            ?: state.contextWindowUsage?.systemTokens,
+                        toolsTokens = event.toolsTokens
+                            ?: state.contextWindowUsage?.toolsTokens,
+                        messageTokens = event.messageTokens
+                            ?: state.contextWindowUsage?.messageTokens,
                     ),
                 )
             }

@@ -1,7 +1,6 @@
 package com.eleckoi.android.feature.chat.data
 
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -11,14 +10,14 @@ import java.util.concurrent.atomic.AtomicReference
  * cancelled state observed by an older blocked HTTP connection.
  */
 internal class GenerationLeaseRegistry {
-    private val sequence = AtomicLong(0L)
     private val active = AtomicReference<Lease?>(null)
     private val mutationLock = Any()
 
-    fun begin(sessionId: String): Lease {
+    fun begin(sessionId: String, runId: String): Lease {
+        require(runId.isNotBlank()) { "Generation run id cannot be blank" }
         return synchronized(mutationLock) {
             val next = Lease(
-                id = sequence.incrementAndGet(),
+                id = runId,
                 sessionId = sessionId,
             )
             active.getAndSet(next)?.cancel()
@@ -26,9 +25,11 @@ internal class GenerationLeaseRegistry {
         }
     }
 
-    fun cancelActive() {
-        synchronized(mutationLock) {
-            active.get()?.cancel()
+    fun cancel(runId: String): Boolean {
+        return synchronized(mutationLock) {
+            val current = active.get()?.takeIf { it.id == runId } ?: return@synchronized false
+            current.cancel()
+            true
         }
     }
 
@@ -75,7 +76,7 @@ internal class GenerationLeaseRegistry {
     }
 
     internal class Lease internal constructor(
-        val id: Long,
+        val id: String,
         val sessionId: String,
     ) {
         internal val cancelled = AtomicBoolean(false)

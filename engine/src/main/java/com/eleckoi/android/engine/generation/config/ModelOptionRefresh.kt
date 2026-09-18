@@ -18,6 +18,11 @@ internal fun mergeFetchedModelOptions(config: ModelConfig, fetched: List<ModelOp
             temperature = if (previous != null) previous.temperature else option.temperature,
             topP = if (previous != null) previous.topP else option.topP,
             reasoningEffort = previous?.reasoningEffort,
+            reasoningEfforts = previous?.reasoningEfforts ?: option.reasoningEfforts,
+            dshReasoningEffortIds = previous?.dshReasoningEffortIds
+                ?: option.dshReasoningEffortIds,
+            reasoningThinkingFormat = previous?.reasoningThinkingFormat
+                ?: option.reasoningThinkingFormat,
             apiFormatOverride = previous?.apiFormatOverride,
             supportsImageInput = previous?.supportsImageInput == true ||
                 (config.isOfficialDeepSeekEndpoint() &&

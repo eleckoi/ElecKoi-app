@@ -1,7 +1,5 @@
 package com.eleckoi.android.engine.generation.model
 
-import java.net.URI
-
 const val NovelAiImageProviderId: String = "novelai_image"
 const val NovelAiDefaultBaseUrl: String = "https://image.novelai.net"
 const val NovelAiDefaultModel: String = "nai-diffusion-4-5-full"
@@ -98,7 +96,8 @@ enum class ModelApiFormat(val storageValue: String) {
 fun defaultApiFormatForProvider(providerId: String): ModelApiFormat = when (
     providerId.trim().lowercase()
 ) {
-    "custom", "deepseek" -> ModelApiFormat.Responses
+    "custom" -> ModelApiFormat.Responses
+    "deepseek" -> ModelApiFormat.ChatCompletions
     else -> ModelApiFormat.ChatCompletions
 }
 
@@ -173,20 +172,14 @@ fun ModelConfig.configuredTopP(): Double? = modelOptions
     ?.topP
     ?.takeIf { it in ModelOption.MinTopP..ModelOption.MaxTopP }
 
-/** DeepSeek's official preview vision route is provider-declared rather than user-asserted. */
+/** Exact image-capable models declared by the pinned DSH DeepSeek catalog. */
 fun ModelConfig.isOfficialDeepSeekVisionModel(): Boolean =
-    model.trim().equals(DeepSeekOfficialVisionModel, ignoreCase = true) &&
+    model.trim().lowercase() in DeepSeekOfficialImageModels &&
         isOfficialDeepSeekEndpoint()
 
-/** True only for DeepSeek's first-party API, never for an arbitrary relay using its provider id. */
-fun ModelConfig.isOfficialDeepSeekEndpoint(): Boolean {
-    val normalizedProvider = provider.trim().lowercase()
-    val configuredBaseUrl = baseUrl.trim()
-    if (normalizedProvider == "deepseek" && configuredBaseUrl.isBlank()) return true
-    if (normalizedProvider !in setOf("deepseek", "custom")) return false
-    return runCatching { URI(configuredBaseUrl).host?.lowercase() }
-        .getOrNull() == DeepSeekOfficialApiHost
-}
+/** Product-route identity for the official DSH adapter; endpoint text never promotes a custom route. */
+fun ModelConfig.isOfficialDeepSeekEndpoint(): Boolean =
+    provider.trim().equals("deepseek", ignoreCase = true)
 
 /** Explicit custom declaration, with the official DeepSeek vision model enabled automatically. */
 fun ModelConfig.supportsImageInput(): Boolean =
@@ -197,7 +190,7 @@ fun ModelConfig.supportsImageInput(): Boolean =
  * default model is still active.
  */
 fun ModelConfig.supportsImageInput(selectedModel: String): Boolean =
-    (selectedModel.trim().equals(DeepSeekOfficialVisionModel, ignoreCase = true) &&
+    (selectedModel.trim().lowercase() in DeepSeekOfficialImageModels &&
         isOfficialDeepSeekEndpoint()) ||
         (modelOptions
             .firstOrNull { it.id == selectedModel.trim() }
@@ -226,22 +219,12 @@ fun ModelConfig.configuredAutoCompactTokenLimit(): Int? {
 }
 
 /** The selected model may override the connection-wide wire format. */
-fun ModelConfig.effectiveApiFormat(): ModelApiFormat = modelOptions
-    .firstOrNull { it.id == model.trim() }
-    ?.apiFormatOverride
-    ?: apiFormat
-
-fun ModelConfig.usesDeepSeekThinkingContract(): Boolean =
-    provider.contains("deepseek", ignoreCase = true) ||
-        model.contains("deepseek", ignoreCase = true) ||
-        baseUrl.contains("api.deepseek.com", ignoreCase = true)
-
-/** Chat-compatible providers that expose an explicit `thinking.type` switch. */
-fun ModelConfig.usesChatThinkingToggleContract(): Boolean =
-    usesDeepSeekThinkingContract() ||
-        provider.contains("minimax", ignoreCase = true) ||
-        model.contains("minimax", ignoreCase = true) ||
-        baseUrl.contains("api.minimax", ignoreCase = true)
+fun ModelConfig.effectiveApiFormat(): ModelApiFormat {
+    return modelOptions
+        .firstOrNull { it.id == model.trim() }
+        ?.apiFormatOverride
+        ?: apiFormat
+}
 
 fun ModelConfig.withProviderDefaults(): ModelConfig {
     val imageProvider = imageGenerationProvider() ?: return this
@@ -266,6 +249,16 @@ data class ModelOption(
     val topP: Double? = null,
     /** Selected DSH reasoning effort id. Null preserves the provider/model default. */
     val reasoningEffort: String? = null,
+    /**
+     * DSH/pi-ai model capability declaration. Null inherits an installed catalog entry, an empty
+     * map is `reasoningEfforts: false`, and a non-empty map declares selectable ids and their wire
+     * spellings. Only `off` may use a null spelling.
+     */
+    val reasoningEfforts: Map<String, String?>? = null,
+    /** Last adapter-owned effort ids returned by DSH; display cache only, never sent as config. */
+    val dshReasoningEffortIds: List<String>? = null,
+    /** Explicit pi-ai Chat Completions thinking dialect; null keeps catalog/protocol defaults. */
+    val reasoningThinkingFormat: String? = null,
     /** Null follows the connection format; non-null overrides it for this model only. */
     val apiFormatOverride: ModelApiFormat? = null,
     /** User assertion that this exact endpoint/model accepts image input. */
@@ -291,4 +284,7 @@ data class ModelOption(
 
 const val DeepSeekOfficialVisionModel: String = "deepseek-v4-flash-vision-exp"
 const val DeepSeekOfficialContextWindowTokens: Int = 1_000_000
-private const val DeepSeekOfficialApiHost: String = "api.deepseek.com"
+val DeepSeekOfficialImageModels: Set<String> = setOf(
+    "deepseek-flash",
+    DeepSeekOfficialVisionModel,
+)

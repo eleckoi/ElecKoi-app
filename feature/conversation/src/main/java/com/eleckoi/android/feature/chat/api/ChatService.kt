@@ -43,7 +43,7 @@ interface ChatService {
         permissionMode: AgentPermissionMode,
     ): ChatDraft
     fun saveModelConfig(config: ModelConfig): ModelConfig
-    fun refreshModelsForChat(config: ModelConfig): ModelConfig
+    suspend fun refreshModelsForChat(config: ModelConfig): ModelConfig
     fun saveCharacterImagePrompt(characterId: String, prompt: String): CharacterSlot
     suspend fun deleteChat(sessionId: String)
     fun exportChatHistory(characterId: String, sessionIds: List<String>): String
@@ -54,6 +54,7 @@ interface ChatService {
     suspend fun prepareEncodedInputImages(images: List<ChatEncodedImageInput>): List<ChatUserImageAttachment>
     fun discardInputImage(image: ChatUserImageAttachment)
     suspend fun sendMessage(
+        runId: String,
         draft: ChatDraft,
         message: String,
         inputImages: List<ChatUserImageAttachment> = emptyList(),
@@ -70,6 +71,7 @@ interface ChatService {
         pendingMessageId: String,
     ): PreparedChatRegeneration
     suspend fun runPreparedRegeneration(
+        runId: String,
         prepared: PreparedChatRegeneration,
         onDelta: (ChatDraft) -> Unit,
     ): ChatSendResult
@@ -82,7 +84,7 @@ interface ChatService {
     suspend fun replaceChatVariableState(sessionId: String, stateJson: String): ChatDraft
     suspend fun resetChatVariableState(sessionId: String): ChatDraft
     suspend fun selectChatOpening(sessionId: String, openingOptionId: String): ChatDraft
-    fun cancelActiveStream()
+    fun cancelStream(runId: String): Boolean
     suspend fun setHistorySaveMode(mode: String): UiPreferences
     fun saveCharacterChatBackground(
         characterId: String,

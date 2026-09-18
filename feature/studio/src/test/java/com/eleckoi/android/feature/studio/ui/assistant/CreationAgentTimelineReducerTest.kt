@@ -612,6 +612,34 @@ class CreationAgentTimelineReducerTest {
     }
 
     @Test
+    fun `completed reasoning snapshot replaces streamed fragments without duplication`() {
+        val streamed = CreationAgentTimelineReducer.apply(
+            timeline = emptyList(),
+            event = AgentSessionEvent.ReasoningTextDelta(
+                threadId = "thread",
+                turnId = "turn",
+                itemId = "reasoning",
+                contentIndex = 0,
+                delta = "partial ",
+            ),
+        )
+        val completed = CreationAgentTimelineReducer.apply(
+            timeline = streamed,
+            event = AgentSessionEvent.ReasoningTextDelta(
+                threadId = "thread",
+                turnId = "turn",
+                itemId = "reasoning",
+                contentIndex = 0,
+                delta = "partial complete",
+                completeSnapshot = true,
+            ),
+        )
+
+        assertEquals(1, completed.size)
+        assertEquals("partial complete", completed.single().detail)
+    }
+
+    @Test
     fun `mcp progress stays on tool item and completed result is retained`() {
         val started = CreationAgentTimelineReducer.apply(
             timeline = emptyList(),

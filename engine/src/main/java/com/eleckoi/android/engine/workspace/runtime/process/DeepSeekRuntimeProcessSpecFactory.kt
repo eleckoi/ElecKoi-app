@@ -19,7 +19,7 @@ internal class DeepSeekRuntimeProcessSpecFactory(
         activeRuntime: ActiveRuntimePaths,
         workspace: File,
         deepSeekHome: File,
-        harnessConfig: File? = null,
+        harnessPatches: List<File> = emptyList(),
         launchSpec: DeepSeekRuntimeLaunchSpec,
         hostResolverConfig: File,
         sessionHome: File,
@@ -29,19 +29,21 @@ internal class DeepSeekRuntimeProcessSpecFactory(
     ): ProcessLaunchSpec {
         require(CommandId.matches(commandId)) { "运行命令编号无效" }
         require(launchSpec.providerBaseUrl.matches(LoopbackUrl)) { "DeepSeek Provider 地址不是安全的本机路由" }
+        require(launchSpec.modelContextWindow > 0) { "模型上下文窗口必须为正数" }
         val hostToolsUrl = launchSpec.providerBaseUrl
             .removeSuffix("/")
             .removeSuffix("/v1") + "/host-tools"
         require(launchSpec.model.isNotBlank() && launchSpec.model.length <= MaxModelChars && '\u0000' !in launchSpec.model) {
             "DeepSeek 模型名无效"
         }
-        require(launchSpec.systemPrompt.length <= MaxSystemPromptChars && '\u0000' !in launchSpec.systemPrompt) {
-            "DeepSeek 系统提示词过长或包含非法字符"
-        }
         require(
-            launchSpec.hostToolCatalogJson.length <= MaxHostToolCatalogChars &&
-                '\u0000' !in launchSpec.hostToolCatalogJson,
-        ) { "DeepSeek Android 工具目录过大或包含非法字符" }
+            launchSpec.deepSeekModelsJson.length <= MaxDeepSeekModelsJsonChars &&
+                '\u0000' !in launchSpec.deepSeekModelsJson,
+        ) { "DeepSeek 官方模型目录过大或包含非法字符" }
+        require(
+            launchSpec.piAiProvidersJson.length <= MaxPiAiProvidersJsonChars &&
+                '\u0000' !in launchSpec.piAiProvidersJson,
+        ) { "DSH pi-ai Provider 目录过大或包含非法字符" }
 
         val rootfs = requireDirectory(activeRuntime.rootfs, "Ubuntu rootfs 不存在")
         require(RuntimeGuestLayout.isPrepared(rootfs)) { "Ubuntu rootfs 缺少安全的挂载目标" }
@@ -51,7 +53,9 @@ internal class DeepSeekRuntimeProcessSpecFactory(
             activeRuntime.requireHarnessConfig(HarnessId),
             "DeepSeek Harness 配置不存在",
         )
-        val config = requireFile(harnessConfig ?: packagedConfig, "DeepSeek Harness 启动配置不存在")
+        val patchFiles = (harnessPatches.ifEmpty { listOf(packagedConfig) }).map { patch ->
+            requireFile(patch, "DeepSeek Harness 启动配置不存在")
+        }
         val ripgrep = requireFile(File(tools, RipgrepRelativePath), "DeepSeek Harness ripgrep 不存在")
         val landlock = requireFile(File(tools, LandlockRelativePath), "DeepSeek Harness Landlock launcher 不存在")
         require(entrypoint.toPath().startsWith(tools.toPath()) && packagedConfig.toPath().startsWith(tools.toPath())) {
@@ -68,14 +72,16 @@ internal class DeepSeekRuntimeProcessSpecFactory(
 
         val project = requireDirectory(workspace, "工作区不存在")
         val state = requireDirectory(deepSeekHome, "DeepSeek 状态目录不存在")
-        val guestConfig = guestPath(
-            file = config,
-            roots = listOf(
-                tools to GuestTools,
-                state to GuestDeepSeekHome,
-            ),
-            message = "DeepSeek Harness 启动配置路径越界",
-        )
+        val guestPatches = patchFiles.map { patch ->
+            guestPath(
+                file = patch,
+                roots = listOf(
+                    tools to GuestTools,
+                    state to GuestDeepSeekHome,
+                ),
+                message = "DeepSeek Harness 启动配置路径越界",
+            )
+        }
         val home = requireDirectory(sessionHome, "运行会话 HOME 目录不存在")
         val guestTemp = requireDirectory(sessionGuestTemp, "运行会话临时目录不存在")
         val prootTemp = requireDirectory(sessionProotTemp, "PROot 临时目录不存在")
@@ -128,21 +134,26 @@ internal class DeepSeekRuntimeProcessSpecFactory(
             add("DSH_CWD=$GuestWorkspace")
             add("DSH_HOME=$GuestDeepSeekHome")
             add("DSH_SESSION_ROOT=$GuestDeepSeekHome/sessions")
-            add("DSH_CORDIS_CONFIG=$guestConfig")
+            add("DSH_TELEMETRY_DISABLED=1")
             add("DSH_RIPGREP_PATH=$GuestTools/$RipgrepRelativePath")
             add("DSH_LANDLOCK_PATH=${RuntimeGuestLayout.LandlockLauncherGuestPath}")
-            add("DSH_SYSTEM_PROMPT=${launchSpec.systemPrompt}")
             add("ELECKOI_PROVIDER_BASE_URL=${launchSpec.providerBaseUrl}")
             add("ELECKOI_HOST_TOOLS_URL=$hostToolsUrl")
-            add("ELECKOI_HOST_TOOL_CATALOG=${launchSpec.hostToolCatalogJson}")
+            add("ELECKOI_SESSION_SNAPSHOT_ROOT=$GuestDeepSeekHome/eleckoi/session-snapshots")
+            add("ELECKOI_REQUEST_CONTEXT_ROOT=$GuestDeepSeekHome/eleckoi/request-context")
             add("ELECKOI_PROVIDER_KEY=$InertLoopbackCredential")
             add("ELECKOI_MODEL=${launchSpec.model}")
-            add("ELECKOI_CONTEXT_WINDOW=${launchSpec.modelContextWindow ?: DefaultContextWindow}")
+            add("ELECKOI_CONTEXT_WINDOW=${launchSpec.modelContextWindow}")
             add("ELECKOI_ENABLE_WORKSPACE_TOOLS=${launchSpec.workspaceToolsEnabled}")
             add("ELECKOI_ENABLE_WORKFLOW_TOOLS=${launchSpec.workflowToolsEnabled}")
             add("ELECKOI_ENABLE_COLLABORATION_TOOLS=${launchSpec.collaborationToolsEnabled}")
             add("$GuestTools/$entrypointRelative")
-            add(guestConfig)
+            add("--profile")
+            add(DshProfile)
+            guestPatches.forEach { patch ->
+                add("--patch")
+                add(patch)
+            }
         }
         return ProcessLaunchSpec(
             commandId = commandId,
@@ -209,6 +220,7 @@ internal class DeepSeekRuntimeProcessSpecFactory(
 
     private companion object {
         const val HarnessId = "deepseek"
+        const val DshProfile = "sdk"
         const val RipgrepRelativePath = "bin/rg"
         const val LandlockRelativePath = "bin/landlock-run"
         const val GuestProc = "/proc"
@@ -220,10 +232,9 @@ internal class DeepSeekRuntimeProcessSpecFactory(
         const val GuestTemp = "/tmp"
         const val GuestVarTemp = "/var/tmp"
         const val InertLoopbackCredential = "eleckoi-local-route"
-        const val DefaultContextWindow = 262_144
         const val MaxModelChars = 512
-        const val MaxSystemPromptChars = 128 * 1024
-        const val MaxHostToolCatalogChars = 512 * 1024
+        const val MaxDeepSeekModelsJsonChars = 512 * 1024
+        const val MaxPiAiProvidersJsonChars = 1024 * 1024
         const val MaxResolverConfigBytes = 64L * 1024L
         const val MaxProtocolOutputBytes = 256L * 1024L * 1024L
         val CommandId = Regex("^[A-Za-z0-9_-]{1,100}$")

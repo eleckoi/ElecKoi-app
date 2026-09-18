@@ -87,6 +87,9 @@ private data class ModelOptionJson(
     val temperature: Double? = null,
     val topP: Double? = null,
     val reasoningEffort: String? = null,
+    val reasoningEfforts: Map<String, String?>? = null,
+    val dshReasoningEffortIds: List<String>? = null,
+    val reasoningThinkingFormat: String? = null,
     val apiFormat: String? = null,
     val supportsImageInput: Boolean = false,
 )
@@ -185,6 +188,20 @@ internal fun optionsFromJson(value: String): List<ModelOption> {
                     temperature = item.temperature,
                     topP = item.topP,
                     reasoningEffort = item.reasoningEffort?.trim()?.lowercase()?.takeIf(String::isNotBlank),
+                    reasoningEfforts = item.reasoningEfforts?.mapNotNull { (level, wireValue) ->
+                        val normalizedLevel = level.trim().lowercase()
+                        normalizedLevel.takeIf(String::isNotBlank)?.let {
+                            it to wireValue?.trim()
+                        }
+                    }?.toMap(),
+                    dshReasoningEffortIds = item.dshReasoningEffortIds
+                        ?.map { it.trim().lowercase() }
+                        ?.filter(String::isNotBlank)
+                        ?.distinct(),
+                    reasoningThinkingFormat = item.reasoningThinkingFormat
+                        ?.trim()
+                        ?.lowercase()
+                        ?.takeIf(String::isNotBlank),
                     apiFormatOverride = item.apiFormat
                         ?.trim()
                         ?.takeIf(String::isNotEmpty)
@@ -239,6 +256,9 @@ internal fun List<ModelOption>.toModelOptionsJson(): String {
                 temperature = option.temperature,
                 topP = option.topP,
                 reasoningEffort = option.reasoningEffort,
+                reasoningEfforts = option.reasoningEfforts,
+                dshReasoningEffortIds = option.dshReasoningEffortIds,
+                reasoningThinkingFormat = option.reasoningThinkingFormat,
                 apiFormat = option.apiFormatOverride?.storageValue,
                 supportsImageInput = option.supportsImageInput,
             )

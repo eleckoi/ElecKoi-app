@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "id": "eleckoi-agent-session-bridge",
+  "version": "1.0.0",
+  "cordisConfig": "cordis.yml",
+  "files": [
+    "cordis.yml",
+    "agent-session-bridge.mjs",
+    "request-projection.mjs",
+    "request-context.mjs"
+  ]
+}

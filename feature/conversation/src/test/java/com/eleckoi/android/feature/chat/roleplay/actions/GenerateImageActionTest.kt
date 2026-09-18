@@ -27,7 +27,7 @@ class GenerateImageActionTest {
         assertEquals(GenerateImageActionContextId, injection.id)
         assertEquals(AgentContextAnchor.ToolContext, injection.anchor)
         assertEquals(AgentContextRole.System, injection.role)
-        assertEquals(AgentContextActivation.Immediate, injection.activation)
+        assertEquals(AgentContextActivation.FirstModelRequest, injection.activation)
         assertEquals(4_001, injection.order)
         val action = instructions.indexOf("<ACTION_CALL name=\"generate_image\">")
         val actionClose = instructions.indexOf("</ACTION_CALL>", startIndex = action)

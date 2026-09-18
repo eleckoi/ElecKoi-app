@@ -8,10 +8,10 @@ class GenerationLeaseRegistryTest {
     @Test
     fun cancelledLeaseCannotBeRevivedByStartingAnotherGeneration() {
         val registry = GenerationLeaseRegistry()
-        val first = registry.begin("session")
+        val first = registry.begin("session", "run-1")
 
-        registry.cancelActive()
-        val second = registry.begin("session")
+        registry.cancel("run-1")
+        val second = registry.begin("session", "run-2")
 
         assertTrue(registry.isCancelled(first))
         assertFalse(registry.isCurrent(first))
@@ -22,8 +22,8 @@ class GenerationLeaseRegistryTest {
     @Test
     fun finishingStaleLeaseCannotClearNewGeneration() {
         val registry = GenerationLeaseRegistry()
-        val first = registry.begin("session")
-        val second = registry.begin("session")
+        val first = registry.begin("session", "run-1")
+        val second = registry.begin("session", "run-2")
 
         registry.finish(first)
 
@@ -34,8 +34,8 @@ class GenerationLeaseRegistryTest {
     @Test
     fun staleLeaseCannotCommitAfterNewGenerationStarts() {
         val registry = GenerationLeaseRegistry()
-        val first = registry.begin("session")
-        registry.begin("session")
+        val first = registry.begin("session", "run-1")
+        registry.begin("session", "run-2")
         var committed = false
 
         val accepted = registry.commitIfOwned(first) { committed = true }
@@ -47,8 +47,8 @@ class GenerationLeaseRegistryTest {
     @Test
     fun cancelledLeaseCanOnlyCommitItsStoppedSnapshotWhileStillOwned() {
         val registry = GenerationLeaseRegistry()
-        val lease = registry.begin("session")
-        registry.cancelActive()
+        val lease = registry.begin("session", "run-1")
+        registry.cancel("run-1")
 
         assertFalse(registry.commitIfActive(lease) {})
         assertTrue(registry.commitIfOwned(lease) {})
@@ -57,11 +57,11 @@ class GenerationLeaseRegistryTest {
     @Test
     fun cancellingLeaseImmediatelyClosesItsRegisteredTransport() {
         val registry = GenerationLeaseRegistry()
-        val lease = registry.begin("session")
+        val lease = registry.begin("session", "run-1")
         var disconnected = false
         lease.invokeOnCancel { disconnected = true }
 
-        registry.cancelActive()
+        registry.cancel("run-1")
 
         assertTrue(disconnected)
     }
@@ -69,15 +69,27 @@ class GenerationLeaseRegistryTest {
     @Test
     fun orphanRecoveryCannotRunWhileTheSessionHasALiveLease() {
         val registry = GenerationLeaseRegistry()
-        registry.begin("session")
+        registry.begin("session", "run-1")
         var recovered = false
 
         assertFalse(registry.runIfSessionInactive("session") { recovered = true })
         assertFalse(recovered)
 
-        registry.cancelActive()
+        registry.cancel("run-1")
 
         assertTrue(registry.runIfSessionInactive("session") { recovered = true })
         assertTrue(recovered)
+    }
+
+    @Test
+    fun lateStopForOldRunCannotCancelReplacementRun() {
+        val registry = GenerationLeaseRegistry()
+        val first = registry.begin("session", "run-1")
+        val second = registry.begin("session", "run-2")
+
+        assertFalse(registry.cancel("run-1"))
+        assertTrue(registry.isCancelled(first))
+        assertFalse(registry.isCancelled(second))
+        assertTrue(registry.isCurrent(second))
     }
 }

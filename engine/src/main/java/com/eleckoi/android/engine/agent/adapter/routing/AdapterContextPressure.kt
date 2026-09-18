@@ -7,4 +7,7 @@ internal data class AdapterContextPressure(
     val pressureTokens: Long?,
     val projectedTokens: Long?,
     val contextWindow: Long?,
+    val systemTokens: Long?,
+    val toolsTokens: Long?,
+    val messageTokens: Long?,
 )

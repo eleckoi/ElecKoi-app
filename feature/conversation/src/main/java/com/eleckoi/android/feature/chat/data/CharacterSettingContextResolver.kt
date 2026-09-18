@@ -60,7 +60,7 @@ internal object CharacterSettingContextResolver {
                     id = entry.id.take(MaxIdLength),
                     anchor = runtimePosition.toAgentAnchor(),
                     role = entry.insertRole.toAgentRole(runtimePosition),
-                    activation = AgentContextActivation.Immediate,
+                    activation = runtimePosition.toAgentActivation(),
                     content = if (imageActionEnabled && entry.isHiddenToolTimelineEntry()) {
                         augmentRoleplayOutputProtocolForImage(entry.content)
                     } else {
@@ -220,6 +220,16 @@ internal object CharacterSettingContextResolver {
         SettingLibraryPosition.InsertPoint3 -> AgentContextAnchor.BeforeLatestUserInput
         SettingLibraryPosition.InsertPoint4 -> AgentContextAnchor.BeforeToolFlow
         SettingLibraryPosition.InsertPoint5 -> AgentContextAnchor.AfterToolFlow
+    }
+
+    /**
+     * Fixed prompt entries are selected when the generation snapshot is created. The DSH request
+     * projector then reuses that frozen definition for every tool continuation in the same turn
+     * without appending the prompt body to the durable conversation surface.
+     */
+    private fun SettingLibraryPosition.toAgentActivation(): AgentContextActivation = when (this) {
+        SettingLibraryPosition.Instructions -> AgentContextActivation.Immediate
+        else -> AgentContextActivation.FirstModelRequest
     }
 
     private fun SettingLibraryInsertRole.toAgentRole(position: SettingLibraryPosition): AgentContextRole = when {

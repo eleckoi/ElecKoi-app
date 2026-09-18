@@ -104,12 +104,18 @@ class ChatTurnMetricsCollectorTest {
                 pressureTokens = 27_000L,
                 projectedTokens = 5_100L,
                 modelContextWindow = 1_000_000L,
+                systemTokens = 21L,
+                toolsTokens = 551L,
+                messageTokens = 4_528L,
             ),
         )
 
         assertEquals(5_100L, collector.contextWindowUsage()?.latestTokens)
         assertEquals(27_400L, collector.contextWindowUsage()?.totalTokens)
         assertEquals(1_000_000L, collector.contextWindowUsage()?.modelContextWindow)
+        assertEquals(21L, collector.contextWindowUsage()?.systemTokens)
+        assertEquals(551L, collector.contextWindowUsage()?.toolsTokens)
+        assertEquals(4_528L, collector.contextWindowUsage()?.messageTokens)
     }
 
     @Test

@@ -314,7 +314,7 @@ internal class ChatServiceImpl(
 
     override fun saveModelConfig(config: ModelConfig): ModelConfig = settings.saveModelConfig(config)
 
-    override fun refreshModelsForChat(config: ModelConfig): ModelConfig = settings.fetchModelOptions(config)
+    override suspend fun refreshModelsForChat(config: ModelConfig): ModelConfig = settings.fetchModelOptions(config)
 
     override fun saveCharacterImagePrompt(characterId: String, prompt: String): CharacterSlot {
         val character = characters.characterById(characterId)
@@ -360,6 +360,7 @@ internal class ChatServiceImpl(
     }
 
     override suspend fun sendMessage(
+        runId: String,
         draft: ChatDraft,
         message: String,
         inputImages: List<ChatUserImageAttachment>,
@@ -367,7 +368,14 @@ internal class ChatServiceImpl(
         onUserTurnPersisted: (ChatDraft, String) -> Unit,
     ): ChatSendResult {
         uiPreferences.restoreChatEntry(draft.session.id)
-        return generationRunCoordinator.sendMessage(draft, message, inputImages, onDelta, onUserTurnPersisted)
+        return generationRunCoordinator.sendMessage(
+            runId,
+            draft,
+            message,
+            inputImages,
+            onDelta,
+            onUserTurnPersisted,
+        )
     }
 
     override suspend fun rawChatMessage(sessionId: String, messageId: String): ChatMessage? =
@@ -413,9 +421,10 @@ internal class ChatServiceImpl(
     }
 
     override suspend fun runPreparedRegeneration(
+        runId: String,
         prepared: PreparedChatRegeneration,
         onDelta: (ChatDraft) -> Unit,
-    ): ChatSendResult = generationRunCoordinator.runPreparedRegeneration(prepared, onDelta)
+    ): ChatSendResult = generationRunCoordinator.runPreparedRegeneration(runId, prepared, onDelta)
 
     override suspend fun regenerateImage(
         sessionId: String,
@@ -440,7 +449,7 @@ internal class ChatServiceImpl(
         openingOptionId: String,
     ): ChatDraft = storyStateCoordinator.selectOpening(sessionId, openingOptionId)
 
-    override fun cancelActiveStream() = generationRunCoordinator.cancelActiveStream()
+    override fun cancelStream(runId: String): Boolean = generationRunCoordinator.cancelStream(runId)
 
     override suspend fun setHistorySaveMode(mode: String): UiPreferences {
         return uiPreferences.setHistorySaveMode(mode)

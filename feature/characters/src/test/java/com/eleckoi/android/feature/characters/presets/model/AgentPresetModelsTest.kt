@@ -41,14 +41,14 @@ class AgentPresetModelsTest {
         val hiddenTimeline = preset.entries.first { it.isHiddenToolTimelineEntry() }
         assertEquals(DefaultHiddenToolTimelineContent, hiddenTimeline.content)
         assertEquals(SettingLibraryInsertRole.User, hiddenTimeline.insertRole)
-        assertEquals(SettingLibraryPosition.InsertPoint4, hiddenTimeline.position)
+        assertEquals(SettingLibraryPosition.InsertPoint5, hiddenTimeline.position)
         assertEquals(HiddenToolTimelinePromptPositionId, hiddenTimeline.promptPositionId)
         assertEquals(1, hiddenTimeline.order)
         val hiddenTimelinePosition = preset.promptPositions.single()
         assertEquals(HiddenToolTimelinePromptPositionId, hiddenTimelinePosition.id)
         assertEquals("隐藏工具时间线", hiddenTimelinePosition.name)
-        assertEquals(SettingLibraryPosition.InsertPoint4, hiddenTimelinePosition.anchor)
-        assertEquals(SettingLibraryPromptPositionSide.BeforeSettingPosition, hiddenTimelinePosition.side)
+        assertEquals(SettingLibraryPosition.InsertPoint5, hiddenTimelinePosition.anchor)
+        assertEquals(SettingLibraryPromptPositionSide.AfterSettingPosition, hiddenTimelinePosition.side)
         assertEquals(1, hiddenTimelinePosition.order)
     }
 
@@ -117,6 +117,46 @@ class AgentPresetModelsTest {
         assertEquals(false, deletedEntry.enabled)
         assertEquals(null, deletedEntry.position)
         assertEquals("", deletedEntry.promptPositionId)
+    }
+
+    @Test
+    fun `previous hidden timeline default is normalized below insert point five`() {
+        val normalized = defaultAgentPreset().copy(
+            promptPositions = listOf(
+                SettingLibraryPromptPosition(
+                    id = HiddenToolTimelinePromptPositionId,
+                    name = "隐藏工具时间线",
+                    anchor = SettingLibraryPosition.InsertPoint4,
+                    side = SettingLibraryPromptPositionSide.BeforeSettingPosition,
+                    order = 4,
+                ),
+            ),
+        ).withRequiredBuiltIns()
+
+        val position = normalized.promptPositions.single()
+        val entry = normalized.entries.single { it.isHiddenToolTimelineEntry() }
+        assertEquals(SettingLibraryPosition.InsertPoint5, position.anchor)
+        assertEquals(SettingLibraryPromptPositionSide.AfterSettingPosition, position.side)
+        assertEquals(1, position.order)
+        assertEquals(SettingLibraryPosition.InsertPoint5, entry.position)
+    }
+
+    @Test
+    fun `legacy default hidden timeline prompt gains the strict final wrapper rule`() {
+        val legacyContent = DefaultHiddenToolTimelineContent
+            .lineSequence()
+            .filterNot { it.trimStart().startsWith("mandatory:") }
+            .joinToString("\n")
+        val normalized = defaultAgentPreset().copy(
+            entries = defaultAgentPreset().entries.map { entry ->
+                if (entry.isHiddenToolTimelineEntry()) entry.copy(content = legacyContent) else entry
+            },
+        ).withRequiredBuiltIns()
+
+        assertEquals(
+            DefaultHiddenToolTimelineContent,
+            normalized.entries.single { it.isHiddenToolTimelineEntry() }.content,
+        )
     }
 
     @Test

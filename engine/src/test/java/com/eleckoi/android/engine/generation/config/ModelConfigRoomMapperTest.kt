@@ -133,7 +133,7 @@ class ModelConfigRoomMapperTest {
     }
 
     @Test
-    fun `DSH reasoning effort survives room json mapping`() {
+    fun `DSH reasoning capability and selected effort survive room json mapping`() {
         val source = ModelConfig(
             id = "config-reasoning",
             model = "deepseek-v4-flash",
@@ -141,6 +141,13 @@ class ModelConfigRoomMapperTest {
                 ModelOption(
                     id = "deepseek-v4-flash",
                     reasoningEffort = "max",
+                    reasoningEfforts = linkedMapOf(
+                        "off" to null,
+                        "high" to "high",
+                        "max" to "ultra",
+                    ),
+                    dshReasoningEffortIds = listOf("off", "high", "max"),
+                    reasoningThinkingFormat = "deepseek",
                 ),
             ),
         )
@@ -149,6 +156,27 @@ class ModelConfigRoomMapperTest {
         val option = restored.modelOptions.single()
 
         assertEquals("max", option.reasoningEffort)
+        assertEquals(
+            linkedMapOf("off" to null, "high" to "high", "max" to "ultra"),
+            option.reasoningEfforts,
+        )
+        assertEquals(listOf("off", "high", "max"), option.dshReasoningEffortIds)
+        assertEquals("deepseek", option.reasoningThinkingFormat)
+    }
+
+    @Test
+    fun `DSH explicit non reasoning declaration survives room json mapping`() {
+        val source = ModelConfig(
+            id = "config-no-reasoning",
+            model = "plain",
+            modelOptions = listOf(ModelOption(id = "plain", reasoningEfforts = emptyMap())),
+        )
+
+        val entity = source.toEntity(codec)
+        val restored = entity.toModelConfig(codec).modelOptions.single()
+
+        assertTrue(entity.modelOptionsJson.contains("\"reasoningEfforts\":{}"))
+        assertEquals(emptyMap<String, String?>(), restored.reasoningEfforts)
     }
 
     @Test

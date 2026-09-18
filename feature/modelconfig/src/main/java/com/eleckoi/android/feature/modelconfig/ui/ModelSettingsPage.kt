@@ -116,6 +116,7 @@ fun ModelSettingsPage(
         ModelApiFormatSheet(
             selected = editorState.form.apiFormat,
             appearance = appearance,
+            formats = apiFormatsForProvider(editorState.form.provider),
             onClose = { editorState.apiFormatSheetOpen = false },
             onSelect = { format ->
                 editorState.apiFormatSheetOpen = false

@@ -13,8 +13,8 @@ internal data class AgentTurnRequestContext(
     val injections: List<AgentContextInjection>,
     val historyProjection: AgentHistoryProjection,
 ) {
-    /** Product history is immutable for one turn; parse the legacy ledger envelope only once. */
-    val parsedHistory: List<JsonObject> = history.mapNotNull { item ->
+    /** Product history is immutable for one turn; parse its Room ledger envelope only once. */
+    val parsedProductHistory: List<JsonObject> = history.mapNotNull { item ->
         runCatching {
             ElecKoiJson.parseToJsonElement(item.responseItemJson).jsonObject
         }.getOrNull()
@@ -24,5 +24,4 @@ internal data class AgentTurnRequestContext(
 internal enum class AgentHistoryProjection {
     Native,
     SeedProductHistory,
-    ReplacePreviousTurns,
 }

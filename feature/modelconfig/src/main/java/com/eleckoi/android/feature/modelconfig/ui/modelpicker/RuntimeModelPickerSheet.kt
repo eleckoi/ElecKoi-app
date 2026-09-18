@@ -45,6 +45,7 @@ import com.eleckoi.android.engine.generation.model.ModelOption
 import com.eleckoi.android.engine.generation.model.isChatModelConfig
 import com.eleckoi.android.engine.generation.model.isImageGenerationConfig
 import com.eleckoi.android.feature.modelconfig.ui.ModelApiFormatSheet
+import com.eleckoi.android.feature.modelconfig.ui.apiFormatsForProvider
 import com.eleckoi.android.feature.modelconfig.ui.configVersionName
 import com.eleckoi.android.feature.modelconfig.ui.modelOptionsKey
 import com.eleckoi.android.feature.modelconfig.ui.providerMeta
@@ -316,12 +317,17 @@ fun ColumnScope.ModelPickerContent(
                         )
                     }
                 }
-                if (apiFormatSheetOpen && focusedConfig != null && activeModel.isNotBlank()) {
+                if (
+                    apiFormatSheetOpen &&
+                    focusedConfig != null &&
+                    activeModel.isNotBlank()
+                ) {
                     val activeOption = focusedConfig.modelOptions.firstOrNull { it.id == activeModel }
                     ModelApiFormatSheet(
                         selected = activeOption?.apiFormatOverride,
                         inherited = focusedConfig.apiFormat,
                         allowInherited = true,
+                        formats = apiFormatsForProvider(focusedConfig.provider),
                         appearance = appearance,
                         onClose = { apiFormatSheetOpen = false },
                         onSelect = { format ->

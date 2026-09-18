@@ -13,6 +13,6 @@ interface ModelService {
     fun blankModelConfig(providerId: String, id: String = ""): ModelConfig
     fun saveModelConfig(config: ModelConfig): ModelConfig
     fun deleteModelConfig(configId: String): ModelConfigCollection
-    fun fetchModelOptions(config: ModelConfig): ModelConfig
+    suspend fun fetchModelOptions(config: ModelConfig): ModelConfig
     suspend fun testModelConnection(config: ModelConfig)
 }

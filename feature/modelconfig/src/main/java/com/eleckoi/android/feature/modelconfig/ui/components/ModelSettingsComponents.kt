@@ -260,12 +260,14 @@ internal fun ModelStackedNavigationField(
     label: String,
     value: String,
     appearance: AppearanceTheme,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
+    val interaction = if (enabled) Modifier.noRippleClickable(onClick = onClick) else Modifier
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .noRippleClickable(onClick = onClick)
+            .then(interaction)
             .padding(horizontal = 14.dp, vertical = 10.dp),
     ) {
         if (label.isNotBlank()) {
@@ -285,7 +287,9 @@ internal fun ModelStackedNavigationField(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            StrokeSvgIcon(AppIconPaths.ChevronRight, appearance.mobileSoft, iconSize = 16.dp)
+            if (enabled) {
+                StrokeSvgIcon(AppIconPaths.ChevronRight, appearance.mobileSoft, iconSize = 16.dp)
+            }
         }
     }
 }

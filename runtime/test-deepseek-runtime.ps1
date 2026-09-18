@@ -45,7 +45,11 @@ function Invoke-JsonRpcSmokeProcess {
                     throw "等待 DeepSeek Runtime 响应超时：id=$expectedId"
                 }
                 $line = $lineTask.GetAwaiter().GetResult()
-                if ($null -eq $line) { throw "DeepSeek Runtime 在响应前退出：id=$expectedId" }
+                if ($null -eq $line) {
+                    $process.WaitForExit()
+                    $stderr = $stderrTask.GetAwaiter().GetResult().Trim()
+                    throw "DeepSeek Runtime 在响应前退出：id=$expectedId exitCode=$($process.ExitCode) stderr=$stderr"
+                }
                 $frame = $line | ConvertFrom-Json
                 if ($null -ne $frame.PSObject.Properties['id'] -and [int]$frame.id -eq $expectedId) {
                     $responses.Add($line)
@@ -112,9 +116,10 @@ if (@($entries | Where-Object { $_ -like 'lib/sharp/libvips-cpp.so.*' }).Count -
 }
 
 $requests = @(
-    '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"cwd":"/tmp","provider":"eleckoi","model":"deepseek-smoke","maxTokens":4096}}',
-    '{"jsonrpc":"2.0","id":2,"method":"session/set_permission","params":{"sessionId":"eleckoi-smoke","cwd":"/tmp","preset":"approve-for-me"}}',
-    '{"jsonrpc":"2.0","id":3,"method":"shutdown","params":{}}'
+    '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"cwd":"/tmp","provider":"deepseek-official","model":"deepseek-smoke","maxTokens":4096}}',
+    '{"jsonrpc":"2.0","id":2,"method":"model/resolve","params":{"provider":"deepseek-official","model":"deepseek-smoke"}}',
+    '{"jsonrpc":"2.0","id":3,"method":"session/set_permission","params":{"sessionId":"eleckoi-smoke","cwd":"/tmp","preset":"approve-for-me","agentPreset":"eleckoi-default"}}',
+    '{"jsonrpc":"2.0","id":4,"method":"shutdown","params":{}}'
 )
 $responses = @()
 if (-not $IsLinux) { throw 'DeepSeek Runtime 烟测只支持 Linux ARM64 GitHub Actions runner' }
@@ -132,12 +137,15 @@ if (-not $testRoot.StartsWith($tempBoundary, [StringComparison]::Ordinal)) {
     throw 'Runtime 烟测目录越出系统临时目录'
 }
 $nativeEnvironment = [ordered]@{
+    DEEPSEEK_API_KEY = 'eleckoi-smoke'
     ELECKOI_PROVIDER_KEY = 'eleckoi-loopback'
     ELECKOI_PROVIDER_BASE_URL = 'http://127.0.0.1:1/v1'
     ELECKOI_MODEL = 'deepseek-smoke'
     ELECKOI_CONTEXT_WINDOW = '262144'
     DSH_CWD = '/tmp'
+    DSH_HOME = (Join-Path $testRoot 'dsh-home')
     DSH_SESSION_ROOT = (Join-Path $testRoot 'sessions')
+    DSH_TELEMETRY_DISABLED = '1'
     DSH_RIPGREP_PATH = (Join-Path $testRoot 'bin/rg')
     DSH_LANDLOCK_PATH = (Join-Path $testRoot 'bin/landlock-run')
     LD_LIBRARY_PATH = (Join-Path $testRoot 'lib/sharp')
@@ -148,6 +156,20 @@ try {
     New-Item -ItemType Directory -Path $testRoot | Out-Null
     & tar -xzf $resolvedBundle -C $testRoot
     if ($LASTEXITCODE -ne 0) { throw '无法解压 Runtime 烟测包' }
+    New-Item -ItemType Directory -Path $nativeEnvironment.DSH_HOME -Force | Out-Null
+    $presetRoot = Join-Path $nativeEnvironment.DSH_HOME '.agent-presets/eleckoi-default'
+    New-Item -ItemType Directory -Path $presetRoot -Force | Out-Null
+    $utf8WithoutBom = [Text.UTF8Encoding]::new($false)
+    [IO.File]::WriteAllText(
+        (Join-Path $presetRoot 'agent.cordis.yml'),
+        "- id: eleckoi-smoke-persona`n  name: '@deepseek-ai/dsh-persona'`n  config:`n    prefix: 'ElecKoi ARM64 smoke'`n    suffix: ''`n    includeRuntimeContext: false`n",
+        $utf8WithoutBom
+    )
+    [IO.File]::WriteAllText(
+        (Join-Path $presetRoot 'preset.yml'),
+        "name: ElecKoi ARM64 smoke`ndescription: Native Runtime mount probe.`n",
+        $utf8WithoutBom
+    )
     foreach ($entry in $nativeEnvironment.GetEnumerator()) {
         $previousEnvironment[$entry.Key] = [Environment]::GetEnvironmentVariable($entry.Key, 'Process')
         [Environment]::SetEnvironmentVariable($entry.Key, [string]$entry.Value, 'Process')
@@ -164,7 +186,12 @@ try {
         throw "Runtime 内的 Landlock launcher 无法实施文件沙箱：$($landlockReport -join ' ')"
     }
     $landlockReport | ForEach-Object { Write-Host $_ }
-    $responses = @(Invoke-JsonRpcSmokeProcess -FilePath $executable -ArgumentList @($config) -Requests $requests)
+    $responses = @(
+        Invoke-JsonRpcSmokeProcess `
+            -FilePath $executable `
+            -ArgumentList @('--profile', 'sdk', '--patch', $config) `
+            -Requests $requests
+    )
 } finally {
     foreach ($entry in $previousEnvironment.GetEnumerator()) {
         [Environment]::SetEnvironmentVariable($entry.Key, $entry.Value, 'Process')
@@ -177,15 +204,18 @@ try {
         Remove-Item -LiteralPath $testRoot -Recurse -Force
     }
 }
-if ($responses.Count -ne 3) { throw "DeepSeek Runtime 返回了异常的 JSON-RPC 响应数量：$($responses.Count)" }
+if ($responses.Count -ne 4) { throw "DeepSeek Runtime 返回了异常的 JSON-RPC 响应数量：$($responses.Count)" }
 $frames = @($responses | ForEach-Object { $_ | ConvertFrom-Json })
 $initializeFrames = @($frames | Where-Object { [int]$_.id -eq 1 })
-$permissionFrames = @($frames | Where-Object { [int]$_.id -eq 2 })
-$shutdownFrames = @($frames | Where-Object { [int]$_.id -eq 3 })
-if ($initializeFrames.Count -ne 1 -or $permissionFrames.Count -ne 1 -or $shutdownFrames.Count -ne 1) {
+$modelFrames = @($frames | Where-Object { [int]$_.id -eq 2 })
+$permissionFrames = @($frames | Where-Object { [int]$_.id -eq 3 })
+$shutdownFrames = @($frames | Where-Object { [int]$_.id -eq 4 })
+if ($initializeFrames.Count -ne 1 -or $modelFrames.Count -ne 1 -or
+    $permissionFrames.Count -ne 1 -or $shutdownFrames.Count -ne 1) {
     throw "DeepSeek Runtime 返回了未知的 JSON-RPC 响应：$($frames | ConvertTo-Json -Compress -Depth 8)"
 }
 $initialize = $initializeFrames[0]
+$model = $modelFrames[0]
 $permission = $permissionFrames[0]
 $shutdown = $shutdownFrames[0]
 if ($null -ne $initialize.PSObject.Properties['error']) {
@@ -198,9 +228,19 @@ if ($null -eq $initialize.PSObject.Properties['result'] -or $null -eq $initializ
 if ([string]$initialize.result.serverInfo.name -ne 'deepseek-harness-sdk-runtime') {
     throw 'DeepSeek Runtime 返回了未知的服务身份'
 }
+if ($null -ne $model.PSObject.Properties['error'] -or
+    $null -eq $model.PSObject.Properties['result'] -or $null -eq $model.result -or
+    $null -eq $model.result.PSObject.Properties['reasoning'] -or $null -eq $model.result.reasoning -or
+    $null -eq $model.result.reasoning.PSObject.Properties['efforts']) {
+    throw "DeepSeek Runtime 官方推理能力响应无效：$($model | ConvertTo-Json -Compress -Depth 8)"
+}
+$efforts = @($model.result.reasoning.efforts | ForEach-Object { [string]$_.id })
+if (($efforts -join ',') -ne 'off,low,high,max') {
+    throw "DeepSeek Runtime 官方推理能力响应无效：$($model | ConvertTo-Json -Compress -Depth 8)"
+}
 if ($null -ne $permission.PSObject.Properties['error'] -or
     [string]$permission.result.preset -ne 'approve-for-me') {
     throw "DeepSeek Runtime 权限模式响应无效：$($permission | ConvertTo-Json -Compress -Depth 8)"
 }
-if ([int]$shutdown.id -ne 3 -or $null -eq $shutdown.result) { throw 'DeepSeek Runtime shutdown 响应无效' }
+if ([int]$shutdown.id -ne 4 -or $null -eq $shutdown.result) { throw 'DeepSeek Runtime shutdown 响应无效' }
 Write-Host "DeepSeek Runtime ARM64 烟测通过：$hash ($length bytes)"

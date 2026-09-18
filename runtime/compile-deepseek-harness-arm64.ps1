@@ -51,7 +51,7 @@ if (Test-Path -LiteralPath $artifactManifest -PathType Leaf) {
         Write-Host "复用已编译的 DeepSeek Harness：$artifactPath"
         return
     }
-    throw "已有编译产物与构建清单不一致；请提升 bundleRevision 后重新构建：$artifactPath"
+    throw "已有编译产物与构建清单不一致；源码或工具链变化时请提升 binaryRevision 后重新构建：$artifactPath"
 }
 if (Test-Path -LiteralPath $artifactPath) {
     throw "编译产物目录已存在但不完整；请检查后处理：$artifactPath"
@@ -97,8 +97,11 @@ if [ ! -d "$source_cache" ]; then
 else
   git -c safe.directory="$source_cache" -C "$source_cache" remote set-url origin "$SOURCE_REPOSITORY"
 fi
+# `eleckoi-build` is a cache-local disposable ref. A later pinned release is not guaranteed to
+# descend from the commit restored by actions/cache, so update this one ref explicitly instead of
+# deleting the verified source cache or requiring a fast-forward relationship between releases.
 git -c safe.directory="$source_cache" -C "$source_cache" fetch --depth 1 origin \
-  "$SOURCE_COMMIT:refs/heads/eleckoi-build"
+  "+$SOURCE_COMMIT:refs/heads/eleckoi-build"
 build_root=$(mktemp -d "$ELECKOI_WORK/eleckoi-dsh.XXXXXX")
 trap 'rm -rf "$build_root"' EXIT
 git -c safe.directory="$source_cache" clone --no-checkout "$source_cache" "$build_root/source"
@@ -108,6 +111,15 @@ test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
 echo "$SOURCE_PATCH_SHA256  $SOURCE_PATCH_PATH" | sha256sum --check --strict
 git apply --check --unidiff-zero "$SOURCE_PATCH_PATH"
 git apply --unidiff-zero "$SOURCE_PATCH_PATH"
+patched_dependency_count=0
+while IFS= read -r patched_dependency; do
+  patched_dependency_count=$((patched_dependency_count + 1))
+  test -f "$patched_dependency" || {
+    echo "patchedDependencies references a missing file: $patched_dependency" >&2
+    exit 1
+  }
+done < <(sed -nE 's/^[[:space:]]+[^:]+:[[:space:]]+(patches\/[^[:space:]]+\.patch)[[:space:]]*$/\1/p' pnpm-workspace.yaml)
+test "$patched_dependency_count" -gt 0
 
 build_node_archive="$ELECKOI_CACHE/downloads/node-v$BUILD_NODE_VERSION-linux-arm64.tar.gz"
 download_verified \
@@ -123,7 +135,7 @@ pnpm install --frozen-lockfile
 
 # The single-executable packager embeds JavaScript but cannot materialize an executable npm asset.
 # Build the reviewed Landlock launcher as a physical ARM64 sidecar for /opt/eleckoi/bin.
-landlock_source="$build_root/source/native/landlock-run/packages/entry/src/main.c"
+landlock_source="$build_root/source/native/system/packages/entry/src/main.c"
 landlock_product="$build_root/landlock-run"
 cc -std=c11 -Os -Wall -Wextra -Werror -s -o "$landlock_product" "$landlock_source"
 test -x "$landlock_product"
@@ -146,7 +158,8 @@ const source = readFileSync(path, 'utf8')
 const from = 'if (!/^node\\d+$/.test(nodeRange)) {'
 const to = 'if (!/^node\\d+(?:\\.\\d+){0,2}$/.test(nodeRange)) {'
 if (source.split(from).length !== 2) throw new Error('DeepSeek Harness target parser changed upstream')
-if (!source.includes(`@yao-pkg/pkg@${process.env.PKG_VERSION}`)) {
+const rootPackage = JSON.parse(readFileSync('package.json', 'utf8'))
+if (rootPackage.devDependencies?.['@yao-pkg/pkg'] !== process.env.PKG_VERSION) {
   throw new Error('DeepSeek Harness pkg version changed upstream')
 }
 writeFileSync(path, source.replace(from, to))
@@ -160,7 +173,7 @@ ln -sfn "$ELECKOI_CACHE/pkg/sea" "$HOME/.pkg-cache/sea"
 pnpm exec tsx scripts/build-exe-for-python-sdk.ts \
   --targets="node$PACKAGED_NODE_VERSION-linux-arm64"
 
-product="$build_root/source/dist-exe/dsh-jsonrpc-agent-pkg-linux-arm64"
+product="$build_root/source/dist-exe/deepseek-harness-sdk-runtime-linux-arm64"
 test -x "$product"
 sharp_package="$build_root/source/python/sdk-runtime/src/deepseek_harness_runtime/runtime/node/node_modules/@img/sharp-libvips-linux-arm64"
 test -d "$sharp_package/lib"
@@ -180,7 +193,7 @@ cp "$ripgrep_binary" "$stage/bin/rg"
 chmod 0755 "$stage/bin/dsh-jsonrpc-agent" "$stage/bin/landlock-run" "$stage/bin/rg"
 cp LICENSE "$stage/licenses/deepseek-harness/LICENSE"
 cp THIRD_PARTY_NOTICES.md "$stage/licenses/deepseek-harness/THIRD_PARTY_NOTICES.md"
-cp native/landlock-run/LICENSE "$stage/licenses/landlock-run/LICENSE"
+cp native/system/LICENSE "$stage/licenses/landlock-run/LICENSE"
 cp "$ripgrep_stage/package/LICENSE" "$stage/licenses/ripgrep/LICENSE"
 cp "$SHARP_LIBVIPS_LICENSE_PATH" "$stage/licenses/sharp-libvips/LGPL-3.0.txt"
 tar -xOf "$pkg_archive" "node-v$PACKAGED_NODE_VERSION-linux-arm64/LICENSE" > "$stage/licenses/node/LICENSE"

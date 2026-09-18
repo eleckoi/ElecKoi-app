@@ -190,6 +190,8 @@ sealed interface AgentSessionEvent {
         val delta: String,
         val step: Int? = null,
         val observedAtMillis: Long = 0L,
+        /** True when [delta] is the completed DSH content block and replaces streamed fragments. */
+        val completeSnapshot: Boolean = false,
     ) : AgentSessionEvent
 
     /** One complete native history item, in the exact order recorded by the Agent runtime. */
@@ -320,6 +322,9 @@ sealed interface AgentSessionEvent {
         val pressureTokens: Long?,
         val projectedTokens: Long?,
         val modelContextWindow: Long?,
+        val systemTokens: Long? = null,
+        val toolsTokens: Long? = null,
+        val messageTokens: Long? = null,
     ) : AgentSessionEvent
 
     data class TurnCompleted(

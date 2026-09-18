@@ -70,6 +70,7 @@ class CharacterAgentGenerationService(
         virtualFileSearch = virtualFileSearch,
         toolContextSnapshot = toolContextSnapshot,
         activeAgentPreset = activeAgentPreset,
+        generationAttempts = generationAttempts,
         captureProviderRequests = captureProviderRequests,
     )
     private val environment = CharacterAgentGenerationEnvironment(settings, workspaces, sessions)
@@ -96,6 +97,7 @@ class CharacterAgentGenerationService(
     }
 
     suspend fun sendMessage(
+        runId: String,
         draft: ChatDraft,
         message: String,
         inputImages: List<ChatUserImageAttachment>,
@@ -135,7 +137,9 @@ class CharacterAgentGenerationService(
         onUserTurnPersisted(draft.copy(session = session), userMessage.id)
         sessions.applyHistorySavePolicy(session.characterId)
         return turnRunner.run(
+            runId = runId,
             session = session,
+            userMessageId = userMessage.id,
             prompt = AgentPrompt(
                 text = RegexRuleProcessor.transform(
                     text = content,
@@ -182,13 +186,24 @@ class CharacterAgentGenerationService(
                 target = RegexRuleTarget.UserInput,
             )
         }
+        val targetMessage = session.messages.firstOrNull { it.id == targetMessageId }
+            ?: throw ElecKoiDataException("没有找到要重新生成的消息")
+        if (targetMessage.role == MessageRole.System) {
+            throw ElecKoiDataException("这条消息不能重新生成")
+        }
+        val retainedUserMessageId = sessions.owningUserMessageId(session.id, targetMessageId)
+            ?: throw ElecKoiDataException("没有找到这条消息对应的用户输入")
         val regeneration = truncateForRegeneration(
             messages = session.messages,
             targetMessageId = targetMessageId,
+            retainedUserMessageId = retainedUserMessageId,
             replacementMessage = editedReplacement,
             provider = config.provider,
             model = config.model,
         )
+        if (regeneration.inputImages.isNotEmpty() && !config.supportsImageInput()) {
+            throw ElecKoiDataException("当前模型没有开启图片输入能力")
+        }
         val variablesConfigured = characterVariableCatalog(variableConfig.load(session.characterId)).isNotEmpty()
         session = session.copy(
             messages = regeneration.messages,
@@ -226,20 +241,21 @@ class CharacterAgentGenerationService(
             ),
             config = config,
             pendingMessageId = resolvedPendingMessageId,
-            inputImages = session.messages.asReversed()
-                .firstOrNull { it.role == MessageRole.User }
-                ?.inputImageAttachments
-                .orEmpty(),
+            userMessageId = retainedUserMessageId,
+            inputImages = regeneration.inputImages,
             obsoleteRuntimeThreadIds = regeneration.obsoleteRuntimeThreadIds,
         )
     }
 
     suspend fun runPreparedRegeneration(
+        runId: String,
         prepared: PreparedChatRegeneration,
         onDelta: (ChatDraft) -> Unit,
     ): ChatSendResult {
         return turnRunner.run(
+            runId = runId,
             session = prepared.session,
+            userMessageId = prepared.userMessageId,
             prompt = AgentPrompt(
                 text = prepared.prompt,
                 images = prepared.inputImages.map { image ->
@@ -253,11 +269,13 @@ class CharacterAgentGenerationService(
         )
     }
 
-    fun cancelActiveStream() {
-        generations.cancelActive()
+    fun cancelStream(runId: String): Boolean {
+        val cancelled = generations.cancel(runId)
+        if (!cancelled) return false
         activeSession.get()?.let { session ->
             cancellationScope.launch { runCatching { session.interrupt() } }
         }
+        return true
     }
 
     fun settleOrphanedPendingResponses(sessionId: String) {

@@ -20,7 +20,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -37,6 +39,14 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,6 +68,7 @@ import com.eleckoi.android.engine.agent.deepseek.trajectory.DshTrajectoryRecordS
 import com.eleckoi.android.engine.agent.deepseek.trajectory.DshTrajectoryRequest
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.foundation.design.components.noRippleClickable
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlin.math.max
 
 @Composable
@@ -262,7 +273,32 @@ private fun OverviewLane(
 }
 
 @Composable
+internal fun rememberDshTrajectoryLedgerState(scopeKey: String): DshTrajectoryLedgerState {
+    val listState = key(scopeKey) { rememberLazyListState() }
+    return remember(scopeKey, listState) { DshTrajectoryLedgerState(listState) }
+}
+
+internal class DshTrajectoryLedgerState(
+    val listState: LazyListState,
+) {
+    var initialScrollCompleted by mutableStateOf(false)
+    var followLatest by mutableStateOf(true)
+    var renderedLatestRecordId by mutableStateOf("")
+    var restoreViewportOnNextAttach by mutableStateOf(false)
+
+    fun preserveViewportForInspector() {
+        // On compact layouts the inspector temporarily removes the ledger from composition. The
+        // LazyListState remains the exact viewport owner; this flag prevents a concurrently-arrived
+        // latest event from overriding that retained viewport when the ledger is attached again.
+        initialScrollCompleted = true
+        restoreViewportOnNextAttach = true
+    }
+}
+
+@Composable
 internal fun DshTrajectoryLedger(
+    state: DshTrajectoryLedgerState,
+    latestRecordId: String,
     groups: List<DshTrajectoryTurnGroup>,
     collapsedTurns: Set<String>,
     selectedId: String,
@@ -276,7 +312,44 @@ internal fun DshTrajectoryLedger(
     onLoadOlder: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val listState = state.listState
+
+    LaunchedEffect(listState) {
+        snapshotFlow {
+            val layout = listState.layoutInfo
+            val lastVisibleIndex = layout.visibleItemsInfo.lastOrNull()?.index ?: -1
+            val nearEnd = layout.totalItemsCount == 0 || lastVisibleIndex >= layout.totalItemsCount - 2
+            listState.isScrollInProgress to nearEnd
+        }
+            .distinctUntilChanged()
+            .collect { (scrolling, nearEnd) ->
+                if (state.initialScrollCompleted && scrolling) state.followLatest = nearEnd
+            }
+    }
+
+    LaunchedEffect(listState, latestRecordId) {
+        if (latestRecordId.isBlank()) return@LaunchedEffect
+        // Wait until the new records have participated in layout before resolving the end anchor.
+        withFrameNanos { }
+        val lastItemIndex = listState.layoutInfo.totalItemsCount - 1
+        if (lastItemIndex < 0) return@LaunchedEffect
+        when {
+            state.restoreViewportOnNextAttach -> {
+                state.restoreViewportOnNextAttach = false
+            }
+            !state.initialScrollCompleted -> {
+                listState.scrollToItem(lastItemIndex)
+                state.initialScrollCompleted = true
+            }
+            latestRecordId != state.renderedLatestRecordId && state.followLatest -> {
+                listState.scrollToItem(lastItemIndex)
+            }
+        }
+        state.renderedLatestRecordId = latestRecordId
+    }
+
     LazyColumn(
+        state = listState,
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 20.dp),
     ) {
@@ -332,6 +405,7 @@ internal fun DshTrajectoryLedger(
                 )
             }
         }
+        item(key = "ledger-end") { Spacer(Modifier.height(1.dp)) }
     }
 }
 

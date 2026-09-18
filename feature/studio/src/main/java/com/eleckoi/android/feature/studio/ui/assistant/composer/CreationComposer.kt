@@ -113,6 +113,9 @@ internal fun CreationComposer(
                     latestTokens = usage.latestTokens,
                     totalTokens = usage.totalTokens,
                     modelContextWindow = usage.modelContextWindow,
+                    systemTokens = usage.systemTokens,
+                    toolsTokens = usage.toolsTokens,
+                    messageTokens = usage.messageTokens,
                 )
             },
             onSubmit = onSend,

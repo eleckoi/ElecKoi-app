@@ -3,6 +3,7 @@ package com.eleckoi.android.app
 import android.content.Context
 import com.eleckoi.android.engine.agent.deepseek.DeepSeekAgentSessionFactory
 import com.eleckoi.android.engine.agent.deepseek.DeepSeekPersistentRuntimeHost
+import com.eleckoi.android.engine.agent.deepseek.trajectory.DshSessionInspection
 import com.eleckoi.android.app.service.ElecKoiRepository
 import com.eleckoi.android.engine.workspace.runtime.service.LocalRuntimeServiceClient
 import com.eleckoi.android.engine.workspace.runtime.RuntimePaths
@@ -68,7 +69,7 @@ class ElecKoiAppContainer(context: Context) : AutoCloseable {
         runtime = localRuntime,
         runtimePaths = runtimePaths,
         modelConfigProvider = repository::creatorModelConfig,
-        toolRequestFilter = agentToolCatalogStore::filterRequest,
+        modelCatalogProvider = { repository.modelCollection().chatConfigs },
     )
     private val deepSeekHarness: AgentHarnessBackend = DeepSeekAgentSessionFactory(
         backendFactory = deepSeekHost,
@@ -135,6 +136,7 @@ class ElecKoiAppContainer(context: Context) : AutoCloseable {
 
     init {
         repository.setRuntimeSessionCleanup(runtimePaths::deletePersistentDeepSeekSessions)
+        repository.setDshModelCapabilityResolver(deepSeekHost::resolveModelCapabilities)
         // Provision both user-configurable channels before the Settings row can open Android's
         // notification page. Channel creation is idempotent and does not post a notification.
         AgentNotificationCenter.ensureChannels(applicationContext)
@@ -150,6 +152,9 @@ class ElecKoiAppContainer(context: Context) : AutoCloseable {
 
     internal fun agentToolContextSnapshot(enabledGroupIds: Set<String>): AgentToolContextSnapshot =
         agentToolCatalogStore.toolContextSnapshot(enabledGroupIds)
+
+    internal suspend fun inspectDshSession(sessionId: String): DshSessionInspection? =
+        deepSeekHost.inspectSession(sessionId)
 
     internal fun agentToolGroups(enabledGroupIds: Set<String>): List<AgentToolGroupSnapshot> =
         agentToolCatalogStore.groups(enabledGroupIds)

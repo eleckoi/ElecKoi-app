@@ -5,6 +5,7 @@ import com.eleckoi.android.feature.chat.model.ChatMessage
 import com.eleckoi.android.feature.chat.model.ChatImageAttachment
 import com.eleckoi.android.feature.chat.model.ChatImageStatus
 import com.eleckoi.android.feature.chat.model.ChatSession
+import com.eleckoi.android.feature.chat.model.ChatUserImageAttachment
 import com.eleckoi.android.feature.chat.model.MessageRole
 import com.eleckoi.android.foundation.storage.ElecKoiDataException
 import org.junit.Assert.assertEquals
@@ -79,6 +80,7 @@ class CharacterAgentRegenerationTest {
         val result = truncateForRegeneration(
             messages = messages,
             targetMessageId = "assistant-2",
+            retainedUserMessageId = "user-2",
             replacementMessage = null,
             provider = "provider",
             model = "model",
@@ -104,6 +106,7 @@ class CharacterAgentRegenerationTest {
         val result = truncateForRegeneration(
             messages = messages,
             targetMessageId = "user-1",
+            retainedUserMessageId = "user-1",
             replacementMessage = null,
             provider = "provider",
             model = "model",
@@ -134,6 +137,7 @@ class CharacterAgentRegenerationTest {
                 ),
             ),
             targetMessageId = "assistant-2",
+            retainedUserMessageId = "user-2",
             replacementMessage = null,
             provider = "provider",
             model = "model",
@@ -165,6 +169,7 @@ class CharacterAgentRegenerationTest {
         val firstReroll = truncateForRegeneration(
             messages = messages,
             targetMessageId = "assistant-1",
+            retainedUserMessageId = "user-1",
             replacementMessage = null,
             provider = "provider",
             model = "model",
@@ -177,6 +182,7 @@ class CharacterAgentRegenerationTest {
                 variableStateJson = """{"好感度":52}""",
             ),
             targetMessageId = "assistant-1",
+            retainedUserMessageId = "user-1",
             replacementMessage = null,
             provider = "provider",
             model = "model",
@@ -205,6 +211,7 @@ class CharacterAgentRegenerationTest {
                 ),
             ),
             targetMessageId = "assistant-current",
+            retainedUserMessageId = "user-legacy",
             replacementMessage = null,
             provider = "provider",
             model = "model",
@@ -221,6 +228,7 @@ class CharacterAgentRegenerationTest {
                 message("assistant-current", MessageRole.Assistant, "要被替换"),
             ),
             targetMessageId = "assistant-current",
+            retainedUserMessageId = "user-legacy",
             replacementMessage = null,
             provider = "provider",
             model = "model",
@@ -234,6 +242,50 @@ class CharacterAgentRegenerationTest {
                 variablesConfigured = true,
             )
         }
+    }
+
+    @Test
+    fun `pure image user input can regenerate with its persisted attachment`() {
+        val image = ChatUserImageAttachment(
+            id = "input-image",
+            localPath = "/input/photo.png",
+            mediaType = "image/png",
+            displayName = "photo.png",
+        )
+        val result = truncateForRegeneration(
+            messages = listOf(
+                message("user-image", MessageRole.User, "", inputImages = listOf(image)),
+                message("assistant-image", MessageRole.Assistant, "看到了"),
+            ),
+            targetMessageId = "assistant-image",
+            retainedUserMessageId = "user-image",
+            replacementMessage = null,
+            provider = "provider",
+            model = "model",
+        )
+
+        assertEquals("", result.prompt)
+        assertEquals(listOf(image), result.inputImages)
+        assertEquals(listOf("user-image"), result.messages.map(ChatMessage::id))
+    }
+
+    @Test
+    fun `assistant regeneration uses the persisted owner instead of nearest user`() {
+        val result = truncateForRegeneration(
+            messages = listOf(
+                message("owner-user", MessageRole.User, "真正所属输入"),
+                message("unrelated-user", MessageRole.User, "不能误选这一条"),
+                message("assistant", MessageRole.Assistant, "旧回复"),
+            ),
+            targetMessageId = "assistant",
+            retainedUserMessageId = "owner-user",
+            replacementMessage = null,
+            provider = "provider",
+            model = "model",
+        )
+
+        assertEquals("真正所属输入", result.prompt)
+        assertEquals(listOf("owner-user"), result.messages.map(ChatMessage::id))
     }
 
     @Test
@@ -255,12 +307,14 @@ class CharacterAgentRegenerationTest {
         imagePath: String = "",
         variableStateJson: String = "",
         runtimeThreadId: String = "",
+        inputImages: List<ChatUserImageAttachment> = emptyList(),
     ) = ChatMessage(
         id = id,
         role = role,
         content = content,
         variableStateJson = variableStateJson,
         runtimeThreadId = runtimeThreadId,
+        inputImageAttachments = inputImages,
         imageAttachments = imagePath.takeIf(String::isNotBlank)?.let { path ->
             listOf(
                 ChatImageAttachment(

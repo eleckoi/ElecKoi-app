@@ -2,12 +2,14 @@ package com.eleckoi.android.feature.chat.data
 
 import com.eleckoi.android.feature.chat.model.ChatMessage
 import com.eleckoi.android.feature.chat.model.ChatSession
+import com.eleckoi.android.feature.chat.model.ChatUserImageAttachment
 import com.eleckoi.android.feature.chat.model.MessageRole
 import com.eleckoi.android.foundation.storage.ElecKoiDataException
 
 internal data class RegenerationTimeline(
     val messages: List<ChatMessage>,
     val prompt: String,
+    val inputImages: List<ChatUserImageAttachment>,
     val replacementMessageId: String?,
     val removedImagePaths: List<String>,
     val obsoleteRuntimeThreadIds: Set<String>,
@@ -43,6 +45,7 @@ internal fun regenerationSessionVariableState(
 internal fun truncateForRegeneration(
     messages: List<ChatMessage>,
     targetMessageId: String,
+    retainedUserMessageId: String,
     replacementMessage: String?,
     provider: String,
     model: String,
@@ -52,10 +55,13 @@ internal fun truncateForRegeneration(
     if (targetIndex < 0) throw ElecKoiDataException("没有找到要重新生成的消息")
     val editingUserInput = replacementMessage != null
     val branchUserIndex = when (truncated[targetIndex].role) {
-        MessageRole.Assistant -> (targetIndex - 1 downTo 0)
-            .firstOrNull { truncated[it].role == MessageRole.User }
+        MessageRole.Assistant -> truncated.indexOfFirst {
+            it.id == retainedUserMessageId && it.role == MessageRole.User
+        }.takeIf { it >= 0 }
             ?: throw ElecKoiDataException("没有找到这条回复对应的用户输入")
-        MessageRole.User -> targetIndex
+        MessageRole.User -> targetIndex.takeIf {
+            truncated[targetIndex].id == retainedUserMessageId
+        } ?: throw ElecKoiDataException("没有找到这条消息对应的用户输入")
         MessageRole.System -> throw ElecKoiDataException("这条消息不能重新生成")
     }
     val replacementMessageId = if (!editingUserInput) {
@@ -71,8 +77,11 @@ internal fun truncateForRegeneration(
             model = model,
         )
     }
-    val userText = truncated[branchUserIndex].content.trim()
-    if (userText.isEmpty()) throw ElecKoiDataException("用户输入为空，不能重新生成")
+    val retainedUser = truncated[branchUserIndex]
+    val userText = retainedUser.content.trim()
+    if (userText.isEmpty() && retainedUser.inputImageAttachments.isEmpty()) {
+        throw ElecKoiDataException("用户输入为空，不能重新生成")
+    }
     val removedImagePaths = truncated
         .drop(branchUserIndex + 1)
         .flatMap { message -> message.imageAttachments.map { image -> image.localPath } }
@@ -89,6 +98,7 @@ internal fun truncateForRegeneration(
     return RegenerationTimeline(
         messages = retainedMessages,
         prompt = userText,
+        inputImages = retainedUser.inputImageAttachments,
         replacementMessageId = replacementMessageId,
         removedImagePaths = removedImagePaths,
         obsoleteRuntimeThreadIds = obsoleteRuntimeThreadIds,

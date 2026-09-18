@@ -55,7 +55,9 @@ fun ElecKoiApp() {
     )
     val darkAppearance = uiPreferences.appearanceMode.resolvesDark(isSystemInDarkTheme())
     val initialAppearance = uiPreferences.appearanceTheme.withDarkAppearance(darkAppearance)
-    val dshTrajectoryReader = remember(context) { DshTrajectoryReader(context) }
+    val dshTrajectoryReader = remember(context, container) {
+        DshTrajectoryReader(context, container::inspectDshSession)
+    }
     val chatViewModel: ChatViewModel = viewModel(
         factory = ChatViewModel.factory(
             chatService = repository,

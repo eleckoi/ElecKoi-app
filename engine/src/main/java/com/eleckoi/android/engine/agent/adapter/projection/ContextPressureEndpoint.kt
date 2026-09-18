@@ -14,7 +14,7 @@ import kotlinx.serialization.json.put
 
 /** Validates and routes one DSH `contextPressure` projection update. */
 internal class ContextPressureEndpoint(
-    private val routes: ResponsesAdapterRouteRegistry,
+    private val routes: DshProviderRouteRegistry,
 ) {
     fun accept(body: ByteArray, output: OutputStream) {
         val request = runCatching {
@@ -30,6 +30,9 @@ internal class ContextPressureEndpoint(
         val pressureTokens = value.optionalNonNegativeLong("pressureTokens")
         val projectedTokens = value.optionalNonNegativeLong("projectedTokens")
         val contextWindow = value.optionalNonNegativeLong("contextWindow")
+        val systemTokens = value.optionalNonNegativeLong("systemTokens")
+        val toolsTokens = value.optionalNonNegativeLong("toolsTokens")
+        val messageTokens = value.optionalNonNegativeLong("messageTokens")
         if (
             sessionId == null ||
             sequence == null || sequence < 0L ||
@@ -37,7 +40,10 @@ internal class ContextPressureEndpoint(
             contextWindow == 0L ||
             value.hasInvalidLong("pressureTokens") ||
             value.hasInvalidLong("projectedTokens") ||
-            value.hasInvalidLong("contextWindow")
+            value.hasInvalidLong("contextWindow") ||
+            value.hasInvalidLong("systemTokens") ||
+            value.hasInvalidLong("toolsTokens") ||
+            value.hasInvalidLong("messageTokens")
         ) {
             writeJsonError(output, 400, "上下文投影缺少有效的 sessionId、seq 或 Token 数据")
             return
@@ -49,6 +55,9 @@ internal class ContextPressureEndpoint(
                 pressureTokens = pressureTokens,
                 projectedTokens = projectedTokens,
                 contextWindow = contextWindow,
+                systemTokens = systemTokens,
+                toolsTokens = toolsTokens,
+                messageTokens = messageTokens,
             ),
         )
         if (!accepted) {

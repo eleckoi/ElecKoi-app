@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
@@ -68,13 +69,14 @@ internal fun ModelPickerSheet(
         Column(
             Modifier
                 .fillMaxWidth()
-                .heightIn(max = 520.dp)
+                .height(520.dp)
                 .imePadding(),
         ) {
             MobileBottomSheetHeader(
                 title = "模型列表",
                 appearance = appearance,
                 onDismiss = onClose,
+                modifier = Modifier.padding(top = 16.dp),
             )
             Row(
                 modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, bottom = 8.dp),

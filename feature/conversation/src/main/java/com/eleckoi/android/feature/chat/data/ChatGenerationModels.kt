@@ -35,6 +35,7 @@ data class PreparedChatRegeneration(
     internal val prompt: String,
     internal val config: ModelConfig,
     internal val pendingMessageId: String,
+    internal val userMessageId: String,
     internal val inputImages: List<ChatUserImageAttachment> = emptyList(),
     internal val obsoleteRuntimeThreadIds: Set<String> = emptySet(),
 )

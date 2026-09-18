@@ -12,6 +12,7 @@ import com.eleckoi.android.engine.agent.diagnostics.AgentRequestDiagnostics
 import com.eleckoi.android.engine.generation.config.AndroidKeystoreModelSecretCodec
 import com.eleckoi.android.engine.generation.config.ModelConfigRepository
 import com.eleckoi.android.engine.generation.model.ModelConfig
+import com.eleckoi.android.engine.generation.reasoning.DshResolvedModelCapabilities
 import com.eleckoi.android.engine.generation.image.ReplyImageGenerator
 import com.eleckoi.android.engine.immersive.project.FrontendProjectRepository
 import com.eleckoi.android.engine.story.variables.config.VariableConfigRepository
@@ -112,6 +113,12 @@ internal class ElecKoiServiceGraph(
     private val chatGenerationStats = ChatGenerationStatsStore(
         File(context.filesDir, "chat/sessions"),
     )
+
+    internal fun setDshModelCapabilityResolver(
+        resolver: suspend (ModelConfig, List<String>) -> Map<String, DshResolvedModelCapabilities>,
+    ) {
+        settings.setDshCapabilityResolver(resolver)
+    }
     private val chatInputImages = ChatInputImageStore(context.applicationContext)
     private val sessions = ChatSessionStore(
         database = database,

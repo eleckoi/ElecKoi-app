@@ -84,17 +84,9 @@ if ((Test-Path -LiteralPath $artifactManifest -PathType Leaf) -and
     if (-not (Test-Path -LiteralPath $resolvedBaseBundle -PathType Leaf)) {
         throw '没有可复用的 DeepSeek 编译产物或基础运行时包；仅此时才需要运行 compile-deepseek-harness-arm64.ps1'
     }
-    Assert-SafeArchive -Path $resolvedBaseBundle
-    $encodedPackage = & tar -xOf $resolvedBaseBundle 'deepseek-harness-package.json'
-    if ($LASTEXITCODE -ne 0) { throw '基础运行时包缺少 DeepSeek 元数据' }
-    $package = $encodedPackage | ConvertFrom-Json
-    if ([string]$package.sourceCommit -ne $definition.SourceCommit -or
-        [string]$package.version -ne $definition.HarnessVersion -or
-        [string]$package.packagedNodeVersion -ne $definition.PackagedNodeVersion -or
-        [string]$package.ripgrepPackageVersion -ne $definition.RipgrepPackageVersion -or
-        [string]$package.ripgrepBinarySha256 -ne $definition.RipgrepBinarySha256) {
-        throw '基础运行时包与构建清单不一致，不能复用其中的可执行文件'
-    }
+    $package = Assert-DeepSeekRuntimeBaseBundleCompatible `
+        -Definition $definition `
+        -BundlePath $resolvedBaseBundle
     $landlockBinarySha256 = [string]$package.landlockBinarySha256
     if ($landlockBinarySha256 -notmatch '^[a-f0-9]{64}$' -or
         -not (@(& tar -tzf $resolvedBaseBundle) -contains 'bin/landlock-run')) {
@@ -207,7 +199,10 @@ printf '%s\n' \
   "  \"version\": \"$HARNESS_VERSION\"," \
   "  \"sourceCommit\": \"$SOURCE_COMMIT\"," \
   "  \"sourcePatchSha256\": \"$SOURCE_PATCH_SHA256\"," \
+  "  \"buildNodeVersion\": \"$BUILD_NODE_VERSION\"," \
   "  \"packagedNodeVersion\": \"$PACKAGED_NODE_VERSION\"," \
+  "  \"pnpmVersion\": \"$PNPM_VERSION\"," \
+  "  \"pkgVersion\": \"$PKG_VERSION\"," \
   "  \"ripgrepPackageVersion\": \"$RIPGREP_PACKAGE_VERSION\"," \
   "  \"ripgrepBinarySha256\": \"$RIPGREP_BINARY_SHA256\"," \
   "  \"landlockBinarySha256\": \"$LANDLOCK_BINARY_SHA256\"," \
@@ -232,7 +227,10 @@ $nativeEnvironment = [ordered]@{
     HARNESS_VERSION = $definition.HarnessVersion
     SOURCE_COMMIT = $definition.SourceCommit
     SOURCE_PATCH_SHA256 = $definition.SourcePatchSha256
+    BUILD_NODE_VERSION = $definition.BuildNodeVersion
     PACKAGED_NODE_VERSION = $definition.PackagedNodeVersion
+    PNPM_VERSION = $definition.PnpmVersion
+    PKG_VERSION = $definition.PkgVersion
     RIPGREP_PACKAGE_VERSION = $definition.RipgrepPackageVersion
     RIPGREP_BINARY_SHA256 = $definition.RipgrepBinarySha256
     LANDLOCK_BINARY_SHA256 = $landlockBinarySha256

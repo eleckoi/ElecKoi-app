@@ -16,12 +16,14 @@ data class DeepSeekRuntimeLaunchSpec(
     val workspaceProjectPath: String = "",
     val providerBaseUrl: String,
     val model: String,
-    val modelContextWindow: Int? = null,
+    val modelContextWindow: Int,
     val autoCompactTokenLimit: Int? = null,
     val maxTokens: Int? = null,
-    val systemPrompt: String = "",
     val ephemeral: Boolean = false,
-    val hostToolCatalogJson: String = "{\"tools\":[]}",
+    /** Advisory catalog consumed by the official dsh-llm-deepseek plugin. */
+    val deepSeekModelsJson: String = "[]",
+    /** Literal provider dictionary consumed by the official dsh-llm-pi-ai plugin. */
+    val piAiProvidersJson: String = "{}",
     val workspaceToolsEnabled: Boolean = false,
     val workflowToolsEnabled: Boolean = false,
     val collaborationToolsEnabled: Boolean = false,

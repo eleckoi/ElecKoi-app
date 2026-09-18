@@ -7,6 +7,7 @@ import com.eleckoi.android.engine.agent.api.AgentVirtualFileSearch
 import com.eleckoi.android.engine.agent.tools.AgentToolContextSnapshot
 import com.eleckoi.android.engine.agent.background.AgentRunManager
 import com.eleckoi.android.engine.generation.model.ModelConfig
+import com.eleckoi.android.engine.generation.reasoning.DshResolvedModelCapabilities
 import com.eleckoi.android.engine.immersive.api.FrontendProjectService
 import com.eleckoi.android.engine.story.variables.runtime.VariableRuntimeCheckResult
 import com.eleckoi.android.engine.workspace.runtime.model.LocalRuntimeGateway
@@ -55,6 +56,12 @@ class ElecKoiRepository private constructor(
 
     internal fun setRuntimeSessionCleanup(cleanup: (Set<String>) -> Unit) {
         graph.setRuntimeSessionCleanup(cleanup)
+    }
+
+    internal fun setDshModelCapabilityResolver(
+        resolver: suspend (ModelConfig, List<String>) -> Map<String, DshResolvedModelCapabilities>,
+    ) {
+        graph.setDshModelCapabilityResolver(resolver)
     }
 
     internal constructor(

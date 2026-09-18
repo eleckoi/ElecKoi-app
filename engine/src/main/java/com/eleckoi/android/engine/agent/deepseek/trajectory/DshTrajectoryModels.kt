@@ -1,5 +1,14 @@
 package com.eleckoi.android.engine.agent.deepseek.trajectory
 
+import kotlinx.serialization.json.JsonObject
+
+/** Logical current-format artifact returned by DSH's persistence service. */
+data class DshSessionInspection(
+    val header: JsonObject,
+    val inheritedEventCount: Int,
+    val events: List<JsonObject>,
+)
+
 enum class DshTrajectoryRecordKind {
     System,
     User,
@@ -16,6 +25,41 @@ enum class DshTrajectoryRecordStatus {
     Cancelled,
 }
 
+enum class DshRequestContextRole {
+    System,
+    User,
+    Assistant,
+}
+
+enum class DshRequestContextKind {
+    System,
+    Prompt,
+    History,
+    User,
+    Assistant,
+    Tool,
+    Context,
+}
+
+data class DshRequestContextItem(
+    val order: Int,
+    val messageId: String,
+    val role: DshRequestContextRole,
+    val kind: DshRequestContextKind,
+    val title: String,
+    val source: String,
+    val anchor: String,
+    val content: String,
+)
+
+data class DshRequestContextSnapshot(
+    val requestSeq: Long,
+    val turn: Int,
+    val step: Int,
+    val timeMillis: Long,
+    val items: List<DshRequestContextItem>,
+)
+
 data class DshTrajectoryRequest(
     val number: Int,
     val seq: Long,
@@ -27,6 +71,7 @@ data class DshTrajectoryRequest(
     val model: String,
     val detail: String,
     val rawJson: String,
+    val context: List<DshRequestContextItem> = emptyList(),
     val timeMillis: Long?,
     val durationMillis: Long?,
 )

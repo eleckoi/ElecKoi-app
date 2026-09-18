@@ -8,6 +8,7 @@ import com.eleckoi.android.engine.workspace.runtime.model.LocalRuntimeTarget
 import java.io.File
 import java.nio.file.Files
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -21,13 +22,13 @@ class DeepSeekRuntimeProcessSpecFactoryTest {
                 activeRuntime = fixture.activeRuntime,
                 workspace = fixture.workspace,
                 deepSeekHome = fixture.deepSeekHome,
-                harnessConfig = fixture.managedConfig,
+                harnessPatches = listOf(fixture.managedConfig, fixture.providerConfig),
                 launchSpec = DeepSeekRuntimeLaunchSpec(
                     workspaceId = "role-1",
                     providerBaseUrl = "http://127.0.0.1:43210/${"r".repeat(32)}/v1/",
                     model = "deepseek-v4",
                     modelContextWindow = 1_000_000,
-                    hostToolCatalogJson = "{\"tools\":[{\"name\":\"roleplay\"}]}",
+                    deepSeekModelsJson = "[{\"id\":\"deepseek-flash\"}]",
                     workspaceToolsEnabled = true,
                     workflowToolsEnabled = false,
                     collaborationToolsEnabled = true,
@@ -40,7 +41,8 @@ class DeepSeekRuntimeProcessSpecFactoryTest {
 
             assertEquals(LocalRuntimeTarget.DeepSeekHarness, spec.target)
             assertTrue(spec.arguments.contains("ELECKOI_HOST_TOOLS_URL=http://127.0.0.1:43210/${"r".repeat(32)}/host-tools"))
-            assertTrue(spec.arguments.contains("ELECKOI_HOST_TOOL_CATALOG={\"tools\":[{\"name\":\"roleplay\"}]}"))
+            assertFalse(spec.arguments.any { it.startsWith("ELECKOI_HOST_TOOL_CATALOG=") })
+            assertFalse(spec.arguments.any { it.startsWith("ELECKOI_DSH_DEEPSEEK_MODELS=") })
             assertTrue(spec.arguments.contains("ELECKOI_CONTEXT_WINDOW=1000000"))
             assertTrue(spec.arguments.contains("ELECKOI_ENABLE_WORKSPACE_TOOLS=true"))
             assertTrue(spec.arguments.contains("ELECKOI_ENABLE_WORKFLOW_TOOLS=false"))
@@ -50,9 +52,27 @@ class DeepSeekRuntimeProcessSpecFactoryTest {
             assertTrue(spec.arguments.any { it.endsWith(":/run/eleckoi/proot-loader") })
             assertTrue(spec.arguments.contains("LD_LIBRARY_PATH=/opt/eleckoi/lib/sharp"))
             assertTrue(spec.arguments.contains("/opt/eleckoi/bin/dsh-jsonrpc-agent"))
-            assertTrue(spec.arguments.contains("DSH_CORDIS_CONFIG=/deepseek-home/eleckoi/cordis.yml"))
-            assertTrue(spec.arguments.contains("DSH_SYSTEM_PROMPT="))
-            assertTrue(spec.arguments.contains("/deepseek-home/eleckoi/cordis.yml"))
+            assertTrue(spec.arguments.contains("DSH_TELEMETRY_DISABLED=1"))
+            assertTrue(
+                spec.arguments.contains(
+                    "ELECKOI_REQUEST_CONTEXT_ROOT=/deepseek-home/eleckoi/request-context",
+                ),
+            )
+            assertFalse(spec.arguments.any { it.startsWith("DSH_CORDIS_CONFIG=") })
+            assertFalse(spec.arguments.any { it.startsWith("DSH_SYSTEM_PROMPT=") })
+            val executableIndex = spec.arguments.indexOf("/opt/eleckoi/bin/dsh-jsonrpc-agent")
+            assertEquals(
+                listOf(
+                    "/opt/eleckoi/bin/dsh-jsonrpc-agent",
+                    "--profile",
+                    "sdk",
+                    "--patch",
+                    "/deepseek-home/eleckoi/cordis.patch.yml",
+                    "--patch",
+                    "/deepseek-home/eleckoi/providers.patch.json",
+                ),
+                spec.arguments.drop(executableIndex),
+            )
         } finally {
             fixture.close()
         }
@@ -72,7 +92,8 @@ class DeepSeekRuntimeProcessSpecFactoryTest {
         private val config = File(tools, "etc/deepseek/cordis.yml").file()
         val workspace = File(temp, "app/workspaces/role-1/project").directory()
         val deepSeekHome = File(temp, "app/local_runtime/state/workspace_deepseek_homes/role-1").directory()
-        val managedConfig = File(deepSeekHome, "eleckoi/cordis.yml").file()
+        val managedConfig = File(deepSeekHome, "eleckoi/cordis.patch.yml").file()
+        val providerConfig = File(deepSeekHome, "eleckoi/providers.patch.json").file()
         private val nativeLibraries = File(temp, "app/native-libs").directory()
         val sessionHome = File(temp, "app/local_runtime/sessions/test/home").directory()
         val sessionGuestTemp = File(temp, "app/local_runtime/sessions/test/guest-tmp").directory()

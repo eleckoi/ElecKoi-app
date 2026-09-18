@@ -46,7 +46,7 @@ class ModelConfigContextWindowTest {
     }
 
     @Test
-    fun `official DeepSeek endpoint defaults missing model metadata to one million tokens`() {
+    fun `dedicated DeepSeek route defaults missing model metadata to one million tokens`() {
         assertEquals(
             DeepSeekOfficialContextWindowTokens,
             ModelConfig(
@@ -55,7 +55,7 @@ class ModelConfigContextWindowTest {
             ).configuredContextWindowTokens(),
         )
         assertEquals(
-            DeepSeekOfficialContextWindowTokens,
+            ModelOption.AgentFallbackContextWindowTokens,
             ModelConfig(
                 provider = "custom",
                 baseUrl = "https://api.deepseek.com/v1",
@@ -65,9 +65,9 @@ class ModelConfigContextWindowTest {
     }
 
     @Test
-    fun `DeepSeek relay keeps the conservative fallback when model metadata is absent`() {
+    fun `dedicated DeepSeek relay still uses the official DSH adapter default`() {
         assertEquals(
-            ModelOption.AgentFallbackContextWindowTokens,
+            DeepSeekOfficialContextWindowTokens,
             ModelConfig(
                 provider = "deepseek",
                 baseUrl = "https://relay.example/v1",
@@ -91,13 +91,33 @@ class ModelConfigContextWindowTest {
     }
 
     @Test
-    fun `new model provider configurations prefer Responses`() {
+    fun `new custom configurations prefer Responses while dedicated providers use Chat`() {
         assertEquals(ModelApiFormat.Responses, defaultApiFormatForProvider("custom"))
-        assertEquals(ModelApiFormat.Responses, defaultApiFormatForProvider("deepseek"))
+        assertEquals(ModelApiFormat.ChatCompletions, defaultApiFormatForProvider("deepseek"))
         assertEquals(ModelApiFormat.ChatCompletions, defaultApiFormatForProvider("zhipu"))
         assertEquals(ZhipuDefaultBaseUrl, defaultBaseUrlForProvider("zhipu"))
         assertEquals(ZaiDefaultBaseUrl, defaultBaseUrlForProvider("zai"))
         assertEquals(MoonshotDefaultBaseUrl, defaultBaseUrlForProvider("moonshot"))
+    }
+
+    @Test
+    fun `dedicated DeepSeek keeps the selected connection and model wire formats`() {
+        val connectionResponses = ModelConfig(
+            provider = "deepseek",
+            apiFormat = ModelApiFormat.Responses,
+            model = "deepseek-flash",
+        )
+        val modelOverride = connectionResponses.copy(
+            modelOptions = listOf(
+                ModelOption(
+                    id = "deepseek-flash",
+                    apiFormatOverride = ModelApiFormat.ChatCompletions,
+                ),
+            ),
+        )
+
+        assertEquals(ModelApiFormat.Responses, connectionResponses.effectiveApiFormat())
+        assertEquals(ModelApiFormat.ChatCompletions, modelOverride.effectiveApiFormat())
     }
 
     @Test
@@ -133,11 +153,17 @@ class ModelConfigContextWindowTest {
                 model = "deepseek-v4-flash",
             ).supportsImageInput(),
         )
-        assertFalse(
+        assertTrue(
             ModelConfig(
                 provider = "deepseek",
                 baseUrl = "https://relay.example/v1",
                 model = DeepSeekOfficialVisionModel,
+            ).supportsImageInput(),
+        )
+        assertTrue(
+            ModelConfig(
+                provider = "deepseek",
+                model = "deepseek-flash",
             ).supportsImageInput(),
         )
     }

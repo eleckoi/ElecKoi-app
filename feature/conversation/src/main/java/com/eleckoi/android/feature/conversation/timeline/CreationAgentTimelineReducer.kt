@@ -58,7 +58,9 @@ object CreationAgentTimelineReducer {
                 timeline = timeline,
                 turnId = event.turnId,
                 itemId = event.itemId,
-                updateDetail = { current -> appendTimelineStream(current, event.delta) },
+                updateDetail = { current ->
+                    if (event.completeSnapshot) event.delta else appendTimelineStream(current, event.delta)
+                },
             )
             is AgentSessionEvent.ModelHistoryItemCompleted -> CreationTimelineTurnReducer.appendModelHistoryItem(
                 timeline = timeline,

@@ -1,6 +1,6 @@
 package com.eleckoi.android.engine.generation.config
 
-import com.eleckoi.android.engine.agent.adapter.AgentModelCapabilityValidator
+import com.eleckoi.android.engine.agent.adapter.ModelProtocolCapabilityValidator
 import com.eleckoi.android.foundation.storage.newId
 import com.eleckoi.android.engine.generation.provider.OpenAiCompatibleClient
 import com.eleckoi.android.foundation.storage.ElecKoiDataException
@@ -16,6 +16,7 @@ import com.eleckoi.android.engine.generation.model.DeepSeekOfficialVisionModel
 import com.eleckoi.android.engine.generation.model.defaultApiFormatForProvider
 import com.eleckoi.android.engine.generation.model.isOfficialDeepSeekEndpoint
 import com.eleckoi.android.engine.generation.model.withProviderDefaults
+import com.eleckoi.android.engine.generation.reasoning.DshResolvedModelCapabilities
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
@@ -39,8 +40,11 @@ class ModelConfigRepository internal constructor(
     private val database: ElecKoiDatabase,
     private val provider: OpenAiCompatibleClient = OpenAiCompatibleClient(),
     private val secretCodec: ModelSecretCodec,
-    private val agentCapabilityValidator: AgentModelCapabilityValidator = AgentModelCapabilityValidator(),
+    private val agentCapabilityValidator: ModelProtocolCapabilityValidator = ModelProtocolCapabilityValidator(),
 ) {
+    private var dshCapabilityResolver:
+        (suspend (ModelConfig, List<String>) -> Map<String, DshResolvedModelCapabilities>)? = null
+
     constructor(
         database: ElecKoiDatabase,
         provider: OpenAiCompatibleClient = OpenAiCompatibleClient(),
@@ -49,7 +53,7 @@ class ModelConfigRepository internal constructor(
         database = database,
         provider = provider,
         secretCodec = secretCodec,
-        agentCapabilityValidator = AgentModelCapabilityValidator(),
+        agentCapabilityValidator = ModelProtocolCapabilityValidator(),
     )
 
     private val dao = database.modelConfigDao()
@@ -178,14 +182,32 @@ class ModelConfigRepository internal constructor(
         return loadModelConfigCollection()
     }
 
-    fun fetchModelOptions(config: ModelConfig): ModelConfig {
+    fun setDshCapabilityResolver(
+        resolver: suspend (ModelConfig, List<String>) -> Map<String, DshResolvedModelCapabilities>,
+    ) {
+        dshCapabilityResolver = resolver
+    }
+
+    suspend fun fetchModelOptions(config: ModelConfig): ModelConfig {
         val models = mergeFetchedModelOptions(config, provider.fetchModels(config))
+        val selectedModel = config.model.ifBlank { models.firstOrNull()?.id.orEmpty() }
+        val draft = config.copy(modelOptions = models, model = selectedModel)
+        val capabilities = dshCapabilityResolver?.invoke(draft, models.map(ModelOption::id)).orEmpty()
+        val resolvedModels = models.map { option ->
+            val resolved = capabilities[option.id]
+            option.copy(
+                contextWindowTokens = option.contextWindowTokens ?: resolved?.contextWindowTokens,
+                maxOutputTokens = option.maxOutputTokens ?: resolved?.maxOutputTokens,
+                dshReasoningEffortIds = resolved?.reasoningEffortIds,
+                supportsImageInput = option.supportsImageInput || resolved?.supportsImageInput == true,
+            )
+        }
         // Fetching is an editor operation, not a persistence boundary. The returned copy stays in
         // the caller's draft until the user explicitly chooses Save.
         return normalizeConfig(
             config.copy(
-                modelOptions = models,
-                model = config.model.ifBlank { models.firstOrNull()?.id.orEmpty() },
+                modelOptions = resolvedModels,
+                model = selectedModel,
             ),
         )
     }

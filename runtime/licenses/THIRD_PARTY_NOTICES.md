@@ -41,16 +41,16 @@ release. A binary-only APK is not the complete GPL/LGPL distribution package.
 
 ## Packaged Linux and Agent Harness components
 
-### DeepSeek Harness 0.1.1-rc.2
+### DeepSeek Harness 0.1.5-rc.2
 
 - License: MIT
-- Source commit: `b150a551b8d465e31e418e1b2eaf5e79bbb7d28e`
+- Source commit: `fb2c4b9e698e30edb738bca4cf0618587db7d203`
 - Upstream: https://github.com/deepseek-ai/deepseek-harness
-- ElecKoi bundle: `deepseek-harness-0.1.1-rc.2-eleckoi.6-arm64.egruntime`
-- Bundle SHA-256: `b3aeb4ed6084c2c470759c261604ef7b84f82ab47d0f513cd65197f764ce78ee`
-- ElecKoi source patch: `runtime/deepseek/patches/0001-sdk-session-control.patch` (SHA-256 `ac88289a384bc2f1fab26740c4486649ec8ea1fcd62e425f2786cba351638f14`)
+- ElecKoi bundle: `deepseek-harness-0.1.5-rc.2-eleckoi.3-arm64.egruntime`
+- Bundle SHA-256: `ca5c76ed90fbf61e7132697d7cfbeb908b052b93888c64891152f87e6a2d33dc`
+- ElecKoi source patch: `runtime/deepseek/patches/0001-sdk-session-control.patch` (SHA-256 `ff001edf858716d8a03c64b092b253b4965328d7ce2c55ccf11c4984f1ecaf93`)
 - License text: `deepseek-harness-MIT.txt`; the upstream license and complete upstream dependency notice are also retained inside the Harness bundle under `licenses/deepseek-harness/`.
-- Embedded executable SHA-256: `fa10743484bc4e465d1b6885bdb9f4b54e04dba419bef8e626e6eb08684f0209`.
+- Embedded executable SHA-256: `331296587e4fb3c87e1fac1b920237df120adddafb86794efecd63b8142d2cc4`.
 - The exact Linux ARM64 JavaScript package closure and retained license/notice
   texts are in `deepseek-harness-arm64-npm-third-party-notices.md`; that
   inventory is limited to the packaged production closure rather than the
@@ -59,8 +59,8 @@ release. A binary-only APK is not the complete GPL/LGPL distribution package.
 
 ### DeepSeek Harness Landlock launcher
 
-- Component: `@deepseek-ai/node-addon-landlock-run` native launcher, compiled
-  from `native/landlock-run/packages/entry/src/main.c` at the DeepSeek Harness
+- Component: `@deepseek-ai/node-addon-system` native launcher, compiled
+  from `native/system/packages/entry/src/main.c` at the DeepSeek Harness
   source commit recorded above.
 - License: BSD-3-Clause, Copyright (c) 2026 node-addon-landlock-run contributors
 - Packaged binary: `bin/landlock-run`
@@ -84,9 +84,9 @@ release. A binary-only APK is not the complete GPL/LGPL distribution package.
 - Archive SHA-256: `8e57184950f004478587574f84d2b042b888ed2a4679e2c0e801ecd809a36404`
 - Archive npm integrity: `sha512-dqVSFynCox4C/J8kT16V7SIFAns0IjgLwkvYT7p8LQVmJ5OS5b6tI9IGflxTeuBS//zXeFIUbwt5dwxyZ17cnA==`
 - Packaging source: https://github.com/lovell/sharp-libvips/tree/v1.3.2, commit `4da6d14c0d59866adfb9d8cf52bcaa53846dc4f6`
-- Primary library: libvips 8.18.3, LGPL-2.1-or-later; this distribution may
+- Primary library: libvips 8.18.6, LGPL-2.1-or-later; this distribution may
   exercise the license under LGPL-3.0 through the "or later" option.
-- Packaged binary: `lib/sharp/libvips-cpp.so.8.18.3`, SHA-256 `56f7e7c98d134371c07990a318e41178cf0b6a956b8d5cd73779881c17deaaab`
+- Packaged binary: `lib/sharp/libvips-cpp.so.8.18.6`, SHA-256 `264d3092d69de80f5acdb71c930efec8db5bd9627f41659ed3416566b9ae34b4`
 - The unmodified upstream dependency notice is retained as
   `sharp-libvips-1.3.2-THIRD-PARTY-NOTICES.md`, followed there by ElecKoi's
   Linux ARM64 corrections. In particular, Cairo 1.18.4 is LGPL-2.1-only or

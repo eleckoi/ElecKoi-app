@@ -46,6 +46,7 @@ internal class ChatGenerationCoordinator(
         val sessionId = draft.session.id
         val existingMessageIds = draft.session.messages.mapTo(hashSetOf(), ChatMessage::id)
         val epoch = begin()
+        val runId = newId(16)
         updateState {
             it.copy(
                 input = "",
@@ -54,6 +55,7 @@ internal class ChatGenerationCoordinator(
                 generationPresentation = ChatGenerationPresentation(
                     generation = epoch,
                     sessionId = sessionId,
+                    runId = runId,
                 ),
                 errorMessage = "",
             )
@@ -62,6 +64,7 @@ internal class ChatGenerationCoordinator(
             runCatching {
                 withContext(Dispatchers.IO) {
                     chatService.sendMessage(
+                        runId = runId,
                         draft = draft,
                         message = content,
                         inputImages = inputImages,
@@ -199,8 +202,9 @@ internal class ChatGenerationCoordinator(
     }
 
     fun stop() {
+        val runId = state().generationPresentation?.runId.orEmpty()
         onStopRequested()
-        chatService.cancelActiveStream()
+        if (runId.isNotBlank()) chatService.cancelStream(runId)
         generationEpoch.incrementAndGet()
         generationJob?.cancel()
         generationJob = null
@@ -226,6 +230,7 @@ internal class ChatGenerationCoordinator(
             newId(10)
         }
         val epoch = begin()
+        val runId = newId(16)
         // Regeneration has deletion semantics: the old branch disappears as soon as the durable
         // truncation is ready. No empty assistant row is introduced while waiting for the model.
         updateState {
@@ -234,6 +239,7 @@ internal class ChatGenerationCoordinator(
                 generationPresentation = ChatGenerationPresentation(
                     generation = epoch,
                     sessionId = sessionId,
+                    runId = runId,
                 ),
                 errorMessage = "",
             )
@@ -251,8 +257,6 @@ internal class ChatGenerationCoordinator(
                         pendingMessageId = pendingMessageId,
                     )
                 }.onSuccess { prepared ->
-                    val retainedUserId = prepared.session.messages.lastOrNull { it.role == MessageRole.User }?.id
-                        ?: error("重新生成后缺少保留的用户消息")
                     if (isCurrent(epoch, sessionId)) {
                         preparedForTurn = prepared
                         updateState { current ->
@@ -285,7 +289,7 @@ internal class ChatGenerationCoordinator(
                     onMessagesChanged(
                         sessionId,
                         if (replacement == null) "regenerated" else "edited",
-                        listOf(retainedUserId, prepared.pendingMessageId),
+                        listOf(prepared.userMessageId, prepared.pendingMessageId),
                     )
                 }.onFailure { error ->
                     if (isCurrent(epoch, sessionId)) {
@@ -305,6 +309,7 @@ internal class ChatGenerationCoordinator(
             runCatching {
                 withContext(Dispatchers.IO) {
                     chatService.runPreparedRegeneration(
+                        runId = runId,
                         prepared = prepared,
                         onDelta = { nextDraft ->
                             publishDraftIfCurrent(

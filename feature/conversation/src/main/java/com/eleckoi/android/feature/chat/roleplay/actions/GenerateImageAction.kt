@@ -30,7 +30,7 @@ internal fun generateImageActionContextInjection(
     id = GenerateImageActionContextId,
     anchor = AgentContextAnchor.ToolContext,
     role = AgentContextRole.System,
-    activation = AgentContextActivation.Immediate,
+    activation = AgentContextActivation.FirstModelRequest,
     content = generateImageActionContextContent(imageConfig),
     order = order.coerceAtLeast(1),
 )

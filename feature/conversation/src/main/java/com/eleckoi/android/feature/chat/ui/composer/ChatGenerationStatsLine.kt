@@ -74,6 +74,15 @@ internal fun generationStatsGroups(metrics: ChatGenerationMetrics): List<String>
     }
 }
 
+internal fun retainVisibleGenerationMetrics(
+    previous: ChatGenerationMetrics,
+    next: ChatGenerationMetrics,
+): ChatGenerationMetrics = when {
+    generationStatsGroups(next).isNotEmpty() -> next
+    generationStatsGroups(previous).isNotEmpty() -> previous
+    else -> next
+}
+
 private fun formatStatsDuration(millis: Long): String {
     val seconds = millis / 1_000.0
     return if (seconds < 60.0) "${formatStatsNumber(seconds)}s" else {

@@ -53,18 +53,6 @@ internal object AdapterHttpCodec {
         return AdapterHttpRequest(parts[0], parts[1].substringBefore('?'), headers, body)
     }
 
-    fun writeSseHeaders(output: OutputStream) {
-        output.write(
-            (
-                "HTTP/1.1 200 OK\r\n" +
-                    "Content-Type: text/event-stream; charset=utf-8\r\n" +
-                    "Cache-Control: no-cache\r\n" +
-                    "Connection: close\r\n\r\n"
-                ).toByteArray(Charsets.US_ASCII),
-        )
-        output.flush()
-    }
-
     fun writeProxyHeaders(
         output: OutputStream,
         status: Int,
@@ -82,11 +70,6 @@ internal object AdapterHttpCodec {
                 ).toByteArray(Charsets.US_ASCII),
         )
         output.flush()
-    }
-
-    fun writeEvents(output: OutputStream, events: List<ResponsesSseEvent>) {
-        events.forEach { output.write(it.encode().toByteArray(Charsets.UTF_8)) }
-        if (events.isNotEmpty()) output.flush()
     }
 
     fun writeJsonError(output: OutputStream, status: Int, message: String) {
@@ -151,8 +134,8 @@ internal object AdapterHttpCodec {
 
     private fun readFixedBody(input: InputStream, rawLength: String?): ByteArray {
         val length = rawLength?.toIntOrNull() ?: 0
-        require(length in 1..MaxBodyBytes) { "Responses 请求体大小无效" }
-        return readExactly(input, length, "Responses 请求体提前结束")
+        require(length in 1..MaxBodyBytes) { "Provider 请求体大小无效" }
+        return readExactly(input, length, "Provider 请求体提前结束")
     }
 
     private fun readChunkedBody(input: InputStream): ByteArray {
@@ -172,12 +155,12 @@ internal object AdapterHttpCodec {
                 break
             }
             require(output.size().toLong() + size <= MaxBodyBytes) {
-                "Responses 请求超过 4 MiB"
+                "Provider 请求超过 24 MiB"
             }
             output.write(readExactly(input, size.toInt(), "chunked 请求块提前结束"))
             require(readAsciiLine(input, 0).isEmpty()) { "chunked 请求块结尾无效" }
         }
-        require(output.size() > 0) { "Responses 请求体不能为空" }
+        require(output.size() > 0) { "Provider 请求体不能为空" }
         return output.toByteArray()
     }
 

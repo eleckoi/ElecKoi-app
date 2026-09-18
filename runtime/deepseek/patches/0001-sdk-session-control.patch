@@ -1,5 +1,156 @@
+diff --git a/packages/compaction/compaction-basic/src/config.ts b/packages/compaction/compaction-basic/src/config.ts
+index 9628c80178..3a9fbb68f5 100644
+--- a/packages/compaction/compaction-basic/src/config.ts
++++ b/packages/compaction/compaction-basic/src/config.ts
+@@ -37,6 +37,7 @@ const POLICY_CONFIG_KEYS = [
+ /** Complete public top-level configuration key set. */
+ const BASIC_COMPACT_CONFIG_KEYS: ReadonlySet<string> = new Set([
+   ...POLICY_CONFIG_KEYS,
++  'instruction',
+   'modelPolicies',
+   'auto',
+ ])
+@@ -70,6 +71,9 @@ export function resolveConfig(config: BasicCompactionConfig = {}): ResolvedConfi
+   if (config.auto !== undefined && typeof config.auto !== 'boolean') {
+     throw new Error('BasicCompactionConfig: auto must be a boolean')
+   }
++  if (config.instruction !== undefined && typeof config.instruction !== 'string') {
++    throw new Error('BasicCompactionConfig: instruction must be a string')
++  }
+ 
+   const thresholdRatio = config.thresholdRatio ?? DEFAULT_THRESHOLD_RATIO
+   const retention = resolveRetention(config, { retainRatio: DEFAULT_RETAIN_RATIO })
+@@ -91,6 +95,7 @@ export function resolveConfig(config: BasicCompactionConfig = {}): ResolvedConfi
+     maxTokens: config.maxTokens ?? 8192,
+     compactionRetries: config.compactionRetries ?? 1,
+     maxOverflowRetries: config.maxOverflowRetries ?? 1,
++    instruction: config.instruction?.trim() ?? '',
+     modelPolicies,
+     auto: config.auto ?? true,
+   })
+diff --git a/packages/compaction/compaction-basic/src/index.ts b/packages/compaction/compaction-basic/src/index.ts
+index 7a6ce3daba..efe2f5b7bf 100644
+--- a/packages/compaction/compaction-basic/src/index.ts
++++ b/packages/compaction/compaction-basic/src/index.ts
+@@ -79,6 +79,7 @@ const summarizationModelSchema = z.string()
+ const maxTokensSchema = z.number().step(1).min(1)
+ const compactionRetriesSchema = z.number().step(1).min(0)
+ const maxOverflowRetriesSchema = z.number().step(1).min(0)
++const instructionSchema = z.string()
+ 
+ const modelPolicy: z<ModelCompactPolicyConfig> = z.object({
+   provider: z.string().required(),
+@@ -115,6 +116,7 @@ export class BasicCompactionEngine extends CompactionEngine {
+     maxOverflowRetries: maxOverflowRetriesSchema,
+     modelPolicies: z.array(modelPolicy),
+     auto: z.boolean(),
++    instruction: instructionSchema,
+   })
+ 
+   /** Resolved and validated compaction configuration. */
+@@ -243,7 +245,7 @@ export class BasicCompactionEngine extends CompactionEngine {
+     const config = target === undefined
+       ? this.config
+       : resolveTargetPolicy(this.config, target)
+-    return summarizeWithLlm(this.ctx, config, input, agent, signal)
++    return summarizeWithLlm(this.ctx, config, input, agent, signal, this.config.instruction)
+   }
+ 
+   /**
+diff --git a/packages/compaction/compaction-basic/src/summarizer.ts b/packages/compaction/compaction-basic/src/summarizer.ts
+index 5fe259a756..4038e2e7e6 100644
+--- a/packages/compaction/compaction-basic/src/summarizer.ts
++++ b/packages/compaction/compaction-basic/src/summarizer.ts
+@@ -122,6 +122,7 @@ export async function summarizeWithLlm(
+   input: SummarizationInput,
+   agent: Agent,
+   signal?: AbortSignal,
++  instruction?: string,
+ ): Promise<SummaryResult> {
+   const latest = agent.session.requestHeader()?.config
+   const configured = config.summarizationProvider.length === 0
+@@ -144,7 +145,7 @@ export async function summarizeWithLlm(
+   const messages: Message[] = [
+     ...input.messages,
+     createUserMessage({
+-      content: [{ type: 'text', text: COMPACTION_INSTRUCTION }],
++      content: [{ type: 'text', text: instruction?.trim() || COMPACTION_INSTRUCTION }],
+       source: { kind: 'plugin', plugin: 'dsh-compaction-basic' },
+     }),
+   ]
+diff --git a/packages/compaction/compaction-basic/src/types.ts b/packages/compaction/compaction-basic/src/types.ts
+index 05fc354573..7ed80bf5de 100644
+--- a/packages/compaction/compaction-basic/src/types.ts
++++ b/packages/compaction/compaction-basic/src/types.ts
+@@ -36,6 +36,8 @@ export interface ModelCompactPolicyConfig extends CompactionPolicyConfig {
+ 
+ /** Basic compaction configuration with an optional exact-target policy table. */
+ export interface BasicCompactionConfig extends CompactionPolicyConfig {
++  /** Optional deployment-owned summarization instruction replacing the built-in directive. */
++  instruction?: string
+   /** Exact provider/model overrides; duplicate targets fail plugin load. */
+   modelPolicies?: ModelCompactPolicyConfig[]
+   /** Enable automatic step-boundary pressure and overflow-recovery listeners. Defaults to `true`. */
+@@ -59,6 +61,7 @@ interface ResolvedPolicyFields {
+ 
+ /** Validated immutable config whose target-specific defaults remain unresolved. */
+ export type ResolvedConfig = ResolvedPolicyFields & ResolvedRetention & {
++  readonly instruction: string
+   readonly modelPolicies: readonly Readonly<ModelCompactPolicyConfig>[]
+   readonly auto: boolean
+ }
+diff --git a/packages/compaction/compaction-basic/tests/compaction-basic.spec.ts b/packages/compaction/compaction-basic/tests/compaction-basic.spec.ts
+index bd6a48af66..35a309116c 100644
+--- a/packages/compaction/compaction-basic/tests/compaction-basic.spec.ts
++++ b/packages/compaction/compaction-basic/tests/compaction-basic.spec.ts
+@@ -312,6 +312,7 @@ describe('compact configuration and defaults', () => {
+       thresholdRatio: 0.8,
+       retainRatio: 0.16,
+       summarizationProvider: '',
++      instruction: '',
+       summarizationModel: '',
+       maxTokens: 8192,
+       compactionRetries: 1,
+diff --git a/packages/compaction/compaction-basic/tests/compaction-loop-repro.spec.ts b/packages/compaction/compaction-basic/tests/compaction-loop-repro.spec.ts
+index a527226c03..bded9bf661 100644
+--- a/packages/compaction/compaction-basic/tests/compaction-loop-repro.spec.ts
++++ b/packages/compaction/compaction-basic/tests/compaction-loop-repro.spec.ts
+@@ -100,12 +100,9 @@ class OverflowRecoveryAdapter extends LlmAdapter {
+   }
+ 
+   override async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+-    // The cache-reusing summarizer replays the conversation prefix and marks
+-    // its call only by the compaction instruction in the trailing user message.
+-    const trailing = options.messages.at(-1)?.content
+-      .map(block => (block.type === 'text' ? block.text : ''))
+-      .join('') ?? ''
+-    if (trailing.includes('acting as a compaction engine')) {
++    // Compaction requests carry an explicit purpose and must not be inferred
++    // from deployment-owned instruction text.
++    if (options.purpose === 'compaction') {
+       this.summaryRequests.push(options)
+       yield { type: 'block-start', index: 0, blockType: 'text' }
+       yield { type: 'block-end', index: 0, block: { type: 'text', text: 'RECOVERY CHECKPOINT' } }
+@@ -401,6 +398,7 @@ describe('context-overflow recovery across the real loop and compaction-basic',
+         maxTokens: 64,
+         compactionRetries: 0,
+         maxOverflowRetries: 1,
++        instruction: 'ElecKoi custom compaction directive.',
+       })
+ 
+       try {
+@@ -421,8 +419,7 @@ describe('context-overflow recovery across the real loop and compaction-basic',
+         const instruction = adapter.summaryRequests[0]!.messages.at(-1)?.content
+           .map(block => (block.type === 'text' ? block.text : ''))
+           .join('') ?? ''
+-        expect(instruction).toContain('Write concise English engineering prose.')
+-        expect(instruction).toContain('numeric values, function signatures, and syntax fragments.')
++        expect(instruction).toBe('ElecKoi custom compaction directive.')
+         expect(JSON.stringify(adapter.conversationRequests[0]!.messages)).toContain('OLD HISTORY SENTINEL')
+         const retry = JSON.stringify(adapter.conversationRequests[1]!.messages)
+         expect(retry).toContain('RECOVERY CHECKPOINT')
 diff --git a/packages/fs/tool-fs-search/src/search-core.ts b/packages/fs/tool-fs-search/src/search-core.ts
-index 5ac552103..a7c5ac01e 100644
+index acdca37c00..8d82b9976a 100644
 --- a/packages/fs/tool-fs-search/src/search-core.ts
 +++ b/packages/fs/tool-fs-search/src/search-core.ts
 @@ -170,6 +170,8 @@ let rgPathPromise: Promise<string> | undefined
@@ -8,20 +159,22 @@ index 5ac552103..a7c5ac01e 100644
    rgPathPromise ??= Promise.resolve().then(async () => {
 +    const externalRgPath = process.env.DSH_RIPGREP_PATH
 +    if (externalRgPath !== undefined) return externalRgPath
-     const executableSidecar = `${process.execPath}-rg`
-     if ('pkg' in process && existsSync(executableSidecar)) return executableSidecar
-     return (await import('@vscode/ripgrep')).rgPath
+     const executable = parse(process.execPath)
+     const executableSidecar = process.platform === 'win32'
+       ? join(executable.dir, `${executable.name}-rg.exe`)
 diff --git a/packages/fs/tool-fs-search/tests/rg-sidecar.spec.ts b/packages/fs/tool-fs-search/tests/rg-sidecar.spec.ts
-index 53c7a01ae..3ea05690a 100644
+index d3a6b5e188..f444c43488 100644
 --- a/packages/fs/tool-fs-search/tests/rg-sidecar.spec.ts
 +++ b/packages/fs/tool-fs-search/tests/rg-sidecar.spec.ts
-@@ -20,9 +20,20 @@ beforeEach(() => {
-
+@@ -25,11 +25,22 @@ beforeEach(() => {
+ 
  afterEach(() => {
    Reflect.deleteProperty(process, 'pkg')
 +  vi.unstubAllEnvs()
+   Reflect.defineProperty(process, 'platform', { configurable: true, enumerable: true, value: originalPlatform })
+   process.execPath = originalExecPath
  })
-
+ 
  describe('ripgrep resolution', () => {
 +  it('uses the deployment-provided executable before packaged fallbacks', async () => {
 +    vi.stubEnv('DSH_RIPGREP_PATH', '/opt/eleckoi/bin/rg')
@@ -35,35 +188,12 @@ index 53c7a01ae..3ea05690a 100644
 +
    it('uses the native sidecar beside the current executable', async () => {
      Reflect.defineProperty(process, 'pkg', { configurable: true, value: {} })
-     existsSync.mockReturnValue(true)
-diff --git a/packages/llm/llm-pi-ai/package.json b/packages/llm/llm-pi-ai/package.json
-index 0fd59afaa..11948d732 100644
---- a/packages/llm/llm-pi-ai/package.json
-+++ b/packages/llm/llm-pi-ai/package.json
-@@ -43,7 +43,7 @@
-     "@deepseek-ai/cordis": "workspace:^"
-   },
-   "dependencies": {
--    "@earendil-works/pi-ai": "^0.82.1",
-+    "@earendil-works/pi-ai": "0.85.1",
-     "@deepseek-ai/schemastery": "workspace:^"
-   },
-   "devDependencies": {
+     Reflect.defineProperty(process, 'platform', { configurable: true, enumerable: true, value: 'linux' })
 diff --git a/packages/llm/llm-pi-ai/src/adapter.ts b/packages/llm/llm-pi-ai/src/adapter.ts
-index f06b27a1e..3108222fe 100644
+index 8dba978c31..8c5e8f4f9e 100644
 --- a/packages/llm/llm-pi-ai/src/adapter.ts
 +++ b/packages/llm/llm-pi-ai/src/adapter.ts
-@@ -347,6 +347,9 @@ export class PiAiAdapter extends LlmAdapter {
-     using watchdog = idleWatchdog(upstream, streamIdleTimeoutMs, 'LLM_STREAM_IDLE_TIMEOUT')
-
-     try {
-+      if (options.signal?.aborted) {
-+        throw new LlmError('pi-ai request aborted by caller', 'ABORTED')
-+      }
-       const containsImage = options.messages.some(message => contentHasImage(message.content))
-       if (containsImage && !model.input.includes('image')) {
-         throw new LlmError(`pi-ai model "${model.id}" does not support image input`, 'UNSUPPORTED_CONTENT')
-@@ -367,6 +370,7 @@ export class PiAiAdapter extends LlmAdapter {
+@@ -380,12 +380,21 @@ export class PiAiAdapter extends LlmAdapter {
        const events = snapshot.models.streamSimple(model, context, {
          ...profileOptions(profile, reasoning, apiKey),
          ...options.temperature === undefined ? {} : { temperature: options.temperature },
@@ -71,260 +201,51 @@ index f06b27a1e..3108222fe 100644
          ...options.maxTokens === undefined ? {} : { maxTokens: options.maxTokens },
          ...options.sessionId === undefined ? {} : { sessionId: String(options.sessionId) },
          signal: watchdog.signal,
-diff --git a/packages/llm/llm-pi-ai/src/catalog.ts b/packages/llm/llm-pi-ai/src/catalog.ts
-index 1e9b126dd..14a1f94a2 100644
---- a/packages/llm/llm-pi-ai/src/catalog.ts
-+++ b/packages/llm/llm-pi-ai/src/catalog.ts
-@@ -100,6 +100,7 @@ const THINKING_FORMAT_GATE: Record<PiAiThinkingFormat, true> = {
-   'deepseek': true,
-   'openrouter': true,
-   'together': true,
-+  'baseten': true,
-   'zai': true,
-   'qwen': true,
-   'chat-template': true,
-@@ -141,6 +142,7 @@ export type PiAiChatTemplateVar = Extract<ChatTemplateKwargValue, { $var: string
- const CHAT_TEMPLATE_VAR_GATE: Record<PiAiChatTemplateVar, true> = {
-   'thinking.enabled': true,
-   'thinking.effort': true,
-+  'thinking.budget': true,
- }
-
- /** The request-state placeholders a profile may name. */
-@@ -217,6 +219,7 @@ const COMPLETIONS_COMPAT_GATE = {
-   supportsDeveloperRole: 'offer',
-   supportsReasoningEffort: 'offer',
-   supportsUsageInStreaming: 'offer',
-+  supportsFinishReason: 'withhold',
-   maxTokensField: 'offer',
-   requiresToolResultName: 'offer',
-   requiresAssistantAfterToolResult: 'offer',
-@@ -224,16 +227,20 @@ const COMPLETIONS_COMPAT_GATE = {
-   requiresReasoningContentOnAssistantMessages: 'offer',
-   thinkingFormat: 'offer',
-   chatTemplateKwargs: 'offer',
-+  chatTemplateArgs: 'withhold',
-   supportsStrictMode: 'offer',
-   cacheControlFormat: 'offer',
-   supportsLongCacheRetention: 'offer',
-   openRouterRouting: 'withhold',
-   vercelGatewayRouting: 'withhold',
-   zaiToolStream: 'withhold',
-+  thinkingTokenBudgetField: 'withhold',
-+  supportsThinkingTokenBudget: 'withhold',
-   supportsOpenAIGrammarTools: 'withhold',
-   sendSessionAffinityHeaders: 'withhold',
-   deferredToolsMode: 'withhold',
-   sessionAffinityFormat: 'withhold',
-+  vllmPriority: 'withhold',
- } as const satisfies Record<keyof OpenAICompletionsCompat, CompatDisposition>
-
- /** Disposition of every `OpenAIResponsesCompat` field; a drift gate like the one above. */
-@@ -243,8 +250,10 @@ const RESPONSES_COMPAT_GATE = {
-   supportsLongCacheRetention: 'offer',
-   sessionAffinityFormat: 'withhold',
-   supportsOpenAIGrammarTools: 'withhold',
-+  supportsAdditionalTools: 'withhold',
-   supportsToolSearch: 'withhold',
-   supportsExplicitPromptCacheMode: 'withhold',
-+  supportsMaxOutputTokens: 'withhold',
- } as const satisfies Record<keyof OpenAIResponsesCompat, CompatDisposition>
-
- /** Disposition of every `AnthropicMessagesCompat` field; a drift gate like the one above. */
-@@ -256,6 +265,8 @@ const ANTHROPIC_COMPAT_GATE = {
-   forceAdaptiveThinking: 'offer',
-   allowEmptySignature: 'offer',
-   supportsStrictTools: 'offer',
-+  supportsMidConvoEffort: 'withhold',
-+  allowedFallbackModels: 'withhold',
-   sendSessionAffinityHeaders: 'withhold',
-   supportsToolReferences: 'withhold',
- } as const satisfies Record<keyof AnthropicMessagesCompat, CompatDisposition>
-diff --git a/packages/llm/llm-pi-ai/src/stream.ts b/packages/llm/llm-pi-ai/src/stream.ts
-index d45df45a3..900570d9a 100644
---- a/packages/llm/llm-pi-ai/src/stream.ts
-+++ b/packages/llm/llm-pi-ai/src/stream.ts
-@@ -112,6 +112,14 @@ export function mapStopReason(message: AssistantMessage, contextWindow?: number)
-       const text = message.errorMessage ?? 'pi-ai stream error'
-       return { kind: 'error', failure: { message: text, code: classifyPiAiError(text) } }
-     }
-+    case 'pending': return {
-+      kind: 'error',
-+      failure: { message: 'pi-ai returned a non-terminal pending response', code: 'PI_AI_ERROR' },
-+    }
-+    case 'deferred': return {
-+      kind: 'error',
-+      failure: { message: 'pi-ai returned a deferred response unsupported by this adapter', code: 'PI_AI_ERROR' },
-+    }
-   }
- }
-
+         // Profile headers are deployment-owned; attribution names are
+         // Harness-owned and therefore win collisions.
+-        headers: requestHeaders(profile.headers),
++        headers: {
++          ...requestHeaders(profile.headers),
++          ...options.sessionId === undefined
++            ? {}
++            : { 'x-deepseek-harness-session-id': String(options.sessionId) },
++          ...options.purpose === 'compaction'
++            ? { 'x-deepseek-harness-compact': '1' }
++            : {},
++        },
+       })
+       const iterator = toStreamChunks(events, model.contextWindow, options.signal, model.id)[Symbol.asyncIterator]()
+       let exhausted = false
 diff --git a/packages/llm/llm-pi-ai/tests/adapter.spec.ts b/packages/llm/llm-pi-ai/tests/adapter.spec.ts
-index e2ed0233d..cad965176 100644
+index a54ec17697..ea969eb9b3 100644
 --- a/packages/llm/llm-pi-ai/tests/adapter.spec.ts
 +++ b/packages/llm/llm-pi-ai/tests/adapter.spec.ts
-@@ -126,13 +126,15 @@ describe('PiAiAdapter provider routing', () => {
-       model: 'deepseek-v4-flash',
+@@ -138,18 +138,23 @@ describe('PiAiAdapter provider routing', () => {
+       model: 'deepseek-v4-pro',
        messages: [],
        temperature: 0.2,
 +      topP: 0,
        maxTokens: 77,
        sessionId: 'session-for-pi' as never,
++      purpose: 'compaction',
      })
      expect(server.requests[0]).toMatchObject({
-       model: 'deepseek-v4-flash',
+       model: 'deepseek-v4-pro',
        temperature: 0.2,
--      max_completion_tokens: 77,
 +      top_p: 0,
-+      max_tokens: 77,
+       max_tokens: 77,
        thinking: { type: 'enabled' },
        reasoning_effort: 'max',
      })
-@@ -481,6 +483,7 @@ describe('provider profile lifecycle', () => {
-         reasoning: {
-           efforts: [
-             { id: ReasoningEffortId('off'), name: 'Off' },
-+            { id: ReasoningEffortId('low'), name: 'Low' },
-             { id: ReasoningEffortId('high'), name: 'High' },
-             { id: ReasoningEffortId('max'), name: 'Max' },
-           ],
-@@ -966,14 +969,15 @@ describe('abort wiring', () => {
-     const adapter = adapterOf({ deepseek: {} })
-     const controller = new AbortController()
-     controller.abort('already stopped')
--    const chunks = []
--    for await (const chunk of adapter.stream({
--      provider: 'deepseek',
--      model: 'deepseek-v4-flash',
--      messages: [],
--      signal: controller.signal,
--    })) chunks.push(chunk)
--    expect(chunks.at(-1)).toMatchObject({ type: 'finish', reason: { kind: 'aborted' } })
-+    const drain = async (): Promise<void> => {
-+      for await (const _chunk of adapter.stream({
-+        provider: 'deepseek',
-+        model: 'deepseek-v4-flash',
-+        messages: [],
-+        signal: controller.signal,
-+      })) { /* drain */ }
-+    }
-+    await expect(drain()).rejects.toMatchObject({ code: 'ABORTED' })
+     expect(server.requests[0]).not.toHaveProperty('dsh_session_log')
+     expect(server.requests[0]).not.toHaveProperty('dsh_plugin_packages')
++    expect(server.headers[0]?.['x-deepseek-harness-session-id']).toBe('session-for-pi')
++    expect(server.headers[0]?.['x-deepseek-harness-compact']).toBe('1')
    })
-
-   it('honors a pre-aborted caller signal', async () => {
-diff --git a/packages/llm/llm-pi-ai/tests/catalog.spec.ts b/packages/llm/llm-pi-ai/tests/catalog.spec.ts
-index 99886cdba..b6ed76d1b 100644
---- a/packages/llm/llm-pi-ai/tests/catalog.spec.ts
-+++ b/packages/llm/llm-pi-ai/tests/catalog.spec.ts
-@@ -9,7 +9,7 @@ import FileSettingsProvider from '@deepseek-ai/dsh-settings-file'
- import { settingsNamespace } from '@deepseek-ai/dsh-settings'
- import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
- import { PiAiAdapter } from '@deepseek-ai/dsh-llm-pi-ai'
--import { getBuiltinModels } from '@earendil-works/pi-ai/providers/all'
-+import { getBuiltinModels, getBuiltinProviders } from '@earendil-works/pi-ai/providers/all'
- import { createModels, getSupportedThinkingLevels } from '@earendil-works/pi-ai'
- import type { Api, Model, OpenAICompletionsCompat, Provider } from '@earendil-works/pi-ai'
- import { resolveProfiles } from '../src/config.ts'
-@@ -75,6 +75,22 @@ async function harness(config: LlmPiAi.Config): Promise<Context> {
-   return ctx
- }
-
-+function mixedOpenAiCatalog(): {
-+  provider: string
-+  completions: Model<Api>
-+  responses: Model<Api>
-+} {
-+  for (const provider of getBuiltinProviders()) {
-+    const catalog = getBuiltinModels(provider) as readonly Model<Api>[]
-+    const completions = catalog.find(model => model.api === 'openai-completions')
-+    const responses = catalog.find(model => model.api === 'openai-responses')
-+    if (completions !== undefined && responses !== undefined) {
-+      return { provider, completions, responses }
-+    }
-+  }
-+  throw new Error('the installed catalog ships no mixed OpenAI provider')
-+}
-+
- describe('hand-declared providers', () => {
-   it('serves a route pi-ai has never heard of from its own declaration', async () => {
-     const server = await mockServer([{ events: textEvents }])
-@@ -637,7 +653,7 @@ describe('per-model reasoning efforts', () => {
-   it('narrows a catalog model’s levels in place', () => {
-     const [catalogModel] = getBuiltinModels('deepseek')
-     if (catalogModel === undefined) throw new Error('the installed catalog ships no deepseek model')
--    expect(getSupportedThinkingLevels(catalogModel as Model<Api>)).toEqual(['off', 'high', 'max'])
-+    expect(getSupportedThinkingLevels(catalogModel as Model<Api>)).toContain('high')
-
-     const model = modelOf({
-       deepseek: { models: [{ id: catalogModel.id, reasoningEfforts: { off: null, high: 'high' } }] },
-@@ -796,19 +812,16 @@ describe('compat switches', () => {
-   })
-
-   it('skips models of other protocols on a mixed route instead of failing them', () => {
--    // xai ships both completions and responses models, so a route-level switch
--    // must land on the former without invalidating the latter.
--    const catalog = getBuiltinModels('xai') as readonly Model<Api>[]
--    const completions = catalog.find(model => model.api === 'openai-completions')
--    const responses = catalog.find(model => model.api === 'openai-responses')
--    if (completions === undefined || responses === undefined) throw new Error('xai no longer ships a mixed catalog')
-+    // A mixed catalog route's switch must land on the compatible protocol
-+    // without invalidating a sibling model that speaks another one.
-+    const { provider, completions, responses } = mixedOpenAiCatalog()
-
-     const models = modelsOf({
--      xai: {
-+      [provider]: {
-         compat: { supportsReasoningEffort: false },
-         models: [{ id: completions.id }, { id: responses.id }],
-       },
--    }, 'xai')
-+    }, provider)
-
-     expect((models.get(completions.id)?.compat as OpenAICompletionsCompat).supportsReasoningEffort).toBe(false)
-     expect(models.get(responses.id)?.compat).toEqual(responses.compat)
-@@ -877,18 +890,15 @@ describe('compat switches', () => {
-   })
-
-   it('lands each route switch only on the models whose protocol declares it', () => {
--    const catalog = getBuiltinModels('xai') as readonly Model<Api>[]
--    const completions = catalog.find(model => model.api === 'openai-completions')
--    const responses = catalog.find(model => model.api === 'openai-responses')
--    if (completions === undefined || responses === undefined) throw new Error('xai no longer ships a mixed catalog')
-+    const { provider, completions, responses } = mixedOpenAiCatalog()
-
-     const models = modelsOf({
--      xai: {
-+      [provider]: {
-         // Both protocols take the first switch; only completions takes the second.
-         compat: { supportsDeveloperRole: false, thinkingFormat: 'openai' },
-         models: [{ id: completions.id }, { id: responses.id }],
-       },
--    }, 'xai')
-+    }, provider)
-
-     const onCompletions = models.get(completions.id)?.compat as OpenAICompletionsCompat
-     expect(onCompletions.supportsDeveloperRole).toBe(false)
-diff --git a/packages/llm/llm-pi-ai/tests/convert.spec.ts b/packages/llm/llm-pi-ai/tests/convert.spec.ts
-index c540f2d50..4e085fe7e 100644
---- a/packages/llm/llm-pi-ai/tests/convert.spec.ts
-+++ b/packages/llm/llm-pi-ai/tests/convert.spec.ts
-@@ -759,6 +759,14 @@ describe('mapStopReason / mapUsage', () => {
-     ['length', { kind: 'max-tokens' }],
-     ['toolUse', { kind: 'tool-calls' }],
-     ['aborted', { kind: 'aborted', failure: { message: 'pi-ai stream aborted', code: 'ABORTED' } }],
-+    ['pending', {
-+      kind: 'error',
-+      failure: { message: 'pi-ai returned a non-terminal pending response', code: 'PI_AI_ERROR' },
-+    }],
-+    ['deferred', {
-+      kind: 'error',
-+      failure: { message: 'pi-ai returned a deferred response unsupported by this adapter', code: 'PI_AI_ERROR' },
-+    }],
-   ] as const)('maps %s', (stopReason, expected) => {
-     expect(mapStopReason(assistant({ stopReason, content: [{ type: 'text', text: 'ok' }] }))).toEqual(expected)
-   })
+ 
+   it('uses a dynamic request effort and reports unsupported efforts before network I/O', async () => {
 diff --git a/packages/llm/llm/src/call-config.ts b/packages/llm/llm/src/call-config.ts
-index 6bf108dc1..45d62a276 100644
+index 9d012cd5c1..ae7f624341 100644
 --- a/packages/llm/llm/src/call-config.ts
 +++ b/packages/llm/llm/src/call-config.ts
 @@ -25,6 +25,7 @@ export interface LlmCallConfig {
@@ -344,10 +265,10 @@ index 6bf108dc1..45d62a276 100644
    ) return false
    if (a.stop === undefined || b.stop === undefined) return a.stop === b.stop
 diff --git a/packages/llm/llm/src/types.ts b/packages/llm/llm/src/types.ts
-index 8c5be187d..d29511aa2 100644
+index bfddde7fc4..c9e3a25232 100644
 --- a/packages/llm/llm/src/types.ts
 +++ b/packages/llm/llm/src/types.ts
-@@ -355,6 +355,8 @@ export interface GenerateOptions {
+@@ -437,6 +437,8 @@ export interface GenerateOptions {
    /** Tool schemas (adapters map to the provider's `tools` field). */
    tools?: ToolSchema[]
    temperature?: number
@@ -357,10 +278,10 @@ index 8c5be187d..d29511aa2 100644
    /**
     * Stop sequences: generation halts as soon as the model produces any one of
 diff --git a/packages/llm/llm/tests/call-config.spec.ts b/packages/llm/llm/tests/call-config.spec.ts
-index 2237d4639..79f856640 100644
+index 24f33acb82..5c3993e599 100644
 --- a/packages/llm/llm/tests/call-config.spec.ts
 +++ b/packages/llm/llm/tests/call-config.spec.ts
-@@ -21,6 +21,8 @@ describe('callConfigEquals', () => {
+@@ -22,6 +22,8 @@ describe('callConfigEquals', () => {
        { ...base, reasoningEffort: ReasoningEffortId('high') },
      )).toBe(true)
      expect(callConfigEquals({ ...base, temperature: 0.5 }, base)).toBe(false)
@@ -370,7 +291,7 @@ index 2237d4639..79f856640 100644
      expect(callConfigEquals({ ...base, stop: ['a'] }, base)).toBe(false)
      expect(callConfigEquals({ ...base, stop: ['a'] }, { ...base, stop: ['a', 'b'] })).toBe(false)
 diff --git a/packages/sandbox/sandbox-local/src/index.ts b/packages/sandbox/sandbox-local/src/index.ts
-index 5965d86d3..3e71c7596 100644
+index 9e9b45a741..8f24dc04b7 100644
 --- a/packages/sandbox/sandbox-local/src/index.ts
 +++ b/packages/sandbox/sandbox-local/src/index.ts
 @@ -23,7 +23,7 @@
@@ -382,67 +303,71 @@ index 5965d86d3..3e71c7596 100644
  import { fileURLToPath } from 'node:url'
  import {
    LAUNCHER_BIN,
-@@ -60,6 +60,13 @@ export interface Config {
-    * covering the executable runner's own failure dialect.
-    */
-   runnerFailureSignatures?: string[]
+@@ -42,6 +42,12 @@ import { bwrapProfileArgs, landlockProfileArgs, seatbeltProfileArgs } from './pr
+ 
+ /** Plugin config. All optional — `static Config` supplies the defaults. */
+ export interface Config {
 +  /**
 +   * Trusted deployment path to a physical `landlock-run` sidecar. Packaged
 +   * single-file executables cannot spawn a binary from their virtual
-+   * filesystem, so embedded runtimes may place the launcher beside the app
-+   * payload and select it explicitly here.
++   * filesystem, so embedded runtimes may select their bundled launcher.
 +   */
 +  landlockPath?: string
-   /** Positive timeout for each functional probe; zero would mean unbounded to Node. */
-   probeTimeoutMs?: number
- }
-@@ -252,6 +259,7 @@ export class LocalSandboxProvider extends SandboxProvider {
+   /**
+    * Override the runner argv; bwrap-compatible profile arguments are appended. A
+    * non-empty override asserts full enforcement and skips built-in selection and
+@@ -250,6 +256,7 @@ const RUNNER_FAILURE_RULES = {
+ export class LocalSandboxProvider extends SandboxProvider {
+   // Inline schema call: the config catalog walks `static Config` statically.
    static Config: z<Config> = z.object({
++    landlockPath: z.string(),
      runnerCommand: z.array(z.string()).default([]),
      runnerFailureSignatures: z.array(z.string()).default([]),
-+    landlockPath: z.string(),
      probeTimeoutMs: z.natural().default(5_000),
-   })
-
-@@ -260,6 +268,7 @@ export class LocalSandboxProvider extends SandboxProvider {
-
+@@ -259,6 +266,7 @@ export class LocalSandboxProvider extends SandboxProvider {
+   internals: SandboxInternals = {}
+ 
    private readonly runnerCommand: string[] | undefined
-   private readonly configuredRunnerFailureSignatures: string[]
 +  private readonly configuredLandlockPath: string | undefined
+   private readonly configuredRunnerFailureSignatures: string[]
    private readonly probeTimeoutMs: number
    /** Cached chain verdict; undefined until the first confined wrap needs it. */
-   private selectedRunner: SelectedRunner | 'unavailable' | undefined
-@@ -289,8 +298,13 @@ export class LocalSandboxProvider extends SandboxProvider {
-     if (runnerFailureSignatures.some(signature => signature.trim().length === 0 || /[\r\n]/u.test(signature))) {
-       throw new Error('sandbox-local: runnerFailureSignatures entries must be non-empty single-line strings')
-     }
+@@ -275,6 +283,10 @@ export class LocalSandboxProvider extends SandboxProvider {
+ 
+   constructor(ctx: Context, config: Config) {
+     super(ctx)
 +    const landlockPath = config.landlockPath?.trim()
 +    if (landlockPath !== undefined && (!isAbsolute(landlockPath) || landlockPath.includes('\0'))) {
 +      throw new Error('sandbox-local: landlockPath must be an absolute path without NUL bytes')
 +    }
+     // The schema (static Config) defaults every field — the casts record
+     // those runtime facts. An empty runnerCommand means "not configured":
+     // use the platform chain.
+@@ -290,6 +302,7 @@ export class LocalSandboxProvider extends SandboxProvider {
+       throw new Error('sandbox-local: runnerFailureSignatures entries must be non-empty single-line strings')
+     }
      this.runnerCommand = runner.length > 0 ? runner : undefined
-     this.configuredRunnerFailureSignatures = runnerFailureSignatures
 +    this.configuredLandlockPath = landlockPath
+     this.configuredRunnerFailureSignatures = runnerFailureSignatures
      this.probeTimeoutMs = config.probeTimeoutMs as number
      assertPositiveFinite('probeTimeoutMs', this.probeTimeoutMs)
-     // The temp grants are revoked with the provider: a clean server
-@@ -540,7 +554,7 @@ export class LocalSandboxProvider extends SandboxProvider {
-
+@@ -540,7 +553,7 @@ export class LocalSandboxProvider extends SandboxProvider {
+ 
    /** The Landlock launcher to probe and exec (test hook over the resolved one). */
    private landlockLauncher(): string {
 -    return this.internals.landlockLauncher ?? landlockLauncherPath()
 +    return this.internals.landlockLauncher ?? this.configuredLandlockPath ?? landlockLauncherPath()
    }
-
+ 
    /** The `sandbox-exec` executable to probe and exec (test hook over the system one). */
 diff --git a/packages/sandbox/sandbox-local/tests/local.spec.ts b/packages/sandbox/sandbox-local/tests/local.spec.ts
-index 285afb865..0fdc8144f 100644
+index e6d7aaa258..faa59e033c 100644
 --- a/packages/sandbox/sandbox-local/tests/local.spec.ts
 +++ b/packages/sandbox/sandbox-local/tests/local.spec.ts
-@@ -158,6 +158,26 @@ describe('runnerCommand config', () => {
-   )
+@@ -334,6 +334,26 @@ describe('the default landlock probe (launcher CLI contract)', () => {
+   })
  })
-
+ 
 +describe('landlockPath config', () => {
 +  it('uses a trusted physical sidecar path for the Linux fallback and its probe', async () => {
 +    const launcher = fakeLauncher()
@@ -463,46 +388,36 @@ index 285afb865..0fdc8144f 100644
 +  })
 +})
 +
- describe('the platform chains', () => {
-   it('linux probes bwrap first: a passing probe wraps with the bwrap dialect at full enforcement', async () => {
-     const probeBwrap = vi.fn(() => true)
-diff --git a/packages/sdk/protocol/package.json b/packages/sdk/protocol/package.json
-index c5bac4b7e..257d7d4a6 100644
---- a/packages/sdk/protocol/package.json
-+++ b/packages/sdk/protocol/package.json
-@@ -31,6 +31,7 @@
-   ],
-   "license": "MIT",
-   "peerDependencies": {
-+    "@deepseek-ai/dsh-attachment": "workspace:^",
-     "@deepseek-ai/dsh-invariants": "workspace:^",
-     "@deepseek-ai/dsh-llm": "workspace:^",
-     "@deepseek-ai/dsh-session": "workspace:^",
-@@ -38,6 +39,7 @@
-     "@deepseek-ai/cordis": "workspace:^"
-   },
-   "devDependencies": {
-+    "@deepseek-ai/dsh-attachment": "workspace:^",
-     "@deepseek-ai/dsh-invariants": "workspace:^",
-     "@deepseek-ai/dsh-llm": "workspace:^",
-     "@deepseek-ai/dsh-session": "workspace:^",
+ describe('probeTimeoutMs config', () => {
+   it('rejects 0 at construction: Node treats a 0 spawnSync timeout as UNBOUNDED, the opposite of the field', async () => {
+     const ctx = new Context()
 diff --git a/packages/sdk/protocol/src/index.ts b/packages/sdk/protocol/src/index.ts
-index 5f0aaca21..4367ea4bf 100644
+index 36c5a39954..834e331119 100644
 --- a/packages/sdk/protocol/src/index.ts
 +++ b/packages/sdk/protocol/src/index.ts
-@@ -16,10 +16,20 @@ export type {
+@@ -12,16 +12,30 @@ export { JsonRpcLineTransport, JsonRpcResponseError } from './transport.ts'
+ export type { JsonRpcTransportPeer } from './transport.ts'
+ export type {
+   HarnessSdkNotificationMap,
++  AgentAssistantStreamNotification,
+   HarnessSdkRequestMap,
    InitializeParams,
    InitializeResult,
++  ModelResolveParams,
++  ModelResolveResult,
+   SdkEncodedImageBlock,
+   SdkPromptContentBlock,
    SdkRunStatus,
 +  SessionApprovalOutcome,
 +  SessionApprovalRequestedNotification,
 +  SessionApprovalResolvedNotification,
 +  SessionCancelParams,
 +  SessionCancelResult,
++  SessionInspectParams,
++  SessionInspectResult,
    SessionEventNotification,
    SessionStatusNotification,
    SessionPromptParams,
-+  SessionPromptContentPart,
    SessionPromptResult,
 +  SessionResolveApprovalParams,
 +  SessionResolveApprovalResult,
@@ -512,44 +427,48 @@ index 5f0aaca21..4367ea4bf 100644
    SubagentStartedNotification,
  } from './types.ts'
 diff --git a/packages/sdk/protocol/src/types.ts b/packages/sdk/protocol/src/types.ts
-index 533b5f23c..603e51648 100644
+index 605b97cc69..0b66649a8d 100644
 --- a/packages/sdk/protocol/src/types.ts
 +++ b/packages/sdk/protocol/src/types.ts
-@@ -9,6 +9,7 @@
+@@ -8,8 +8,8 @@
+  * @module @deepseek-ai/dsh-sdk-protocol/types
   */
-
- import type { ContentBlock } from '@deepseek-ai/dsh-llm'
-+import type { EncodedImageAttachment } from '@deepseek-ai/dsh-attachment/types'
- import type { SessionEvent } from '@deepseek-ai/dsh-session'
+ 
+-import type { ContentBlock, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+-import type { SessionEvent } from '@deepseek-ai/dsh-session'
++import type { ContentBlock, LlmResolvedModelInfo, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
++import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
  import type { SubagentStopReason } from '@deepseek-ai/dsh-subagent'
-
-@@ -34,16 +35,69 @@ export interface InitializeResult {
+ 
+ /** Parameters for the process-wide SDK handshake. */
+@@ -32,10 +32,23 @@ export interface InitializeResult {
+   serverInfo: { name: string; version: string }
+ }
+ 
++/** Resolve one exact registered provider/model route through the DSH LLM service. */
++export interface ModelResolveParams {
++  provider: string
++  model: string
++}
++
++/** Adapter-owned current model metadata, including selectable reasoning efforts. */
++export type ModelResolveResult = LlmResolvedModelInfo
++
+ /** One user turn on one SDK session. */
  export interface SessionPromptParams {
    /** The SDK-side session id; an unknown id lazily creates the agent+session pair. */
    sessionId: string
--  /** The prompt content blocks, sent verbatim as the user message. */
--  contentBlocks: ContentBlock[]
-+  /** Legacy durable prompt content, already admitted into the deployment attachment store. */
-+  contentBlocks?: ContentBlock[]
-+  /** Upload-capable prompt content. Images are admitted before the user message is published. */
-+  content?: SessionPromptContentPart[]
 +  /** Workspace recorded when the session is first created; later prompts must keep the same path. */
 +  cwd?: string
 +  /** Ordinary turns queue behind current work; steering is consumed at the nearest step boundary. */
 +  mode?: 'followup' | 'steer'
+   /** The prompt content blocks, sent verbatim as the user message. */
+   contentBlocks: SdkPromptContentBlock[]
  }
-
-+/** Upload-capable content accepted by the SDK prompt wire. */
-+export type SessionPromptContentPart =
-+  | { type: 'text'; text: string }
-+  | ({ type: 'image' } & EncodedImageAttachment)
-+
- /** Durable enqueue receipt for one prompt. */
- export interface SessionPromptResult {
-   /** Identity of the queued user message. */
+@@ -58,6 +71,64 @@ export interface SessionPromptResult {
    messageId: string
  }
-
+ 
 +/** Cancel the active activity for one existing SDK session. */
 +export interface SessionCancelParams {
 +  /** The SDK-side session id. Unknown ids are left untouched. */
@@ -559,6 +478,22 @@ index 533b5f23c..603e51648 100644
 +/** Whether the server found a live SDK session to cancel. */
 +export interface SessionCancelResult {
 +  accepted: boolean
++}
++
++/** Read one stored session through the configured persistence backend. */
++export interface SessionInspectParams {
++  /** Durable DSH session identity. */
++  sessionId: string
++}
++
++/** Current logical session artifact after physical decoding and format migration. */
++export interface SessionInspectResult {
++  /** Immutable logical session metadata. */
++  header: SessionHeader
++  /** Exact prefix inherited from a fork parent. */
++  inheritedEventCount: number
++  /** Fully decoded and migrated current-format events. */
++  events: SessionEvent[]
 +}
 +
 +/** Set one SDK-owned session's durable permission preset. */
@@ -594,11 +529,11 @@ index 533b5f23c..603e51648 100644
 +
  /** Deployment-mapped SDK outcome: `ok` for an accepted result, `error` otherwise. */
  export type SdkRunStatus = 'ok' | 'error'
-
-@@ -63,6 +117,30 @@ export interface SessionStatusNotification {
+ 
+@@ -77,6 +148,36 @@ export interface SessionStatusNotification {
    status: 'idle' | 'running'
  }
-
+ 
 +/** A sandbox escalation is waiting for the SDK host's one-shot decision. */
 +export interface SessionApprovalRequestedNotification {
 +  /** Server-issued process-local request identity. */
@@ -623,55 +558,58 @@ index 533b5f23c..603e51648 100644
 +  outcome: SessionApprovalOutcome | 'unavailable'
 +}
 +
++/** Live model-attempt frame emitted before the durable Session event is committed. */
++export interface AgentAssistantStreamNotification {
++  sessionId: string
++  frame: unknown
++}
++
  /** `subagent.started` payload: an in-runtime child session was created. */
  export interface SubagentStartedNotification {
    /** The delegating session. */
-@@ -93,6 +171,8 @@ export interface SubagentFinishedNotification {
+@@ -107,6 +208,9 @@ export interface SubagentFinishedNotification {
  export interface HarnessSdkNotificationMap {
    'session.event': SessionEventNotification
    'session.status': SessionStatusNotification
++  'agent.assistant-stream': AgentAssistantStreamNotification
 +  'session.approval_requested': SessionApprovalRequestedNotification
 +  'session.approval_resolved': SessionApprovalResolvedNotification
    'subagent.started': SubagentStartedNotification
    'subagent.finished': SubagentFinishedNotification
  }
-@@ -101,5 +181,8 @@ export interface HarnessSdkNotificationMap {
+@@ -114,6 +218,11 @@ export interface HarnessSdkNotificationMap {
+ /** Client-to-server request methods with their param and result shapes. */
  export interface HarnessSdkRequestMap {
    'initialize': { params: InitializeParams; result: InitializeResult }
++  'model/resolve': { params: ModelResolveParams; result: ModelResolveResult }
    'session/prompt': { params: SessionPromptParams; result: SessionPromptResult }
 +  'session/cancel': { params: SessionCancelParams; result: SessionCancelResult }
++  'session/inspect': { params: SessionInspectParams; result: SessionInspectResult }
 +  'session/set_permission': { params: SessionSetPermissionParams; result: SessionSetPermissionResult }
 +  'session/resolve_approval': { params: SessionResolveApprovalParams; result: SessionResolveApprovalResult }
    'shutdown': { params: undefined; result: Record<string, never> }
  }
 diff --git a/packages/sdk/server/package.json b/packages/sdk/server/package.json
-index f32b4a014..bc2df840b 100644
+index 56d1e7cad5..5e20f9f457 100644
 --- a/packages/sdk/server/package.json
 +++ b/packages/sdk/server/package.json
-@@ -35,28 +35,36 @@
-     "@deepseek-ai/schemastery": "workspace:^"
-   },
-   "peerDependencies": {
-+    "@deepseek-ai/dsh-attachment": "workspace:^",
-     "@deepseek-ai/dsh-agent": "workspace:^",
-     "@deepseek-ai/dsh-invariants": "workspace:^",
+@@ -36,10 +36,13 @@
+     "@deepseek-ai/dsh-attachment": "workspace:^",
      "@deepseek-ai/dsh-llm": "workspace:^",
      "@deepseek-ai/dsh-llm-deepseek": "workspace:^",
 +    "@deepseek-ai/dsh-permission-presets": "workspace:^",
      "@deepseek-ai/dsh-scope": "workspace:^",
      "@deepseek-ai/dsh-sdk-protocol": "workspace:^",
      "@deepseek-ai/dsh-session": "workspace:^",
+-    "@deepseek-ai/dsh-subagent": "workspace:^"
 +    "@deepseek-ai/dsh-session-persistence": "workspace:^",
-     "@deepseek-ai/dsh-subagent": "workspace:^",
-+    "@deepseek-ai/dsh-user-approval": "workspace:^",
-     "@deepseek-ai/cordis": "workspace:^"
++    "@deepseek-ai/dsh-subagent": "workspace:^",
++    "@deepseek-ai/dsh-user-approval": "workspace:^"
    },
    "devDependencies": {
-+    "@deepseek-ai/dsh-attachment": "workspace:^",
-     "@deepseek-ai/cordis-plugin-loader": "workspace:^",
-     "@deepseek-ai/dsh-agent": "workspace:^",
-     "@deepseek-ai/dsh-agent-spine-demo": "workspace:^",
-     "@deepseek-ai/dsh-invariants": "workspace:^",
+     "@deepseek-ai/cordis": "workspace:^",
+@@ -50,11 +53,14 @@
+     "@deepseek-ai/dsh-attachment": "workspace:^",
      "@deepseek-ai/dsh-llm": "workspace:^",
      "@deepseek-ai/dsh-llm-deepseek": "workspace:^",
 +    "@deepseek-ai/dsh-permission-presets": "workspace:^",
@@ -680,85 +618,64 @@ index f32b4a014..bc2df840b 100644
      "@deepseek-ai/dsh-session": "workspace:^",
 +    "@deepseek-ai/dsh-session-persistence": "workspace:^",
      "@deepseek-ai/dsh-session-persistence-jsonl": "workspace:^",
-     "@deepseek-ai/dsh-subagent": "workspace:^",
-+    "@deepseek-ai/dsh-user-approval": "workspace:^",
-     "@deepseek-ai/cordis": "workspace:^"
+     "@deepseek-ai/dsh-session-projection": "workspace:^",
+-    "@deepseek-ai/dsh-subagent": "workspace:^"
++    "@deepseek-ai/dsh-subagent": "workspace:^",
++    "@deepseek-ai/dsh-user-approval": "workspace:^"
    }
  }
 diff --git a/packages/sdk/server/src/server.ts b/packages/sdk/server/src/server.ts
-index 195caa908..4213bb430 100644
+index 1cc17059c9..8f356a1f88 100644
 --- a/packages/sdk/server/src/server.ts
 +++ b/packages/sdk/server/src/server.ts
-@@ -8,19 +8,32 @@
- import type { Context } from '@deepseek-ai/cordis'
- import { resolve } from 'node:path'
+@@ -11,18 +11,33 @@ import { brandString } from '@deepseek-ai/dsh-brand'
  import type { Agent, AgentHandle } from '@deepseek-ai/dsh-agent'
--import { createUserMessage } from '@deepseek-ai/dsh-llm'
-+import { admitEncodedImages } from '@deepseek-ai/dsh-attachment'
-+import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment/types'
-+import { createUserMessage, type ContentBlock } from '@deepseek-ai/dsh-llm'
+ import { admitEncodedImages, type EncodedImageAttachment, type ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+ import { createUserMessage, ReasoningEffortId, type ContentBlock, type LlmRuntime } from '@deepseek-ai/dsh-llm'
 +import type {} from '@deepseek-ai/dsh-permission-presets'
  import { carrierKeyOf, type Scoped } from '@deepseek-ai/dsh-scope'
- import { SessionId } from '@deepseek-ai/dsh-session'
+ import type { SessionId } from '@deepseek-ai/dsh-session'
 +import type {} from '@deepseek-ai/dsh-session-persistence'
  import type SubagentRuntime from '@deepseek-ai/dsh-subagent'
  import type { SubagentRunEndInfo } from '@deepseek-ai/dsh-subagent'
 +import type { ApprovalOutcome, ApprovalRequest } from '@deepseek-ai/dsh-user-approval'
  import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek'
  import type {
++  AgentAssistantStreamNotification,
    InitializeParams,
    InitializeResult,
    JsonRpcTransportPeer,
++  ModelResolveParams,
++  ModelResolveResult,
 +  SessionApprovalOutcome,
 +  SessionCancelParams,
 +  SessionCancelResult,
    SessionEventNotification,
++  SessionInspectParams,
++  SessionInspectResult,
    SessionPromptParams,
-+  SessionPromptContentPart,
    SessionPromptResult,
 +  SessionResolveApprovalParams,
 +  SessionResolveApprovalResult,
 +  SessionSetPermissionParams,
 +  SessionSetPermissionResult,
+   SdkEncodedImageBlock,
    SubagentFinishedNotification,
    SubagentStartedNotification,
- } from '@deepseek-ai/dsh-sdk-protocol'
-@@ -29,6 +42,12 @@ interface SessionRecord {
+@@ -32,6 +47,12 @@ interface SessionRecord {
    handle: AgentHandle
  }
-
+ 
 +interface PendingApproval {
 +  ownerSessionId: string
 +  sessionId: string
 +  settle(outcome: ApprovalOutcome): void
 +}
 +
- /** Recover the delegating parent from the service-owned scoped carrier. */
- function subagentParentOf(carrier: Scoped<SubagentRuntime>): Agent {
-   return carrierKeyOf(carrier) as Agent
-@@ -45,6 +64,21 @@ function successStatus(reason: string, options: HarnessSdkJsonRpcServerOptions):
-   return reason === 'max-tokens' && options.maxTokensAsSuccess === true ? 'ok' : 'error'
+ function encodedImage(block: SessionPromptParams['contentBlocks'][number]): block is SdkEncodedImageBlock {
+   return block.type === 'image' && 'data' in block
  }
-
-+/** Admit one upload-capable prompt as a batch before publishing any user-visible session event. */
-+async function durablePromptContent(
-+  ctx: Context,
-+  content: readonly SessionPromptContentPart[],
-+): Promise<ContentBlock[]> {
-+  if (content.every(part => part.type === 'text')) {
-+    return content.map(part => ({ type: 'text', text: part.text }))
-+  }
-+  const refs = await admitEncodedImages(ctx.attachments, content.filter(part => part.type === 'image'))
-+  let next = 0
-+  return content.map(part => part.type === 'text'
-+    ? { type: 'text', text: part.text }
-+    : { type: 'image', attachment: refs[next++] as ImageAttachmentRef })
-+}
-+
- /**
-  * SDK server over one booted harness context and transport peer. Construction
-  * subscribes to session, agent, and subagent lifecycle events until shutdown;
-@@ -58,7 +92,11 @@ export class HarnessSdkJsonRpcServer {
+@@ -81,7 +102,11 @@ export class HarnessSdkJsonRpcServer {
    private llmFiber: { dispose(): Promise<void> } | undefined
    private readonly sessions = new Map<string, SessionRecord>()
    private readonly sessionCreations = new Map<string, Promise<SessionRecord>>()
@@ -769,8 +686,8 @@ index 195caa908..4213bb430 100644
 +  private nextApprovalRequestId = 0
    private shutdownTask: Promise<Record<string, never>> | undefined
    private shuttingDown = false
-
-@@ -78,6 +116,8 @@ export class HarnessSdkJsonRpcServer {
+   private initialized = false
+@@ -102,6 +127,8 @@ export class HarnessSdkJsonRpcServer {
      this.disposers.push(ctx.on('session/created', (session) => {
        const parentSession = session.header.parentSession
        if (parentSession === undefined) return
@@ -779,50 +696,56 @@ index 195caa908..4213bb430 100644
        const payload: SubagentStartedNotification = {
          parentSessionId: String(parentSession),
          childSessionId: String(session.id),
-@@ -101,6 +141,7 @@ export class HarnessSdkJsonRpcServer {
+@@ -125,6 +152,14 @@ export class HarnessSdkJsonRpcServer {
        }
        transport.notify('subagent.finished', payload)
      }))
++    this.disposers.push(ctx.on('agent/assistant-stream', ({ agent, frame }) => {
++      const payload: AgentAssistantStreamNotification = {
++        sessionId: String(agent.session.id),
++        frame,
++      }
++      transport.notify('agent.assistant-stream', payload)
++    }))
 +    this.disposers.push(ctx.on('approval/request', (request, next) => this.requestApproval(request, next)))
    }
-
+ 
    /**
-@@ -130,18 +171,67 @@ export class HarnessSdkJsonRpcServer {
-    * @returns the durable message identity.
+@@ -175,12 +210,13 @@ export class HarnessSdkJsonRpcServer {
     */
    async prompt(params: SessionPromptParams): Promise<SessionPromptResult> {
+     if (!this.initialized) throw new Error('SDK server is not initialized')
 -    const rec = await this.getOrCreateSession(params.sessionId)
 +    const rec = await this.getOrCreateSession(params.sessionId, params.cwd)
      // An agent-loop-only reload disposes the loop's agents while this record
      // survives; a retained agent accepts followup() silently, so validate the
-     // record against the live registry before delivery (as the ACP bridge does).
-     if (this.ctx.agents.get(rec.handle.agent.id) !== rec.handle.agent) {
-       throw new Error(`session agent was disposed outside the server: ${params.sessionId}`)
-     }
--    const message = createUserMessage({ content: params.contentBlocks, source: { kind: 'user' } })
+     // record against the live registry before delivery.
+     this.assertLiveAgent(rec, params.sessionId)
+     const content = await durablePromptContent(this.ctx, params.contentBlocks)
++    if (content.length === 0) throw new TypeError('session/prompt contentBlocks cannot be empty')
+     // Attachment admission crosses an async boundary where shutdown or an
+     // agent-loop reload may detach the retained handle.
+     this.assertLiveAgent(rec, params.sessionId)
+@@ -188,10 +224,74 @@ export class HarnessSdkJsonRpcServer {
+       content,
+       source: { kind: 'user' },
+     })
 -    rec.handle.agent.followup(message)
-+    if (params.content !== undefined && params.contentBlocks !== undefined) {
-+      throw new TypeError('session/prompt accepts content or contentBlocks, not both')
-+    }
-+    const uploadContent = params.content
-+    if (uploadContent !== undefined && uploadContent.some(part => part.type === 'image')) {
-+      const info = await this.ctx.llm.resolveModelInfo(this.provider, this.model)
-+      if (info.inputModalities !== undefined && !info.inputModalities.includes('image')) {
-+        throw new TypeError(`model "${this.model}" does not support image input`)
-+      }
-+    }
-+    const content = uploadContent === undefined
-+      ? params.contentBlocks
-+      : await durablePromptContent(this.ctx, uploadContent)
-+    if (content === undefined || content.length === 0) {
-+      throw new TypeError('session/prompt content cannot be empty')
-+    }
-+    const message = createUserMessage({ content, source: { kind: 'user' } })
 +    if (params.mode === 'steer') rec.handle.agent.steer(message)
 +    else rec.handle.agent.followup(message)
      return { messageId: message.id }
    }
-
+ 
++  /** Return the official adapter's exact model metadata without duplicating its catalog. */
++  async resolveModel(params: ModelResolveParams): Promise<ModelResolveResult> {
++    if (!this.initialized) throw new Error('SDK server is not initialized')
++    const provider = params.provider?.trim()
++    const model = params.model?.trim()
++    if (provider === undefined || provider.length === 0) throw new TypeError('model/resolve provider cannot be empty')
++    if (model === undefined || model.length === 0) throw new TypeError('model/resolve model cannot be empty')
++    return this.ctx.llm.resolveModelInfo(provider, model)
++  }
++
 +  /** Cancel only the active activity while preserving queued SDK work and the session itself. */
 +  cancel(params: SessionCancelParams): SessionCancelResult {
 +    const rec = this.sessions.get(params.sessionId)
@@ -833,13 +756,34 @@ index 195caa908..4213bb430 100644
 +    return { accepted: true }
 +  }
 +
++  /** Read the persistence backend's logical artifact so storage codecs remain backend-owned. */
++  async inspect(params: SessionInspectParams): Promise<SessionInspectResult> {
++    const sessionId = params.sessionId?.trim()
++    if (sessionId === undefined || sessionId.length === 0) {
++      throw new TypeError('session/inspect sessionId cannot be empty')
++    }
++    const persistence = this.ctx.get('sessionPersistence')
++    if (persistence === undefined) throw new Error('session persistence is unavailable in this SDK runtime')
++    const handle = await persistence.open(brandString<SessionId>(sessionId), 'read')
++    try {
++      const result = await handle.read()
++      return {
++        header: handle.header,
++        inheritedEventCount: handle.inheritedEventCount,
++        events: [...result.events],
++      }
++    } finally {
++      await handle.close()
++    }
++  }
++
 +  /** Create/resume a session when needed and switch its durable permission preset. */
 +  async setPermission(params: SessionSetPermissionParams): Promise<SessionSetPermissionResult> {
 +    const permissions = this.ctx.get('permissionPresets')
 +    if (permissions === undefined) throw new Error('permission presets are unavailable in this SDK runtime')
 +    const rec = await this.getOrCreateSession(params.sessionId, params.cwd)
 +    permissions.set(rec.handle.agent.session, params.preset)
-+    return { preset: permissions.current(rec.handle.agent.session.events) }
++    return { preset: permissions.current(rec.handle.agent.session) }
 +  }
 +
 +  /** Resolve one process-local approval request without creating a durable grant. */
@@ -855,23 +799,29 @@ index 195caa908..4213bb430 100644
 +    return { accepted: true }
 +  }
 +
-   /**
-    * Dispose server-owned agents, adapter, and subscriptions to quiescence.
-    * The surrounding context remains running.
-@@ -154,6 +244,7 @@ export class HarnessSdkJsonRpcServer {
-
+   private assertLiveAgent(rec: SessionRecord, sessionId: string): void {
+     if (this.ctx.agents.get(rec.handle.agent.id) !== rec.handle.agent) {
+       throw new Error(`session agent was disposed outside the server: ${sessionId}`)
+@@ -210,6 +310,7 @@ export class HarnessSdkJsonRpcServer {
+ 
    private async performShutdown(): Promise<Record<string, never>> {
      this.shuttingDown = true
 +    for (const pending of [...this.pendingApprovals.values()]) pending.settle('cancelled')
      const pendingCreations = [...this.sessionCreations.values()]
      await Promise.allSettled(pendingCreations)
      this.sessionCreations.clear()
-@@ -193,6 +284,12 @@ export class HarnessSdkJsonRpcServer {
+@@ -247,8 +348,18 @@ export class HarnessSdkJsonRpcServer {
+     switch (method) {
+       case 'initialize':
          return this.initialize(params as unknown as InitializeParams)
++      case 'model/resolve':
++        return this.resolveModel(params as unknown as ModelResolveParams)
        case 'session/prompt':
          return this.prompt(params as unknown as SessionPromptParams)
 +      case 'session/cancel':
 +        return this.cancel(params as unknown as SessionCancelParams)
++      case 'session/inspect':
++        return this.inspect(params as unknown as SessionInspectParams)
 +      case 'session/set_permission':
 +        return this.setPermission(params as unknown as SessionSetPermissionParams)
 +      case 'session/resolve_approval':
@@ -879,10 +829,10 @@ index 195caa908..4213bb430 100644
        case 'shutdown':
          return this.shutdown()
        default:
-@@ -200,13 +297,13 @@ export class HarnessSdkJsonRpcServer {
+@@ -256,13 +367,13 @@ export class HarnessSdkJsonRpcServer {
      }
    }
-
+ 
 -  private async getOrCreateSession(sessionId: string): Promise<SessionRecord> {
 +  private async getOrCreateSession(sessionId: string, cwd?: string): Promise<SessionRecord> {
      if (this.shuttingDown) throw new Error('SDK server is shutting down')
@@ -897,10 +847,10 @@ index 195caa908..4213bb430 100644
      this.sessionCreations.set(sessionId, creation)
      void creation.then(
        () => { this.sessionCreations.delete(sessionId) },
-@@ -215,25 +312,90 @@ export class HarnessSdkJsonRpcServer {
+@@ -271,26 +382,85 @@ export class HarnessSdkJsonRpcServer {
      return creation
    }
-
+ 
 -  private async createSession(sessionId: string): Promise<SessionRecord> {
 +  private async createSession(sessionId: string, cwd?: string): Promise<SessionRecord> {
      // No preset composition: this server's compositions keep the model-facing
@@ -908,58 +858,54 @@ index 195caa908..4213bb430 100644
      // deployment that configures a roster has to join one here first
      // (@deepseek-ai/dsh-agent-presets README, "Composing a child agent").
 -    const handle = await this.ctx.agents.create({
--      sessionId: SessionId(sessionId),
+-      sessionId: brandString<SessionId>(sessionId),
 -      meta: { cwd: this.cwd },
 -      agentOptions: {
 -        provider: this.provider,
 -        model: this.model,
+-        ...this.reasoningEffort === undefined ? {} : { reasoningEffort: this.reasoningEffort },
 -        ...this.maxTokens === undefined ? {} : { maxTokens: this.maxTokens },
 -      },
 -    })
-+    const id = SessionId(sessionId)
++    const id = brandString<SessionId>(sessionId)
 +    const resolvedCwd = resolve(cwd ?? this.cwd)
 +    const agentOptions = {
 +      provider: this.provider,
 +      model: this.model,
++      ...this.reasoningEffort === undefined ? {} : { reasoningEffort: this.reasoningEffort },
 +      ...this.maxTokens === undefined ? {} : { maxTokens: this.maxTokens },
 +    }
 +    const persistence = this.ctx.get('sessionPersistence')
-+    const stored = persistence === undefined
++    const stored = persistence === undefined || typeof persistence.stat !== 'function'
 +      ? undefined
-+      : (await persistence.list()).find(header => header.id === id)
-+    if (stored !== undefined && stored.cwd !== resolvedCwd) {
++      : await persistence.stat(id)
++    if (stored !== undefined
++      && (stored.header.cwd === undefined || resolve(stored.header.cwd) !== resolvedCwd)) {
 +      throw new Error(`session cwd changed for ${sessionId}`)
 +    }
 +    const handle = stored === undefined
-+      ? await this.ctx.agents.create({
-+          sessionId: id,
-+          meta: { cwd: resolvedCwd },
-+          agentOptions,
-+        })
-+      : await this.ctx.agents.resume({
-+          resumeSessionId: id,
-+          agentOptions,
-+        })
++      ? await this.ctx.agents.create({ sessionId: id, meta: { cwd: resolvedCwd }, agentOptions })
++      : await this.ctx.agents.resume({ resumeSessionId: id, agentOptions })
      const rec: SessionRecord = { handle }
      this.sessions.set(sessionId, rec)
 +    this.sessionOwners.set(sessionId, sessionId)
-+    return rec
-+  }
-+
+     return rec
+   }
+ 
 +  private requireSessionCwd(rec: SessionRecord, cwd?: string): SessionRecord {
 +    if (cwd !== undefined && resolve(cwd) !== rec.handle.agent.session.header.cwd) {
 +      throw new Error(`session cwd changed for ${rec.handle.agent.session.id}`)
 +    }
-     return rec
-   }
-
++    return rec
++  }
++
 +  /** Bridge one owned root/descendant approval question to the SDK host and fail closed on transport loss. */
 +  private requestApproval(request: ApprovalRequest, next: () => Promise<ApprovalOutcome>): Promise<ApprovalOutcome> {
 +    const sessionId = String(request.agent.session.id)
 +    const ownerSessionId = this.sessionOwners.get(sessionId)
 +    if (ownerSessionId === undefined) return next()
 +    const requestId = ++this.nextApprovalRequestId
-+    return new Promise<ApprovalOutcome>((resolve) => {
++    return new Promise<ApprovalOutcome>((resolvePromise) => {
 +      let settled = false
 +      const onAbort = (): void => settle('cancelled')
 +      const settle = (outcome: ApprovalOutcome): void => {
@@ -972,7 +918,7 @@ index 195caa908..4213bb430 100644
 +        } catch {
 +          // The answer still settles locally; transport loss cannot leave the tool call hanging.
 +        }
-+        resolve(outcome)
++        resolvePromise(outcome)
 +      }
 +      this.pendingApprovals.set(requestId, { ownerSessionId, sessionId, settle })
 +      request.signal?.addEventListener('abort', onAbort, { once: true })
@@ -999,23 +945,14 @@ index 195caa908..4213bb430 100644
      return this.ctx.get('llm')?.listProviders().some(entry => entry.id === provider) ?? false
    }
 diff --git a/packages/sdk/server/tests/server.spec.ts b/packages/sdk/server/tests/server.spec.ts
-index 495f1d90f..c2eb0d5a8 100644
+index 43fd51257c..ef90fcaf20 100644
 --- a/packages/sdk/server/tests/server.spec.ts
 +++ b/packages/sdk/server/tests/server.spec.ts
-@@ -2,7 +2,7 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
- import { createServer } from 'node:http'
- import type { IncomingMessage, Server, ServerResponse } from 'node:http'
- import { mkdtemp, rm } from 'node:fs/promises'
--import { join } from 'node:path'
-+import { join, resolve } from 'node:path'
- import { tmpdir } from 'node:os'
- import { afterEach, describe, expect, it, vi } from 'vitest'
- import { Context } from '@deepseek-ai/cordis'
-@@ -209,6 +209,189 @@ describe('HarnessSdkJsonRpcServer', () => {
-     expect(otherHandle.dispose).toHaveBeenCalledOnce()
-   })
-
-+  it('routes steering and cancellation to the existing DSH agent', async () => {
+@@ -112,6 +112,157 @@ async function settleSubagent(
+ }
+ 
+ describe('HarnessSdkJsonRpcServer', () => {
++  it('routes steering and cancellation to the existing SDK agent', async () => {
 +    const followup = vi.fn<Agent['followup']>()
 +    const steer = vi.fn<Agent['steer']>()
 +    const cancel = vi.fn<Agent['cancel']>()
@@ -1031,7 +968,13 @@ index 495f1d90f..c2eb0d5a8 100644
 +      agents: { create: vi.fn(async () => handle), get: () => agent },
 +      get: () => undefined,
 +    } as unknown as Context
-+    const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport())
++    const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport()) as unknown as {
++      initialized: boolean
++      prompt(params: { sessionId: string; contentBlocks: { type: 'text'; text: string }[]; mode: 'steer' }): Promise<unknown>
++      cancel(params: { sessionId: string }): { accepted: boolean }
++      shutdown(): Promise<Record<string, never>>
++    }
++    server.initialized = true
 +
 +    await server.prompt({
 +      sessionId: 'main',
@@ -1050,7 +993,7 @@ index 495f1d90f..c2eb0d5a8 100644
 +    let approvalListener: ((request: Record<string, unknown>, next: () => Promise<'unavailable'>) => Promise<string>) | undefined
 +    const session = {
 +      id: SessionId('secure'),
-+      header: { version: 0, id: SessionId('secure'), createdAt: 0, cwd: resolve('secure-project') },
++      header: { version: 3, id: SessionId('secure'), createdAt: 0, cwd: process.cwd(), isSeeded: false },
 +      events: [],
 +    }
 +    const agent = { id: SessionId('secure'), session, followup: vi.fn() } as unknown as Agent
@@ -1073,7 +1016,7 @@ index 495f1d90f..c2eb0d5a8 100644
 +
 +    await expect(server.setPermission({
 +      sessionId: 'secure',
-+      cwd: resolve('secure-project'),
++      cwd: process.cwd(),
 +      preset: 'approve-for-me',
 +    })).resolves.toEqual({ preset: 'approve-for-me' })
 +    expect(set).toHaveBeenCalledWith(session, 'approve-for-me')
@@ -1111,138 +1054,148 @@ index 495f1d90f..c2eb0d5a8 100644
 +    await server.shutdown()
 +  })
 +
-+  it('admits SDK image uploads before publishing the durable user message', async () => {
-+    const followup = vi.fn<Agent['followup']>()
-+    const agent = ({
-+      id: SessionId('vision'),
-+      followup,
-+    } satisfies Pick<Agent, 'id' | 'followup'>) as unknown as Agent
-+    const handle = { agent, dispose: vi.fn(() => Promise.resolve()) }
-+    const attachment = {
-+      attachmentId: 'sha256:test',
-+      mediaType: 'image/png',
-+      bytes: 4,
-+      width: 1,
-+      height: 1,
++  it('resumes a persisted SDK session and rejects a changed workspace', async () => {
++    const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-resume-'))
++    const sessionId = 'persisted-sdk-session'
++    const create = async (ctx: Context): Promise<HarnessSdkJsonRpcServer> => {
++      const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport())
++      await server.initialize({ cwd: storageDir, provider: 'deepseek-official', model: 'deepseek-flash' })
++      return server
 +    }
-+    const saveImages = vi.fn(async () => [attachment])
-+    const resolveModelInfo = vi.fn(async () => ({ inputModalities: ['text', 'image'] }))
-+    const llm = {
-+      resolveModelInfo,
-+      listProviders: () => [{ id: 'mock', name: 'Mock' }],
++    const firstCtx = await makeHarness(storageDir)
++    try {
++      const first = await create(firstCtx) as unknown as {
++        getOrCreateSession(id: string, cwd?: string): Promise<unknown>
++        shutdown(): Promise<Record<string, never>>
++      }
++      await first.getOrCreateSession(sessionId, storageDir)
++      await firstCtx.sessionPersistence.flush()
++      await first.shutdown()
++    } finally {
++      await firstCtx.fiber.dispose()
 +    }
-+    const ctx = {
-+      on: vi.fn(() => () => undefined),
-+      agents: { create: vi.fn(async () => handle), get: () => agent },
-+      attachments: { saveImages },
-+      llm,
-+      get: (name: string) => name === 'llm' ? llm : undefined,
-+    } as unknown as Context
-+    const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport())
 +
-+    await server.initialize({ cwd: '.', provider: 'mock', model: 'vision-model' })
-+    await server.prompt({
-+      sessionId: 'vision',
-+      content: [
-+        { type: 'text', text: 'inspect' },
-+        { type: 'image', mediaType: 'image/png', data: 'AQIDBA==', name: 'screen.png' },
-+      ],
-+    })
-+
-+    expect(resolveModelInfo).toHaveBeenCalledWith('mock', 'vision-model')
-+    expect(saveImages).toHaveBeenCalledWith([{
-+      data: new Uint8Array([1, 2, 3, 4]),
-+      mediaType: 'image/png',
-+      name: 'screen.png',
-+    }])
-+    const message = followup.mock.calls[0]?.[0]
-+    expect(message?.content).toEqual([
-+      { type: 'text', text: 'inspect' },
-+      { type: 'image', attachment },
-+    ])
-+    await server.shutdown()
++    const secondCtx = await makeHarness(storageDir)
++    try {
++      const resume = vi.spyOn(secondCtx.agents, 'resume')
++      const second = await create(secondCtx) as unknown as {
++        getOrCreateSession(id: string, cwd?: string): Promise<unknown>
++        handleRequest(method: string, params: Record<string, unknown>): Promise<unknown>
++        shutdown(): Promise<Record<string, never>>
++      }
++      await second.getOrCreateSession(sessionId, storageDir)
++      expect(resume).toHaveBeenCalledOnce()
++      const inspection = await second.handleRequest('session/inspect', { sessionId }) as {
++        header: { id: string }
++        inheritedEventCount: number
++        events: unknown[]
++      }
++      expect(inspection.header.id).toBe(sessionId)
++      expect(inspection.inheritedEventCount).toBe(0)
++      expect(inspection.events.map(event => (event as { type?: unknown }).type))
++        .toEqual(['session/end-seed'])
++      await expect(second.getOrCreateSession(sessionId, join(storageDir, 'changed')))
++        .rejects.toThrow('session cwd changed')
++      await second.shutdown()
++    } finally {
++      await secondCtx.fiber.dispose()
++      await rm(storageDir, { recursive: true, force: true })
++    }
 +  })
 +
-+  it('resumes a durable session instead of recreating its identity', async () => {
-+    const cwd = resolve('project')
-+    const followup = vi.fn<Agent['followup']>()
-+    const agent = {
-+      id: SessionId('main'),
-+      session: { header: { version: 0, id: SessionId('main'), createdAt: 0, cwd } },
-+      followup,
-+    } as unknown as Agent
-+    const handle = { agent, dispose: vi.fn(() => Promise.resolve()) }
-+    const create = vi.fn()
-+    const resume = vi.fn(async () => handle)
-+    const ctx = {
-+      on: vi.fn(() => () => undefined),
-+      agents: { create, resume, get: () => agent },
-+      get: (name: string) => name === 'sessionPersistence'
-+        ? { list: async () => [{ id: SessionId('main'), cwd }] }
-+        : undefined,
-+    } as unknown as Context
-+    const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport())
+   it('creates a harness agent and calls the configured OpenAI-compatible endpoint', { timeout: 15_000 }, async () => {
+     const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-'))
+     const llmServer = await mockCompletionServer()
+@@ -131,6 +282,13 @@ describe('HarnessSdkJsonRpcServer', () => {
+       }) as { serverInfo: { name: string } }
+       expect(init.serverInfo.name).toBe('deepseek-harness-sdk-runtime')
+ 
++      const modelInfo = await server.handleRequest('model/resolve', {
++        provider: 'deepseek-official',
++        model: 'dsagent-model',
++      }) as { reasoning?: { efforts: Array<{ id: string }> } }
++      expect(modelInfo.reasoning?.efforts.map(effort => effort.id))
++        .toEqual(['off', 'low', 'high', 'max'])
 +
-+    await server.prompt({
-+      sessionId: 'main',
-+      cwd,
-+      contentBlocks: [{ type: 'text', text: 'continue' }],
-+    })
+       const receipt = await server.handleRequest('session/prompt', {
+         sessionId: 'main',
+         contentBlocks: [{ type: 'text', text: 'fix it' }],
+@@ -374,6 +532,32 @@ describe('HarnessSdkJsonRpcServer', () => {
+     await ctx.fiber.dispose()
+   })
+ 
++  it('forwards live assistant stream frames before durable session events', async () => {
++    const ctx = new Context()
++    await ctx.plugin(SessionStore)
++    await ctx.plugin(AgentRegistry)
++    const transport = new FakeTransport()
++    const server = new HarnessSdkJsonRpcServer(ctx, transport)
++    const session = ctx.sessions.create(SessionId('live-stream'))
++    const agent = ({ id: SessionId('live-stream'), session } satisfies Pick<Agent, 'id' | 'session'>) as Agent
++    const frame = {
++      type: 'start' as const,
++      attemptId: 'live-stream:attempt' as never,
++      revision: 1,
++      turn: 1,
++      step: 1,
++    }
 +
-+    expect(resume).toHaveBeenCalledWith({
-+      resumeSessionId: SessionId('main'),
-+      agentOptions: { provider: 'deepseek-official', model: 'deepseek-official' },
++    ctx.emit('agent/assistant-stream', { agent, frame })
++
++    expect(transport.notifications.at(-1)).toEqual({
++      method: 'agent.assistant-stream',
++      params: { sessionId: 'live-stream', frame },
 +    })
-+    expect(create).not.toHaveBeenCalled()
-+    expect(followup).toHaveBeenCalledOnce()
 +    await server.shutdown()
++    await ctx.fiber.dispose()
 +  })
 +
-   it('rejects a prompt for a session whose agent was disposed outside the server', async () => {
-     const followup = vi.fn<Agent['followup']>()
-     const agent = ({
-@@ -910,7 +1093,9 @@ describe('HarnessSdkJsonRpcServer', () => {
-     const ctx = {
-       on: vi.fn(() => () => undefined),
-       agents: { create, get: () => undefined },
--      get: () => ({ listProviders: () => [{ id: 'mock', name: 'Mock' }] }),
-+      get: (name: string) => name === 'llm'
-+        ? { listProviders: () => [{ id: 'mock', name: 'Mock' }] }
-+        : undefined,
-     } as unknown as Context
-     const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport()) as unknown as {
-       initialize(params: { cwd: string; provider: string; model: string; maxTokens?: number }): Promise<unknown>
-@@ -963,6 +1148,6 @@ describe('HarnessSdkJsonRpcServer', () => {
+   it('notifies the host when a child session is created with parent lineage', async () => {
+     const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-subagent-'))
+     const ctx = await makeHarness(storageDir)
+@@ -1198,6 +1382,6 @@ describe('HarnessSdkJsonRpcServer', () => {
      const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport())
-
+ 
      await expect(server.shutdown()).rejects.toBe(listenerFailure)
 -    expect(on).toHaveBeenCalledTimes(4)
-+    expect(on).toHaveBeenCalledTimes(5)
++    expect(on).toHaveBeenCalledTimes(6)
    })
  })
 diff --git a/packages/sdk/server/tsconfig.json b/packages/sdk/server/tsconfig.json
-index 4dc47252d..63971cb6c 100644
+index 8bef96bf44..b4f80c3bc7 100644
 --- a/packages/sdk/server/tsconfig.json
 +++ b/packages/sdk/server/tsconfig.json
-@@ -26,6 +26,15 @@
+@@ -20,6 +20,9 @@
      {
-       "path": "../../core/session"
+       "path": "../../llm/llm-deepseek"
      },
 +    {
 +      "path": "../../interaction/permission-presets"
 +    },
-+    {
-+      "path": "../../interaction/user-approval"
-+    },
+     {
+       "path": "../../core/agent"
+     },
+@@ -29,11 +32,17 @@
+     {
+       "path": "../../core/session"
+     },
 +    {
 +      "path": "../../session/session-persistence"
 +    },
      {
        "path": "../protocol"
      },
+     {
+       "path": "../../subagent/subagent"
++    },
++    {
++      "path": "../../interaction/user-approval"
+     }
+   ]
+ }
 diff --git a/patches/@earendil-works__pi-ai@0.85.1.patch b/patches/@earendil-works__pi-ai@0.85.1.patch
 new file mode 100644
-index 000000000..d1dff77b2
+index 0000000000..d1dff77b28
 --- /dev/null
 +++ b/patches/@earendil-works__pi-ai@0.85.1.patch
 @@ -0,0 +1,122 @@
@@ -1369,58 +1322,27 @@ index 000000000..d1dff77b2
 +      * Arbitrary sampling parameters merged into the request body as-is, after the named request
 +      * fields, so keys here override them. Lets custom OpenAI-compatible servers (llama.cpp, vLLM,
 diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
-index 737a21eea..faea6e7ad 100644
+index be1647c24b..9d33343141 100644
 --- a/pnpm-lock.yaml
 +++ b/pnpm-lock.yaml
 @@ -9,6 +9,7 @@ overrides:
    '@deepseek-ai/schemastery': link:vendor/schemastery
-
+ 
  patchedDependencies:
 +  '@earendil-works/pi-ai@0.85.1': 0e192be50adbc4de6d9c6b22d0ba345345236099744df160552f096859f7196d
+   '@yao-pkg/pkg@6.21.0': 28edd2180c36691c481522ef81f6f6614505f45e491aad542ac4663d4e6b3ff8
    node-pty@1.2.0-beta.15: b40ae545608897914bd25fb009c97eeac478c34e8a910298ddcb01b746534bb0
-
- importers:
-@@ -411,7 +412,7 @@ importers:
-         version: 6.4.3(@types/node@22.20.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0)
-       vitest:
-         specifier: ^4.1.8
--        version: 4.1.8(@opentelemetry/api@1.9.0)(@types/node@22.20.0)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1)(vite@6.4.3(@types/node@22.20.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))
-+        version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@22.20.0)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1)(vite@6.4.3(@types/node@22.20.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))
-
-   examples:
-     dependencies:
-@@ -5538,8 +5539,8 @@ importers:
-         specifier: link:../../../vendor/schemastery
+ 
+@@ -7087,7 +7088,7 @@ importers:
          version: link:../../../vendor/schemastery
        '@earendil-works/pi-ai':
--        specifier: ^0.82.1
--        version: 0.82.1(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(ws@8.21.0)(zod@4.4.3)
-+        specifier: 0.85.1
+         specifier: ^0.85.1
+-        version: 0.85.1(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(ws@8.21.0)(zod@4.4.3)
 +        version: 0.85.1(patch_hash=0e192be50adbc4de6d9c6b22d0ba345345236099744df160552f096859f7196d)(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(ws@8.21.0)(zod@4.4.3)
      devDependencies:
        '@deepseek-ai/cordis':
          specifier: workspace:^
-@@ -6084,6 +6085,9 @@ importers:
-       '@deepseek-ai/cordis':
-         specifier: workspace:^
-         version: link:../../../vendor/cordis
-+      '@deepseek-ai/dsh-attachment':
-+        specifier: workspace:^
-+        version: link:../../attachment/attachment
-       '@deepseek-ai/dsh-invariants':
-         specifier: workspace:^
-         version: link:../../runtime-diagnostics/invariants
-@@ -6115,6 +6119,9 @@ importers:
-       '@deepseek-ai/dsh-agent-spine-demo':
-         specifier: workspace:^
-         version: link:../../examples/agent-spine-demo
-+      '@deepseek-ai/dsh-attachment':
-+        specifier: workspace:^
-+        version: link:../../attachment/attachment
-       '@deepseek-ai/dsh-invariants':
-         specifier: workspace:^
-         version: link:../../runtime-diagnostics/invariants
-@@ -6124,6 +6131,9 @@ importers:
+@@ -7745,6 +7746,9 @@ importers:
        '@deepseek-ai/dsh-llm-deepseek':
          specifier: workspace:^
          version: link:../../llm/llm-deepseek
@@ -1430,7 +1352,7 @@ index 737a21eea..faea6e7ad 100644
        '@deepseek-ai/dsh-scope':
          specifier: workspace:^
          version: link:../../core/scope
-@@ -6133,12 +6143,18 @@ importers:
+@@ -7754,6 +7758,9 @@ importers:
        '@deepseek-ai/dsh-session':
          specifier: workspace:^
          version: link:../../core/session
@@ -1440,360 +1362,33 @@ index 737a21eea..faea6e7ad 100644
        '@deepseek-ai/dsh-session-persistence-jsonl':
          specifier: workspace:^
          version: link:../../session/session-persistence-jsonl
+@@ -7763,6 +7770,9 @@ importers:
        '@deepseek-ai/dsh-subagent':
          specifier: workspace:^
          version: link:../../subagent/subagent
 +      '@deepseek-ai/dsh-user-approval':
 +        specifier: workspace:^
 +        version: link:../../interaction/user-approval
-
+ 
    packages/session-query/session-log-export:
-     devDependencies:
-@@ -8012,7 +8028,7 @@ importers:
-         version: link:../loader-smoke
-       vitest:
-         specifier: ^4.1.8
--        version: 4.1.8(@opentelemetry/api@1.9.0)(@types/node@25.9.3)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1)(vite@8.0.16(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
-+        version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@25.9.3)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1)(vite@8.0.16(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
-     devDependencies:
-       '@deepseek-ai/cordis':
-         specifier: workspace:^
-@@ -8732,12 +8748,18 @@ importers:
-       '@deepseek-ai/dsh-attachment':
-         specifier: workspace:^
-         version: link:../../packages/attachment/attachment
-+      '@deepseek-ai/dsh-attachment-local':
-+        specifier: workspace:^
-+        version: link:../../packages/attachment/attachment-local
-       '@deepseek-ai/dsh-authorization':
-         specifier: workspace:^
-         version: link:../../packages/credentials/authorization
-       '@deepseek-ai/dsh-bash-local':
-         specifier: workspace:^
-         version: link:../../packages/shell/bash-local
-+      '@deepseek-ai/dsh-bash-sandbox':
-+        specifier: workspace:^
-+        version: link:../../packages/shell/bash-sandbox
-       '@deepseek-ai/dsh-brand':
-         specifier: workspace:^
-         version: link:../../packages/util/brand
-@@ -9327,8 +9349,8 @@ packages:
-       '@modelcontextprotocol/sdk': ^1.29.0
-       zod: ^4.0.0
-
--  '@anthropic-ai/sdk@0.91.1':
--    resolution: {integrity: sha512-LAmu761tSN9r66ixvmciswUj/ZC+1Q4iAfpedTfSVLeswRwnY3n2Nb6Tsk+cLPP28aLOPWeMgIuTuCcMC6W/iw==}
-+  '@anthropic-ai/sdk@0.123.0':
-+    resolution: {integrity: sha512-Y9oX9mPNGZClHQOFqrWRk43Srcu/UHuPq3rfxxOq7JgW0gi+lJA2MAOK4Ul3k/+AUrwRWFJvd0tK3oC0Pw25dw==}
-     hasBin: true
-     peerDependencies:
-       zod: ^3.25.0 || ^4.0.0
-@@ -9659,11 +9681,15 @@ packages:
-       search-insights:
-         optional: true
-
--  '@earendil-works/pi-ai@0.82.1':
--    resolution: {integrity: sha512-3WFYRhEp3lQB3444EhPMBcM7zSaEUE3eJgHOR7s4081NLqbw/FsWilIKWXSua0Gv3sRr7m9xMidR3pPDE7jI/A==}
-+  '@earendil-works/pi-ai@0.85.1':
-+    resolution: {integrity: sha512-+VgVIJDkDO2efYJKEEqvPTH4zmnIaXdAppGbO+vKFA9qy5PdhFiAenuFAkU+oiCSfOC4dMHDyrjdQeL4ZoC5CQ==}
-     engines: {node: '>=22.19.0'}
-     hasBin: true
-
-+  '@earendil-works/pi-telemetry@0.85.1':
-+    resolution: {integrity: sha512-Bg/YN6kA7Swja/NQxka8xFdecb4E/auIEGF2G5A25EaQXhRnPj300/7/KpgsDDMYUzHTDAv4RyUxaQPJKW81Rw==}
-+    engines: {node: '>=22.19.0'}
-+
-   '@emnapi/core@1.10.0':
-     resolution: {integrity: sha512-yq6OkJ4p82CAfPl0u9mQebQHKPJkY7WrIuk205cTYnYe+k2Z8YBh11FrbRG/H6ihirqcacOgl2BIO8oyMQLeXw==}
-
-@@ -10492,14 +10518,6 @@ packages:
-   '@mermaid-js/parser@1.2.0':
-     resolution: {integrity: sha512-oYPyv8A4As1yH5Bx+04iQEQxXuIQDe0GKCNSRgao6z8AM9jixXIfP0vsppRLvGf+nKIOb9/LdpWA4YuJiVvESA==}
-
--  '@mistralai/mistralai@2.2.6':
--    resolution: {integrity: sha512-W8pX7zHxjJvMIpw8JMxeJEleapXX0Q9NPszdNzqkM3MIEoIGPObdodujj+WHteXEvGfaP/AMwlNyRfEzSY6dQQ==}
--    peerDependencies:
--      '@opentelemetry/api': ^1.9.0
--    peerDependenciesMeta:
--      '@opentelemetry/api':
--        optional: true
--
-   '@mixmark-io/domino@2.2.0':
-     resolution: {integrity: sha512-Y28PR25bHXUg88kCV7nivXrP2Nj2RueZ3/l/jdx6J9f8J4nsEGcgX0Qe6lt7Pa+J79+kPiJU3LguR6O/6zrLOw==}
-
-@@ -10575,10 +10593,6 @@ packages:
-     resolution: {integrity: sha512-CmVa4ImJ+ynfrPMNaAXHET6Bhb44SwzmfyVJFq9ni2jgXJR/l7C6gfVFddNmHP+ZOkP9cf4f9DBe68qVLTHc9w==}
-     engines: {node: '>=8.0.0'}
-
--  '@opentelemetry/api@1.9.0':
--    resolution: {integrity: sha512-3giAOQvZiH5F9bMlMiv8+GSPMeqg0dbaeo58/0SlA9sxSqZhnUtxzX9/2FzyhS9sWQf5S0GJE0AKBrFqjpeYcg==}
--    engines: {node: '>=8.0.0'}
--
-   '@opentelemetry/api@1.9.1':
-     resolution: {integrity: sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q==}
-     engines: {node: '>=8.0.0'}
-@@ -11506,6 +11520,9 @@ packages:
-     resolution: {integrity: sha512-R8Rdn8Hy72KKcebgLiv8jQcQkXoLMOGGv5uI1/k0l+snqkOzQ1R0ChUBCxWMlBsFMekWjq0wRudIweFs7sKT5A==}
-     engines: {node: '>=14.0.0'}
-
-+  '@stablelib/base64@1.0.1':
-+    resolution: {integrity: sha512-1bnPQqSxSuc3Ii6MhBysoWCg58j97aUjuCSZrGSmDxNqtytIi0k8utUenAwTZN4V5mXXYGsVUI9zeBqy+jBOSQ==}
-+
-   '@standard-schema/spec@1.1.0':
-     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
-
-@@ -12687,6 +12704,9 @@ packages:
-   fast-levenshtein@2.0.6:
-     resolution: {integrity: sha512-DCXu6Ifhqcks7TZKY3Hxp3y6qphY5SJZmrWMDrKcERSOXWQdMhU9Ig/PYrzyw/ul9jOIyh0N4M0tbC5hodg8dw==}
-
-+  fast-sha256@1.3.0:
-+    resolution: {integrity: sha512-n11RGP/lrWEFI/bWdygLxhI+pVeo1ZYIVwvvPkW7azl/rOy+F3HYRZ2K5zeE9mmkhQppyv9sQFx0JM9UabnpPQ==}
-+
-   fast-uri@3.1.3:
-     resolution: {integrity: sha512-i70LwGWUduXqzicKXWshooq+sWL1K3WUU5rKZNG/0i3a1OSoX3HqhH5WbWwTmqWfor4urUakGPiRQcleRZTwOg==}
-
-@@ -13651,9 +13671,8 @@ packages:
-     resolution: {integrity: sha512-smsWv2LzFjP03xmvFoJ331ss6h+jixfA4UUV/Bsiyuu4YJPfN+FIQGOIiv4w9/+MoHkfkJ22UIaQWRVFRfH6Vw==}
-     engines: {node: '>=20'}
-
--  openai@6.26.0:
--    resolution: {integrity: sha512-zd23dbWTjiJ6sSAX6s0HrCZi41JwTA1bQVs0wLQPZ2/5o2gxOJA5wh7yOAUgwYybfhDXyhwlpeQf7Mlgx8EOCA==}
--    hasBin: true
-+  openai@6.40.0:
-+    resolution: {integrity: sha512-MWtTjd/gQt4jpbji61NTgFWJLoY/PdRJ6wG9/ZDRMYNMlBKrCrSlkLI+KgHP1vR1qT6LKSAyAqIxno6lcK9JiA==}
-     peerDependencies:
-       ws: ^8.18.0
-       zod: ^3.25 || ^4.0
-@@ -14109,6 +14128,9 @@ packages:
-   stackback@0.0.2:
-     resolution: {integrity: sha512-1XMJE5fQo1jGH6Y/7ebnwPOBEkIEnT4QF32d5R1+VXdXveM0IBMJt8zfaxX1P3QhVwrYe+576+jkANtSS2mBbw==}
-
-+  standardwebhooks@1.1.1:
-+    resolution: {integrity: sha512-bCbX9ZEyFkWPsRz7Bl3NuQUJohmwGSev/yhr7vhaGPlc4AfIrspIRa6cPTBuI1ItmrTDJ4d/S2hCsfe4+vQGnQ==}
-+
-   statuses@2.0.2:
-     resolution: {integrity: sha512-DvEy55V3DB7uknRo+4iOGT5fP1slR8wQohVdknigZPMpMstaKJQWhwiYBACJE3Ul2pTnATihhBYnRhZQHGBiRw==}
-     engines: {node: '>= 0.8'}
-@@ -14293,8 +14315,8 @@ packages:
-     resolution: {integrity: sha512-faYHw0anBbc/kWF3zFTEnxSFOAGUX9GFbOBthvDdLsIlEoWOFOtS0zgCiQYwIskL9iGXZL3kAXD8OoZ4GmMATA==}
-     engines: {node: '>= 18'}
-
--  typebox@1.1.38:
--    resolution: {integrity: sha512-pZ0aQPmMmXoUvSbeuWf/Hzsc+avNw/Zd6VeE8CFgkVGWyuHPJvqeJJDeJqLve+K70LvjYIoleGcoJHPT17cWoA==}
-+  typebox@1.3.7:
-+    resolution: {integrity: sha512-meKuifc33Pccx0O6PdIzYMq3Og8zvP4TIi/a+Bw3AEMZMxOD0+RHGQvpglEe6Zdy3wZ8nqn/j95h8LUZLk/6Hg==}
-
-   typescript-language-server@5.3.0:
-     resolution: {integrity: sha512-5puofxZHgFdAYtfNpmwCAvgtaYgg8wrUnH30m7Ze3QuguId5RNRadKASpOpyDxTyUdAF51FjhTdjntLw/EuWcQ==}
-@@ -14875,9 +14897,10 @@ snapshots:
-       '@anthropic-ai/claude-agent-sdk-win32-arm64': 0.3.220
-       '@anthropic-ai/claude-agent-sdk-win32-x64': 0.3.220
-
--  '@anthropic-ai/sdk@0.91.1(zod@4.4.3)':
-+  '@anthropic-ai/sdk@0.123.0(zod@4.4.3)':
      dependencies:
-       json-schema-to-ts: 3.1.1
-+      standardwebhooks: 1.1.1
-     optionalDependencies:
-       zod: 4.4.3
-
-@@ -15342,19 +15365,18 @@ snapshots:
+@@ -18868,7 +18878,7 @@ snapshots:
      transitivePeerDependencies:
        - '@algolia/client-search'
-
--  '@earendil-works/pi-ai@0.82.1(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(ws@8.21.0)(zod@4.4.3)':
+ 
+-  '@earendil-works/pi-ai@0.85.1(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(ws@8.21.0)(zod@4.4.3)':
 +  '@earendil-works/pi-ai@0.85.1(patch_hash=0e192be50adbc4de6d9c6b22d0ba345345236099744df160552f096859f7196d)(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(ws@8.21.0)(zod@4.4.3)':
      dependencies:
--      '@anthropic-ai/sdk': 0.91.1(zod@4.4.3)
-+      '@anthropic-ai/sdk': 0.123.0(zod@4.4.3)
+       '@anthropic-ai/sdk': 0.123.0(zod@4.4.3)
        '@aws-sdk/client-bedrock-runtime': 3.1048.0
-+      '@earendil-works/pi-telemetry': 0.85.1
-       '@google/genai': 1.52.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))
--      '@mistralai/mistralai': 2.2.6(@opentelemetry/api@1.9.0)
--      '@opentelemetry/api': 1.9.0
-       '@smithy/node-http-handler': 4.7.3
-       http-proxy-agent: 7.0.2
-       https-proxy-agent: 7.0.6
--      openai: 6.26.0(ws@8.21.0)(zod@4.4.3)
-+      openai: 6.40.0(ws@8.21.0)(zod@4.4.3)
-       partial-json: 0.1.7
--      typebox: 1.1.38
-+      typebox: 1.3.7
-     transitivePeerDependencies:
-       - '@modelcontextprotocol/sdk'
-       - bufferutil
-@@ -15363,6 +15385,8 @@ snapshots:
-       - ws
-       - zod
-
-+  '@earendil-works/pi-telemetry@0.85.1': {}
-+
-   '@emnapi/core@1.10.0':
-     dependencies:
-       '@emnapi/wasi-threads': 1.2.1
-@@ -15904,18 +15928,6 @@ snapshots:
-     dependencies:
-       '@chevrotain/types': 11.1.2
-
--  '@mistralai/mistralai@2.2.6(@opentelemetry/api@1.9.0)':
--    dependencies:
--      '@opentelemetry/semantic-conventions': 1.43.0
--      ws: 8.21.0
--      zod: 4.4.3
--      zod-to-json-schema: 3.25.2(zod@4.4.3)
--    optionalDependencies:
--      '@opentelemetry/api': 1.9.0
--    transitivePeerDependencies:
--      - bufferutil
--      - utf-8-validate
--
-   '@mixmark-io/domino@2.2.0': {}
-
-   '@modelcontextprotocol/sdk@1.29.0(zod@4.4.3)':
-@@ -16009,8 +16021,6 @@ snapshots:
-     dependencies:
-       '@opentelemetry/api': 1.9.1
-
--  '@opentelemetry/api@1.9.0': {}
--
-   '@opentelemetry/api@1.9.1': {}
-
-   '@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1)':
-@@ -16629,6 +16639,8 @@ snapshots:
-       '@smithy/util-buffer-from': 2.2.0
-       tslib: 2.8.1
-
-+  '@stablelib/base64@1.0.1': {}
-+
-   '@standard-schema/spec@1.1.0': {}
-
-   '@stylistic/eslint-plugin@5.10.0(eslint@10.5.0(jiti@2.7.0))':
-@@ -17977,6 +17989,8 @@ snapshots:
-
-   fast-levenshtein@2.0.6: {}
-
-+  fast-sha256@1.3.0: {}
-+
-   fast-uri@3.1.3: {}
-
-   fast-xml-builder@1.2.0:
-@@ -19121,7 +19135,7 @@ snapshots:
-       powershell-utils: 0.1.0
-       wsl-utils: 0.3.1
-
--  openai@6.26.0(ws@8.21.0)(zod@4.4.3):
-+  openai@6.40.0(ws@8.21.0)(zod@4.4.3):
-     optionalDependencies:
-       ws: 8.21.0
-       zod: 4.4.3
-@@ -19712,6 +19726,11 @@ snapshots:
-
-   stackback@0.0.2: {}
-
-+  standardwebhooks@1.1.1:
-+    dependencies:
-+      '@stablelib/base64': 1.0.1
-+      fast-sha256: 1.3.0
-+
-   statuses@2.0.2: {}
-
-   std-env@4.1.0: {}
-@@ -19869,7 +19888,7 @@ snapshots:
-       media-typer: 1.1.0
-       mime-types: 3.0.2
-
--  typebox@1.1.38: {}
-+  typebox@1.3.7: {}
-
-   typescript-language-server@5.3.0:
-     dependencies:
-@@ -20078,7 +20097,7 @@ snapshots:
-       - typescript
-       - universal-cookie
-
--  vitest@4.1.8(@opentelemetry/api@1.9.0)(@types/node@22.20.0)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1)(vite@6.4.3(@types/node@22.20.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0)):
-+  vitest@4.1.8(@opentelemetry/api@1.9.1)(@types/node@22.20.0)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1)(vite@6.4.3(@types/node@22.20.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0)):
-     dependencies:
-       '@vitest/expect': 4.1.8
-       '@vitest/mocker': 4.1.8(vite@6.4.3(@types/node@22.20.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))
-@@ -20101,43 +20120,13 @@ snapshots:
-       vite: 6.4.3(@types/node@22.20.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0)
-       why-is-node-running: 2.3.0
-     optionalDependencies:
--      '@opentelemetry/api': 1.9.0
-+      '@opentelemetry/api': 1.9.1
-       '@types/node': 22.20.0
-       '@vitest/coverage-v8': 4.1.8(vitest@4.1.8)
-       jsdom: 29.1.1
-     transitivePeerDependencies:
-       - msw
-
--  vitest@4.1.8(@opentelemetry/api@1.9.0)(@types/node@25.9.3)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1)(vite@8.0.16(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)):
--    dependencies:
--      '@vitest/expect': 4.1.8
--      '@vitest/mocker': 4.1.8(vite@8.0.16(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
--      '@vitest/pretty-format': 4.1.8
--      '@vitest/runner': 4.1.8
--      '@vitest/snapshot': 4.1.8
--      '@vitest/spy': 4.1.8
--      '@vitest/utils': 4.1.8
--      es-module-lexer: 2.1.0
--      expect-type: 1.3.0
--      magic-string: 0.30.21
--      obug: 2.1.3
--      pathe: 2.0.3
--      picomatch: 4.0.4
--      std-env: 4.1.0
--      tinybench: 2.9.0
--      tinyexec: 1.2.4
--      tinyglobby: 0.2.17
--      tinyrainbow: 3.1.0
--      vite: 8.0.16(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
--      why-is-node-running: 2.3.0
--    optionalDependencies:
--      '@opentelemetry/api': 1.9.0
--      '@types/node': 25.9.3
--      '@vitest/coverage-v8': 4.1.8(vitest@4.1.8)
--      jsdom: 29.1.1
--    transitivePeerDependencies:
--      - msw
--
-   vitest@4.1.8(@opentelemetry/api@1.9.1)(@types/node@22.20.0)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1)(vite@8.0.16(@types/node@22.20.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)):
-     dependencies:
-       '@vitest/expect': 4.1.8
 diff --git a/pnpm-workspace.yaml b/pnpm-workspace.yaml
-index ec6cfd3af..60ada9f0a 100644
+index 68eff9cd1c..47fcefc44c 100644
 --- a/pnpm-workspace.yaml
 +++ b/pnpm-workspace.yaml
-@@ -57,7 +57,7 @@ allowBuilds:
- minimumReleaseAgeExclude:
-   # Fresh pi-ai releases carry the model catalog updates that are the whole
-   # point of bumping it; waiting out the release age would defeat that.
--  - '@earendil-works/pi-ai@0.82.1'
-+  - '@earendil-works/pi-ai@0.85.1'
-   - node-addon-native-custom-loader@0.1.4
-   - node-addon-require-builtin-darwin-arm64@0.1.4
-   - node-addon-require-builtin-darwin-x64@0.1.4
-@@ -69,4 +69,5 @@ minimumReleaseAgeExclude:
-   - node-addon-require-builtin@0.1.4
-
+@@ -84,5 +84,6 @@ minimumReleaseAgeExclude:
+   - '@openai/codex@0.153.4||0.153.4-darwin-arm64||0.153.4-darwin-x64||0.153.4-linux-arm64||0.153.4-linux-x64||0.153.4-win32-arm64||0.153.4-win32-x64'
+ 
  patchedDependencies:
 +  '@earendil-works/pi-ai@0.85.1': patches/@earendil-works__pi-ai@0.85.1.patch
+   '@yao-pkg/pkg@6.21.0': patches/@yao-pkg__pkg@6.21.0.patch
    node-pty@1.2.0-beta.15: patches/node-pty@1.2.0-beta.15.patch
-diff --git a/python/sdk-runtime/package.json b/python/sdk-runtime/package.json
-index abf3e11a7..6caa9c00d 100644
---- a/python/sdk-runtime/package.json
-+++ b/python/sdk-runtime/package.json
-@@ -17,10 +17,12 @@
-     "@deepseek-ai/dsh-agent-tool-presentation": "workspace:^",
-     "@deepseek-ai/dsh-app-boot": "workspace:^",
-     "@deepseek-ai/dsh-attachment": "workspace:^",
-+    "@deepseek-ai/dsh-attachment-local": "workspace:^",
-     "@deepseek-ai/dsh-atomic-write": "workspace:^",
-     "@deepseek-ai/dsh-shell": "workspace:^",
-     "@deepseek-ai/dsh-shell-env": "workspace:^",
-     "@deepseek-ai/dsh-bash-local": "workspace:^",
-+    "@deepseek-ai/dsh-bash-sandbox": "workspace:^",
-     "@deepseek-ai/dsh-brand": "workspace:^",
-     "@deepseek-ai/dsh-code-runtime": "workspace:^",
-     "@deepseek-ai/dsh-code-runtime-worker-thread": "workspace:^",

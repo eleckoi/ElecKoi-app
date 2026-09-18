@@ -101,7 +101,7 @@ internal class DeepSeekAgentSession(
             if (!prepared.clientAlreadyStarted) {
                 prepared.client.start(
                     cwd = RuntimeWorkspace,
-                    provider = ProviderRoute,
+                    provider = prepared.provider,
                     model = prepared.model,
                     maxTokens = prepared.maxTokens,
                 )
@@ -241,7 +241,7 @@ internal class DeepSeekAgentSession(
             val notificationSessionId = notification.params.stringValue("sessionId")
             if (notificationSessionId != threadId) return
         }
-        if (notification.method == "session.event") {
+        if (notification.method == "session.event" || notification.method == "agent.assistant-stream") {
             val notificationSessionId = notification.params.stringValue("sessionId") ?: return
             if (notificationSessionId != threadId) {
                 val lineage = subagentLineageBySession[notificationSessionId] ?: return
@@ -433,6 +433,9 @@ internal class DeepSeekAgentSession(
                 pressureTokens = sample.pressureTokens,
                 projectedTokens = sample.projectedTokens,
                 modelContextWindow = sample.contextWindow,
+                systemTokens = sample.systemTokens,
+                toolsTokens = sample.toolsTokens,
+                messageTokens = sample.messageTokens,
             ),
         )
     }
@@ -506,7 +509,6 @@ internal class DeepSeekAgentSession(
         const val EventBufferCapacity = 256
         const val TurnStartTimeoutMillis = 20_000L
         const val RuntimeWorkspace = "/workspace"
-        const val ProviderRoute = "eleckoi-bridge"
         val SessionId = Regex("^[A-Za-z0-9._:-]{1,160}$")
     }
 }

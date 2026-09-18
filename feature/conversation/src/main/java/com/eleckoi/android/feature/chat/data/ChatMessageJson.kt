@@ -145,11 +145,17 @@ internal data class ChatContextWindowUsageJson(
     @SerialName("latest_tokens") val latestTokens: Long = 0L,
     @SerialName("total_tokens") val totalTokens: Long = 0L,
     @SerialName("model_context_window") val modelContextWindow: Long? = null,
+    @SerialName("system_tokens") val systemTokens: Long? = null,
+    @SerialName("tools_tokens") val toolsTokens: Long? = null,
+    @SerialName("message_tokens") val messageTokens: Long? = null,
 ) {
     fun toDomain() = ChatContextWindowUsage(
         latestTokens = latestTokens,
         totalTokens = totalTokens,
         modelContextWindow = modelContextWindow,
+        systemTokens = systemTokens,
+        toolsTokens = toolsTokens,
+        messageTokens = messageTokens,
     )
 
     companion object {
@@ -157,6 +163,9 @@ internal data class ChatContextWindowUsageJson(
             latestTokens = usage.latestTokens,
             totalTokens = usage.totalTokens,
             modelContextWindow = usage.modelContextWindow,
+            systemTokens = usage.systemTokens,
+            toolsTokens = usage.toolsTokens,
+            messageTokens = usage.messageTokens,
         )
     }
 }

@@ -41,4 +41,19 @@ class ModelOptionRefreshTest {
 
         assertEquals(listOf(manual), mergeFetchedModelOptions(old, emptyList()))
     }
+
+    @Test
+    fun `refresh preserves DSH capability cache and explicit reasoning declaration`() {
+        val previous = ModelOption(
+            id = "reasoning-model",
+            reasoningEfforts = linkedMapOf("off" to null, "max" to "ultra"),
+            dshReasoningEffortIds = listOf("off", "max"),
+        )
+        val config = ModelConfig(modelOptions = listOf(previous))
+
+        val refreshed = mergeFetchedModelOptions(config, listOf(ModelOption(previous.id))).single()
+
+        assertEquals(previous.reasoningEfforts, refreshed.reasoningEfforts)
+        assertEquals(previous.dshReasoningEffortIds, refreshed.dshReasoningEffortIds)
+    }
 }

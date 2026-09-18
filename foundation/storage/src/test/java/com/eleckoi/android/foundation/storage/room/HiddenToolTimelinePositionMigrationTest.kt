@@ -18,14 +18,14 @@ class HiddenToolTimelinePositionMigrationTest {
         )
 
         val entry = JSONObject(migrated.entryPayloadJson)
-        assertEquals("insert_point_4", entry.getString("position"))
+        assertEquals("insert_point_5", entry.getString("position"))
         assertEquals("hidden-tool-timeline", entry.getString("prompt_position_id"))
         val positions = JSONArray(migrated.promptPositionsJson)
         assertEquals(1, positions.length())
         assertEquals("hidden-tool-timeline", positions.getJSONObject(0).getString("id"))
         assertEquals("隐藏工具时间线", positions.getJSONObject(0).getString("name"))
-        assertEquals("insert_point_4", positions.getJSONObject(0).getString("anchor"))
-        assertEquals("before_setting_position", positions.getJSONObject(0).getString("side"))
+        assertEquals("insert_point_5", positions.getJSONObject(0).getString("anchor"))
+        assertEquals("after_setting_position", positions.getJSONObject(0).getString("side"))
     }
 
     @Test
@@ -53,7 +53,33 @@ class HiddenToolTimelinePositionMigrationTest {
     }
 
     @Test
-    fun `deleted customized and current timelines are not recreated`() {
+    fun `previous built-in default moves below insert point five`() {
+        val positions = JSONArray().put(
+            JSONObject()
+                .put("id", "hidden-tool-timeline")
+                .put("name", "隐藏工具时间线")
+                .put("anchor", "insert_point_4")
+                .put("side", "before_setting_position")
+                .put("order", 3),
+        )
+
+        val migrated = requireNotNull(
+            HiddenToolTimelinePositionMigration.migratePayloads(
+                legacyEntry(position = "insert_point_4", promptPositionId = "hidden-tool-timeline"),
+                positions.toString(),
+            ),
+        )
+
+        val entry = JSONObject(migrated.entryPayloadJson)
+        val position = JSONArray(migrated.promptPositionsJson).getJSONObject(0)
+        assertEquals("insert_point_5", entry.getString("position"))
+        assertEquals("insert_point_5", position.getString("anchor"))
+        assertEquals("after_setting_position", position.getString("side"))
+        assertEquals(1, position.getInt("order"))
+    }
+
+    @Test
+    fun `deleted customized timelines stay deleted and dangling built-in position is repaired`() {
         assertNull(
             HiddenToolTimelinePositionMigration.migratePayloads(
                 entryPayloadJson = legacyEntry(enabled = false),
@@ -72,12 +98,15 @@ class HiddenToolTimelinePositionMigrationTest {
                 promptPositionsJson = "[]",
             ),
         )
-        assertNull(
+        val danglingBuiltIn = requireNotNull(
             HiddenToolTimelinePositionMigration.migratePayloads(
                 entryPayloadJson = legacyEntry(promptPositionId = "hidden-tool-timeline"),
                 promptPositionsJson = "[]",
             ),
         )
+        val repairedPosition = JSONArray(danglingBuiltIn.promptPositionsJson).getJSONObject(0)
+        assertEquals("insert_point_5", repairedPosition.getString("anchor"))
+        assertEquals("after_setting_position", repairedPosition.getString("side"))
     }
 
     @Test

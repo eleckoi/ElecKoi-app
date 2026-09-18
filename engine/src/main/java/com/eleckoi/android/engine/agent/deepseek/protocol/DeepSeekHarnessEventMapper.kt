@@ -27,13 +27,18 @@ internal class DeepSeekHarnessEventMapper {
     private val activeTurns = mutableMapOf<String, Int>()
     private val activeToolNames = mutableMapOf<String, String>()
     private val activeToolArguments = mutableMapOf<String, String>()
+    private val completedTools = mutableMapOf<String, CompletedTool>()
     private val actionDecoders = mutableMapOf<ActionStreamKey, AssistantActionCallDecoder>()
     private val emittedActionCounts = mutableMapOf<ActionStreamKey, MutableMap<ActionSignature, Int>>()
+    private val reasoningBlockIndexes = mutableMapOf<ActionStreamKey, MutableList<Int>>()
     private val activeCompactions = mutableMapOf<String, CompactionProgress>()
+    private val liveAttempts = mutableMapOf<String, AssistantAttempt>()
+    private val liveChunkSteps = mutableSetOf<ActionStreamKey>()
     private var totalUsage = ZeroUsage
     private var modelContextWindow: Long? = null
 
     fun map(notification: DeepSeekNotification): List<AgentSessionEvent> {
+        if (notification.method == AssistantStreamMethod) return mapAssistantStream(notification)
         if (notification.method != "session.event") return emptyList()
         val threadId = notification.params.string("sessionId") ?: return emptyList()
         val envelope = notification.params.obj("event") ?: return emptyList()
@@ -49,7 +54,12 @@ internal class DeepSeekHarnessEventMapper {
                 listOf(AgentSessionEvent.TurnStarted(threadId, it, time))
             }.orEmpty()
             "step/start" -> mapStepStart(threadId, turnId, data, time)
-            "assistant/chunk" -> mapChunk(threadId, turnId, data, time)
+            "assistant/chunk" -> {
+                val step = data.int("step") ?: 0
+                val key = turnId?.let { ActionStreamKey(it, step) }
+                if (key != null && key in liveChunkSteps) emptyList()
+                else mapChunk(threadId, turnId, data, time)
+            }
             "assistant/message" -> mapAssistantMessage(threadId, turnId, data, time)
             "tool/call" -> mapToolCall(threadId, turnId, data, time)
             "tool/result" -> mapToolResult(threadId, turnId, data, time)
@@ -63,6 +73,10 @@ internal class DeepSeekHarnessEventMapper {
             }
             "turn/end" -> mapTurnEnd(threadId, turnId, data, time).also {
                 activeTurns.remove(threadId)
+                liveAttempts.entries.removeAll { (_, attempt) ->
+                    attempt.threadId == threadId && attempt.turnId == turnId
+                }
+                liveChunkSteps.removeAll { key -> key.turnId == turnId }
             }
             else -> emptyList()
         }
@@ -179,6 +193,7 @@ internal class DeepSeekHarnessEventMapper {
     ): List<AgentSessionEvent> {
         turnId ?: return emptyList()
         val step = data.int("step") ?: return emptyList()
+        reasoningBlockIndexes.remove(ActionStreamKey(turnId, step))
         return finishActionStream(threadId, turnId, step) +
             AgentSessionEvent.StepCompleted(threadId, turnId, step, time)
     }
@@ -193,18 +208,23 @@ internal class DeepSeekHarnessEventMapper {
         val step = data.int("step") ?: 0
         val chunk = data.obj("chunk") ?: return emptyList()
         val index = chunk.int("index") ?: 0
+        val actionKey = ActionStreamKey(turnId, step)
+        if (chunk.isReasoningBlockEvent()) {
+            reasoningBlockIndexes.getOrPut(actionKey, ::mutableListOf).run {
+                if (index !in this) add(index)
+            }
+        }
         val itemId = "assistant-$turnId-$step"
         return when (chunk.string("type")) {
             "text-delta" -> chunk.string("text")?.let { delta ->
-                val key = ActionStreamKey(turnId, step)
                 val decoded = actionDecoders
-                    .getOrPut(key, ::AssistantActionCallDecoder)
+                    .getOrPut(actionKey, ::AssistantActionCallDecoder)
                     .accept(delta)
                 mapActionChunk(
                     threadId = threadId,
                     turnId = turnId,
                     itemId = itemId,
-                    key = key,
+                    key = actionKey,
                     decoded = decoded,
                     displayText = delta,
                     observedAtMillis = time,
@@ -215,7 +235,7 @@ internal class DeepSeekHarnessEventMapper {
                     AgentSessionEvent.ReasoningTextDelta(
                         threadId,
                         turnId,
-                        "reasoning-$turnId-$step-$index",
+                        reasoningItemId(turnId, step, index),
                         index,
                         delta,
                         step,
@@ -261,13 +281,45 @@ internal class DeepSeekHarnessEventMapper {
         val messageId = "assistant-$turnId-$step"
         val actionKey = ActionStreamKey(turnId, step)
         val hadStreamingText = actionDecoders.remove(actionKey) != null
-        // `assistant/message` is a completed typed-content snapshot, not a second text stream.
-        // Reasoning has already travelled through `reasoning-delta`; only actual text blocks may
-        // become assistant narrative/history here.
+        // `assistant/message` is the authoritative completed typed-content snapshot. Some
+        // Responses providers expose reasoning only in the final block instead of deltas, while
+        // others emit both. Project every completed reasoning block as a replacing snapshot so
+        // the UI neither drops final-only reasoning nor duplicates streamed reasoning.
+        val streamedReasoningIndexes = reasoningBlockIndexes.remove(actionKey).orEmpty()
+        val reasoning = message["content"].reasoningTextContent(streamedReasoningIndexes)
+        val completedReasoningIndexes = (streamedReasoningIndexes + reasoning.map(IndexedReasoningText::index))
+            .distinct()
         val text = message["content"].assistantTextContent()
         val decodedText = stripAssistantActionCalls(text)
         val snapshotActions = unseenSnapshotActions(actionKey, decodedText.calls)
         return buildList {
+            reasoning.forEach { block ->
+                add(
+                    AgentSessionEvent.ReasoningTextDelta(
+                        threadId = threadId,
+                        turnId = turnId,
+                        itemId = reasoningItemId(turnId, step, block.index),
+                        contentIndex = block.index,
+                        delta = block.text,
+                        step = step,
+                        observedAtMillis = time,
+                        completeSnapshot = true,
+                    ),
+                )
+            }
+            completedReasoningIndexes.forEach { index ->
+                add(
+                    AgentSessionEvent.WorkItemCompleted(
+                        threadId = threadId,
+                        turnId = turnId,
+                        itemId = reasoningItemId(turnId, step, index),
+                        type = AgentWorkItemType.Reasoning,
+                        status = AgentWorkStatus.Completed,
+                        completedAtMillis = time,
+                        step = step,
+                    ),
+                )
+            }
             addAll(
                 mapActionChunk(
                     threadId = threadId,
@@ -319,6 +371,7 @@ internal class DeepSeekHarnessEventMapper {
         val callId = data.string("callId") ?: return emptyList()
         val name = data.string("name").orEmpty()
         val arguments = data.string("arguments").orEmpty()
+        completedTools.remove(callId)
         activeToolNames[callId] = name
         activeToolArguments[callId] = arguments
         return listOf(
@@ -359,11 +412,13 @@ internal class DeepSeekHarnessEventMapper {
             ?.let { runCatching { it.jsonObject }.getOrNull() }
             ?.takeIf { it.string("type") == "tool-result" }
         val callId = source?.string("callId") ?: resultBlock?.string("toolCallId") ?: return emptyList()
-        val toolName = activeToolNames.remove(callId).orEmpty()
+        if (callId in completedTools) return emptyList()
+        val toolName = activeToolNames.remove(callId) ?: return emptyList()
         val toolArguments = activeToolArguments.remove(callId).orEmpty()
         val error = data.obj("error")
         val isError = error != null || resultBlock?.get("isError")?.jsonPrimitive?.contentOrNull == "true"
         val detail = message["content"].toolResultTextContent()
+        completedTools[callId] = CompletedTool(toolName, toolArguments)
         return listOf(
             AgentSessionEvent.WorkItemCompleted(
                 threadId = threadId,
@@ -558,6 +613,58 @@ internal class DeepSeekHarnessEventMapper {
         reasoningOutputTokens + other.reasoningOutputTokens,
     )
 
+    private fun mapAssistantStream(notification: DeepSeekNotification): List<AgentSessionEvent> {
+        val threadId = notification.params.string("sessionId") ?: return emptyList()
+        val frame = notification.params.obj("frame") ?: return emptyList()
+        val attemptId = frame.string("attemptId") ?: return emptyList()
+        val attemptKey = "$threadId:$attemptId"
+        return when (frame.string("type")) {
+            "start" -> {
+                val turn = frame.int("turn") ?: return emptyList()
+                val step = frame.int("step") ?: return emptyList()
+                val attempt = AssistantAttempt(
+                    threadId = threadId,
+                    turnId = turnId(threadId, turn),
+                    step = step,
+                )
+                liveAttempts[attemptKey] = attempt
+                liveChunkSteps += ActionStreamKey(attempt.turnId, step)
+                emptyList()
+            }
+            "chunk" -> {
+                val attempt = liveAttempts[attemptKey] ?: return emptyList()
+                val chunk = frame.obj("chunk") ?: return emptyList()
+                mapChunk(
+                    threadId = threadId,
+                    turnId = attempt.turnId,
+                    data = buildJsonObject {
+                        put("step", attempt.step)
+                        put("chunk", chunk)
+                    },
+                    time = frame.long("time") ?: 0L,
+                )
+            }
+            "end" -> {
+                val attempt = liveAttempts.remove(attemptKey) ?: return emptyList()
+                val kind = frame.obj("outcome")?.string("kind")
+                if (kind != "abandoned") return emptyList()
+                val key = ActionStreamKey(attempt.turnId, attempt.step)
+                reasoningBlockIndexes[key].orEmpty().map { index ->
+                    AgentSessionEvent.WorkItemCompleted(
+                        threadId = attempt.threadId,
+                        turnId = attempt.turnId,
+                        itemId = reasoningItemId(attempt.turnId, attempt.step, index),
+                        type = AgentWorkItemType.Reasoning,
+                        status = AgentWorkStatus.Interrupted,
+                        completedAtMillis = frame.long("time") ?: 0L,
+                        step = attempt.step,
+                    )
+                }
+            }
+            else -> emptyList()
+        }
+    }
+
     companion object {
         fun turnId(sessionId: String, turn: Int): String = "$sessionId:$turn"
 
@@ -584,9 +691,30 @@ private data class ActionStreamKey(
     val step: Int,
 )
 
+private data class AssistantAttempt(
+    val threadId: String,
+    val turnId: String,
+    val step: Int,
+)
+
+private data class CompletedTool(
+    val name: String,
+    val arguments: String,
+)
+
+private fun reasoningItemId(turnId: String, step: Int, index: Int): String =
+    "reasoning-$turnId-$step-$index"
+
+private const val AssistantStreamMethod = "agent.assistant-stream"
+
 private data class ActionSignature(
     val name: String,
     val argumentsJson: String,
+)
+
+private data class IndexedReasoningText(
+    val index: Int,
+    val text: String,
 )
 
 private fun JsonObject.string(name: String): String? = this[name]?.jsonPrimitive?.contentOrNull
@@ -601,6 +729,38 @@ private fun JsonElement?.assistantTextContent(): String = when (this) {
     }.joinToString("\n")
     is JsonObject -> string("text").orEmpty().takeIf { string("type") == "text" }.orEmpty()
     else -> ""
+}
+
+private fun JsonElement?.reasoningTextContent(
+    streamedIndexes: List<Int>,
+): List<IndexedReasoningText> = when (this) {
+    is JsonArray -> buildList {
+        var reasoningOrdinal = 0
+        this@reasoningTextContent.forEachIndexed { contentIndex, block ->
+            val payload = runCatching { block.jsonObject }.getOrNull() ?: return@forEachIndexed
+            val text = payload.string("text").takeIf { payload.string("type") == "reasoning" }
+                ?: return@forEachIndexed
+            add(
+                IndexedReasoningText(
+                    index = streamedIndexes.getOrNull(reasoningOrdinal++) ?: contentIndex,
+                    text = text,
+                ),
+            )
+        }
+    }
+
+    is JsonObject -> string("text")
+        ?.takeIf { string("type") == "reasoning" }
+        ?.let { text -> listOf(IndexedReasoningText(streamedIndexes.firstOrNull() ?: 0, text)) }
+        .orEmpty()
+    else -> emptyList()
+}
+
+private fun JsonObject.isReasoningBlockEvent(): Boolean = when (string("type")) {
+    "reasoning-delta" -> true
+    "block-start" -> string("blockType") == "reasoning"
+    "block-end" -> obj("block")?.string("type") == "reasoning"
+    else -> false
 }
 
 private fun JsonElement?.toolResultTextContent(): String = when (this) {

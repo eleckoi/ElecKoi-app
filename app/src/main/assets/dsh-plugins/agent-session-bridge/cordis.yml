@@ -1,0 +1,5 @@
+- id: eleckoi-agent-session-bridge
+  name: ./agent-session-bridge.mjs
+  config:
+    snapshotRoot: !!js process.env.ELECKOI_SESSION_SNAPSHOT_ROOT
+    requestContextRoot: !!js process.env.ELECKOI_REQUEST_CONTEXT_ROOT

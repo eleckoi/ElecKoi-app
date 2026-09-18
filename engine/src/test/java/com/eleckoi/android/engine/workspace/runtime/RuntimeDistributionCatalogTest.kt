@@ -45,15 +45,16 @@ class RuntimeDistributionCatalogTest {
         assertEquals(setOf("deepseek"), catalog.harnesses.keys)
         assertEquals("ubuntu-base-24.04.4-arm64.egruntime", catalog.rootfs.assetPath)
         val deepSeek = catalog.requireHarness("deepseek")
-        assertEquals("deepseek-harness-0.1.1-rc.2-eleckoi.7-arm64.egruntime", deepSeek.assetPath)
+        assertEquals("0.1.5-rc.2", deepSeek.version)
+        assertEquals("deepseek-harness-0.1.5-rc.2-eleckoi.3-arm64.egruntime", deepSeek.assetPath)
         assertEquals("bin/dsh-jsonrpc-agent", deepSeek.entrypoint)
         assertEquals("etc/deepseek/cordis.yml", deepSeek.configPath)
-        assertEquals("b150a551b8d465e31e418e1b2eaf5e79bbb7d28e", deepSeek.sourceCommit)
+        assertEquals("fb2c4b9e698e30edb738bca4cf0618587db7d203", deepSeek.sourceCommit)
         assertTrue(deepSeek.embeddedOnly)
     }
 
     @Test
-    fun `repository DSH SDK server injects multimodal services`() {
+    fun `repository DSH SDK server declares the model resolver dependency`() {
         val configFile = sequenceOf(
             File("runtime/deepseek/cordis.yml"),
             File("../runtime/deepseek/cordis.yml"),
@@ -63,8 +64,10 @@ class RuntimeDistributionCatalogTest {
             .substringBefore("\n- id:")
 
         assertTrue(sdkServer.contains("  inject:\n"))
-        assertTrue(sdkServer.contains("    - attachments\n"))
+        assertTrue(sdkServer.contains("    - sdkAppStartup\n"))
+        assertTrue(sdkServer.contains("    - loader\n"))
         assertTrue(sdkServer.contains("    - llm\n"))
+        assertTrue(sdkServer.contains("  config:\n"))
     }
 
     @Test
