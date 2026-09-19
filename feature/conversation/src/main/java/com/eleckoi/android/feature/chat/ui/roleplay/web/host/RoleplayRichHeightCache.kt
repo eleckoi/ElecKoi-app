@@ -82,7 +82,9 @@ internal object RoleplayRichHeightCache {
                 }
                 keys.forEach { heights.remove(it) }
             }
-            persistentDao?.deleteForMessages(sessionId, messageIds)
+            withContext(Dispatchers.IO) {
+                persistentDao?.deleteForMessages(sessionId, messageIds)
+            }
         }
     }
 
@@ -96,7 +98,9 @@ internal object RoleplayRichHeightCache {
                 val keys = heights.keys.filter { key -> parseKey(key)?.sessionId in ids }
                 keys.forEach { heights.remove(it) }
             }
-            persistentDao?.deleteForSessions(ids.toList())
+            withContext(Dispatchers.IO) {
+                persistentDao?.deleteForSessions(ids.toList())
+            }
         }
     }
 
@@ -162,6 +166,12 @@ internal object RoleplayRichHeightCache {
         heights.clear()
         deletedSessions.clear()
         deletedMessages.clear()
+        persistentDao = null
+    }
+
+    @Synchronized
+    internal fun installPersistentDaoForTest(dao: RoleplayRichHeightDao) {
+        persistentDao = dao
     }
 
     @Synchronized

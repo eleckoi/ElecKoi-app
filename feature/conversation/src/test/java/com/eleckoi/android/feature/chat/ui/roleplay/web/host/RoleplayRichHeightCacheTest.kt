@@ -1,9 +1,11 @@
 package com.eleckoi.android.feature.chat.ui.roleplay.web.host
 
+import com.eleckoi.android.foundation.storage.room.RoleplayRichHeightDao
 import com.eleckoi.android.foundation.storage.room.RoleplayRichHeightEntity
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotSame
 import org.junit.Test
 import kotlinx.coroutines.runBlocking
 
@@ -120,5 +122,41 @@ class RoleplayRichHeightCacheTest {
         ))
 
         assertEquals(0, RoleplayRichHeightCache.snapshotJson("deleted-session").length())
+    }
+
+    @Test
+    fun `persistent deletion leaves the caller thread`() = runBlocking {
+        val callerThread = Thread.currentThread()
+        val dao = ThreadRecordingDao()
+        RoleplayRichHeightCache.installPersistentDaoForTest(dao)
+
+        RoleplayRichHeightCache.discardMessages("session", listOf("message"))
+        RoleplayRichHeightCache.discardSessions(listOf("session"))
+
+        assertNotSame(callerThread, dao.messageDeletionThread)
+        assertNotSame(callerThread, dao.sessionDeletionThread)
+    }
+
+    private class ThreadRecordingDao : RoleplayRichHeightDao {
+        var messageDeletionThread: Thread? = null
+        var sessionDeletionThread: Thread? = null
+
+        override fun deleteForMessages(sessionId: String, messageIds: List<String>) {
+            messageDeletionThread = Thread.currentThread()
+        }
+
+        override fun deleteForSessions(sessionIds: List<String>) {
+            sessionDeletionThread = Thread.currentThread()
+        }
+
+        override suspend fun heightsForSession(sessionId: String): List<RoleplayRichHeightEntity> = emptyList()
+
+        override suspend fun upsert(height: RoleplayRichHeightEntity) = Unit
+
+        override suspend fun deleteOtherRevisions(
+            sessionId: String,
+            messageId: String,
+            contentRevision: String,
+        ) = Unit
     }
 }
