@@ -12,7 +12,7 @@ dependencies {
     implementation(project(":foundation:serialization"))
     implementation(project(":foundation:storage"))
 
-    implementation("androidx.javascriptengine:javascriptengine:1.1.0")
+    implementation("io.github.dokar3:quickjs-kt:1.0.15")
     implementation("androidx.paging:paging-runtime:3.5.0")
     implementation("androidx.work:work-runtime-ktx:2.11.2")
     implementation("com.github.mwiede:jsch:2.28.0")

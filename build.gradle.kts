@@ -15,4 +15,11 @@ allprojects {
     dependencyLocking {
         lockAllConfigurations()
     }
+
+    configurations.matching { it.name.endsWith("UnitTestRuntimeClasspath") }.configureEach {
+        resolutionStrategy.dependencySubstitution {
+            substitute(module("io.github.dokar3:quickjs-kt-android"))
+                .using(module("io.github.dokar3:quickjs-kt-jvm:1.0.15"))
+        }
+    }
 }

@@ -15,6 +15,7 @@ The following component families are licensed under Apache License 2.0. The comp
 - Cloudy 1.0.0-alpha01 (`com.github.skydoves:cloudy-android` and `cloudy-native`), https://github.com/skydoves/Cloudy
 - OkHttp 4.12.0 (`com.squareup.okhttp3:okhttp`), https://github.com/square/okhttp
 - Okio 3.17.0 (`com.squareup.okio:*`), https://github.com/square/okio
+- QuickJS-KT 1.0.15 (`io.github.dokar3:quickjs-kt*`), https://github.com/dokar3/quickjs-kt
 - Google Accompanist (`com.google.accompanist:*`), https://github.com/google/accompanist
 - Guava (`com.google.guava:*`) and its Error Prone and J2ObjC annotation dependencies (`com.google.errorprone:error_prone_annotations`, `com.google.j2objc:j2objc-annotations`), https://github.com/google/guava
 - Apache Commons Compress 1.28.0, Codec 1.19.0, IO 2.20.0 and Lang 3.18.0, https://commons.apache.org/; required attributions are in `apache-commons.NOTICE.txt`
@@ -24,6 +25,7 @@ Exceptions and additional licenses:
 
 - AndroidX DataStore's repackaged Protocol Buffers runtime is BSD-3-Clause; see `androidx-datastore-protobuf.BSD-3-Clause.txt`.
 - Checker Framework qualifiers 3.33.0 are MIT; see `checker-framework.MIT.txt`.
+- The embedded QuickJS engine is MIT; see `quickjs.MIT.txt`.
 - Kotlin Multiplatform LaTeX Renderer 1.4.7 is MIT; see `latex-renderer.MIT.txt`.
 - zstd-jni 1.5.7-16 is BSD-2-Clause; see `zstd-jni.BSD-2-Clause.txt`.
 - MaterialKolor Material Color Utilities 2.0.2 (`com.materialkolor:material-color-utilities:*`) is published under MIT and is a Kotlin Multiplatform port of Google's Apache-2.0 Material Color Utilities source. ElecKoi packages `materialkolor-2.0.2.MIT.txt` and the common `Apache-2.0.txt` terms for both layers.

@@ -1,7 +1,7 @@
 package com.eleckoi.android.engine.story.variables.runtime
 
 import android.content.Context
-import androidx.javascriptengine.JavaScriptSandbox
+import com.dokar.quickjs.QuickJsInterruptedException
 import com.eleckoi.android.engine.story.variables.runtime.script.VariableRuntimeScripts
 import com.eleckoi.android.foundation.storage.ElecKoiDataException
 import org.json.JSONArray
@@ -48,7 +48,7 @@ data class EjsTemplateRenderResult(
 class VariableRuntimeService(
     private val context: Context,
 ) {
-    private val sandboxManager = ProcessJavaScriptSandboxManager.get(context.applicationContext)
+    private val runtimeManager = ProcessQuickJsRuntimeManager.instance
 
     suspend fun evaluateVariableConditions(
         stateJson: String,
@@ -113,8 +113,7 @@ class VariableRuntimeService(
         val result = parseJsonResult(
             evaluateRaw(
                 VariableRuntimeScripts.helpers + "\n" + VariableRuntimeScripts.ejsRuntime +
-                    "\n__eleckoiRenderTemplates(${input});",
-                requirePromiseReturn = true,
+                    "\nawait __eleckoiRenderTemplates(${input});",
             ),
         )
         result.optString("error").takeIf(String::isNotBlank)?.let { message ->
@@ -143,19 +142,13 @@ class VariableRuntimeService(
     }
 
     suspend fun checkJavaScriptEngine(): VariableRuntimeCheckResult {
-        if (!JavaScriptSandbox.isSupported()) {
-            return VariableRuntimeCheckResult(
-                ok = false,
-                message = "当前设备不支持 AndroidX JavaScriptEngine",
-            )
-        }
         return runCatching {
             evaluateRaw(zodBundleScript() + "\nBoolean(globalThis.z && globalThis.z.object)")
         }.fold(
             onSuccess = { result ->
                 VariableRuntimeCheckResult(
                     ok = result == "true",
-                    message = if (result == "true") "JavaScriptEngine 与 Zod 运行库可用" else "Zod 运行库加载失败",
+                    message = if (result == "true") "QuickJS 与 Zod 运行库可用" else "Zod 运行库加载失败",
                 )
             },
             onFailure = { error ->
@@ -215,18 +208,10 @@ class VariableRuntimeService(
         )
     }
 
-    private suspend fun evaluateRaw(
-        script: String,
-        requirePromiseReturn: Boolean = false,
-    ): String {
-        if (!JavaScriptSandbox.isSupported()) {
-            throw ElecKoiDataException("当前设备不支持 AndroidX JavaScriptEngine")
-        }
-        return try {
-            sandboxManager.evaluate(script, requirePromiseReturn)
-        } catch (_: JavaScriptPromiseReturnUnsupportedException) {
-            throw ElecKoiDataException("当前设备的 JavaScriptEngine 不支持异步 EJS 模板")
-        }
+    private suspend fun evaluateRaw(script: String): String = try {
+        runtimeManager.evaluate(script)
+    } catch (error: QuickJsInterruptedException) {
+        throw ElecKoiDataException("变量脚本执行超时", error)
     }
 
     private fun jsonObjectOrEmpty(value: String): JSONObject = runCatching {
@@ -237,7 +222,7 @@ class VariableRuntimeService(
         runCatching { return JSONObject(raw) }
         val decoded = runCatching { JSONTokener(raw).nextValue() as? String }.getOrNull()
         return decoded?.let { text -> runCatching { JSONObject(text) }.getOrNull() }
-            ?: throw ElecKoiDataException("JavaScriptEngine 返回了无法识别的数据")
+            ?: throw ElecKoiDataException("QuickJS 返回了无法识别的数据")
     }
 
     private fun parseRuntimeResult(raw: String): VariableRuntimeCheckResult {
