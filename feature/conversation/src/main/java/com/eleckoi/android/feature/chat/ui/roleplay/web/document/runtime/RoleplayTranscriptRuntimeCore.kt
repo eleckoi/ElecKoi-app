@@ -4,6 +4,32 @@ internal val RoleplayTranscriptRuntimeCore = """
   (() => {
     'use strict';
     const native = window.ElecKoiTranscript;
+    const post = value => {
+      if (native && typeof native.postMessage === 'function') native.postMessage(JSON.stringify(value));
+    };
+    const rendererErrorPayload = (error, phase, transactionId = 0, sessionId = '') => ({
+      type: 'rendererError',
+      message: String(error?.message || error || 'renderer fault'),
+      stack: String(error?.stack || ''),
+      phase: String(phase || ''),
+      transactionId,
+      sessionId,
+    });
+    let reportRendererFailure = (error, phase) => {
+      post(rendererErrorPayload(error, phase));
+    };
+    addEventListener('error', event => {
+      reportRendererFailure(
+        event.error || new Error(String(event.message || 'uncaught window error')),
+        'window-error',
+      );
+    });
+    addEventListener('unhandledrejection', event => {
+      const reason = event.reason instanceof Error
+        ? event.reason
+        : new Error(String(event.reason || 'unhandled promise rejection'));
+      reportRendererFailure(reason, 'unhandled-promise-rejection');
+    });
     const authorSdkBase64 = '__ELECKOI_AUTHOR_SDK_BASE64__';
     const authorSdkSource = new TextDecoder().decode(
       Uint8Array.from(atob(authorSdkBase64), character => character.charCodeAt(0)),
@@ -134,9 +160,6 @@ internal val RoleplayTranscriptRuntimeCore = """
       state.scroll.mode === ScrollMode.PROGRAMMATIC_JUMP ||
       state.scroll.mode === ScrollMode.VIEWPORT_RESIZE;
     const isAtUiEnd = () => followsTail() || distanceFromEnd() <= (state.atEnd ? 96 : 24);
-    const post = value => {
-      if (native && typeof native.postMessage === 'function') native.postMessage(JSON.stringify(value));
-    };
     const virtualScrollTo = (offset, options, instance) => {
       const adjustments = Number(options.adjustments || 0);
       const target = Math.max(0, offset + adjustments);
@@ -172,7 +195,7 @@ internal val RoleplayTranscriptRuntimeCore = """
       state.forceTail = false;
       setScrollMode(ScrollMode.USER_BROWSING, cause);
     };
-    const failRenderer = error => {
+    const failRenderer = (error, phase) => {
       if (state.fault) return;
       state.fault = String(error?.message || error || 'renderer fault');
       if (state.scroll.frame) cancelAnimationFrame(state.scroll.frame);
@@ -186,8 +209,16 @@ internal val RoleplayTranscriptRuntimeCore = """
       }
       state.richViewport.handle = 0;
       state.richViewport.scheduler = '';
-      post({ type: 'rendererError', message: state.fault });
+      post(
+        rendererErrorPayload(
+          error,
+          phase,
+          state.committedTransactionId,
+          state.sessionId,
+        ),
+      );
     };
+    reportRendererFailure = failRenderer;
     const mutate = (label, operation) => {
       if (state.mutation) throw new Error(`mutation ${'$'}{label} reentered during ${'$'}{state.mutation}`);
       state.mutation = label;
@@ -235,8 +266,8 @@ internal val RoleplayTranscriptRuntimeCore = """
     }
     try {
       (0, eval)(authorSdkSource);
-    } catch (_) {
-      post({ type: 'rendererError' });
+    } catch (error) {
+      failRenderer(error, 'author-sdk-evaluation');
     }
     const notifyScrollState = () => {
       const nextAtEnd = isAtUiEnd();
@@ -297,7 +328,7 @@ internal val RoleplayTranscriptRuntimeCore = """
           state.metrics.maxCommitDurationMs = Math.max(state.metrics.maxCommitDurationMs, duration);
         });
       } catch (error) {
-        failRenderer(error);
+        failRenderer(error, 'geometry-commit');
       }
     };
     const requestGeometryCommit = ({

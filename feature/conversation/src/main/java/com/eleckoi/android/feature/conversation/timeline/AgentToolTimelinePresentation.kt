@@ -10,6 +10,7 @@ import com.eleckoi.android.engine.agent.api.AgentReadSettingFilesTool
 import com.eleckoi.android.engine.agent.api.AgentReadVariablesTool
 import com.eleckoi.android.engine.agent.api.AgentRemoteDshTaskTool
 import com.eleckoi.android.engine.agent.api.AgentSettingFileMutationTools
+import com.eleckoi.android.engine.agent.api.AgentSendMessageTool
 import com.eleckoi.android.engine.agent.api.AgentSubagentTool
 import com.eleckoi.android.engine.agent.api.AgentTodoWriteTool
 import com.eleckoi.android.engine.agent.api.AgentUpdatePlanTool
@@ -17,6 +18,8 @@ import com.eleckoi.android.engine.agent.api.AgentUpdateRoleplayPlanTool
 import com.eleckoi.android.feature.conversation.timeline.model.CreationTimelineItem
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
+
+private val SubagentWhitespace = Regex("\\s+")
 
 fun CreationTimelineItem.agentToolTimelinePresentation():
     AgentToolTimelinePresentation? {
@@ -114,6 +117,40 @@ fun CreationTimelineItem.agentToolTimelinePresentation():
     }
     return AgentToolTimelinePresentation(title = title, target = target)
 }
+
+/**
+ * A subagent tool completes as soon as the delegated session starts, so its direct tool result is
+ * only a launch receipt. The child reply is already visible in the nested timeline; a separate
+ * return block is needed only when the text relayed to the parent differs from that visible reply.
+ */
+fun CreationTimelineItem.subagentReturnResult(): String {
+    if (toolName != AgentSubagentTool) return ""
+    val relayedResult = childTimeline.asReversed().firstNotNullOfOrNull { child ->
+        child.takeIf { it.toolName == AgentSendMessageTool }
+            ?.toolArguments
+            ?.jsonObjectOrNull()
+            ?.string("message")
+            ?.trim()
+            ?.takeIf(String::isNotBlank)
+    }.orEmpty()
+    val childIsRunning = childTimeline.any(CreationTimelineItem::running)
+    val finalReply = childTimeline
+        .toCreationTurns(isRunning = childIsRunning)
+        .lastOrNull()
+        ?.finalAnswer
+        ?.text
+        .orEmpty()
+        .trim()
+    if (
+        relayedResult.isNotBlank() &&
+        relayedResult.normalizedSubagentResult() != finalReply.normalizedSubagentResult()
+    ) {
+        return relayedResult
+    }
+    return detail.trim().takeIf { failed }.orEmpty()
+}
+
+private fun String.normalizedSubagentResult(): String = trim().replace(SubagentWhitespace, " ")
 
 private fun CreationTimelineItem.itemPlanTarget(): String {
     val plan = agentPlanUpdatePresentation() ?: return "任务计划"

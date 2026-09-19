@@ -166,8 +166,11 @@ interface AgentSession {
     suspend fun send(
         prompt: AgentPrompt,
         contextInjections: List<AgentContextInjection> = emptyList(),
+        /** Fresh product-ledger history for this turn; null reuses the session-start snapshot. */
+        authoritativeHistoryItems: List<AgentHistoryItem>? = null,
     ): AgentTurnHandle {
         require(prompt.images.isEmpty()) { "当前 Agent 后端不支持图片输入" }
+        require(authoritativeHistoryItems == null) { "当前 Agent 后端不支持按回合更新历史" }
         return send(prompt.text, contextInjections)
     }
     /** Adds input to the currently active regular turn without starting another turn. */

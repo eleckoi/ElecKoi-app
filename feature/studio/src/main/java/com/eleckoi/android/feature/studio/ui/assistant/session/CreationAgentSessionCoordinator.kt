@@ -1,6 +1,7 @@
 package com.eleckoi.android.feature.studio.ui.assistant.session
 
 import com.eleckoi.android.engine.agent.api.AgentApprovalDecision
+import com.eleckoi.android.engine.agent.api.AgentHistoryItem
 import com.eleckoi.android.engine.agent.api.AgentPermissionMode
 import com.eleckoi.android.engine.agent.api.AgentSession
 import com.eleckoi.android.engine.agent.api.AgentSessionFactory
@@ -266,6 +267,11 @@ internal class CreationAgentSessionCoordinator(
                             current
                         }
                     }
+                    val roomHistory = creatorService.loadCreatorConversationAgentHistory(
+                        workspaceId = workspaceId,
+                        conversationId = conversationId,
+                        excludeTrailingUser = excludeTrailingHistoryUser,
+                    )
                     val session = ensureSession(
                         workspaceId = workspaceId,
                         conversationId = conversationId,
@@ -280,10 +286,12 @@ internal class CreationAgentSessionCoordinator(
                         } else {
                             emptySet()
                         },
+                        roomHistory = roomHistory,
                     )
                     session.send(
                         prompt = creationAgentPrompt(prompt, inputImages),
                         contextInjections = listOf(rootsContextBuilder.build(workspaceId)),
+                        authoritativeHistoryItems = roomHistory,
                     )
                     terminal.await()
                 }
@@ -418,6 +426,7 @@ internal class CreationAgentSessionCoordinator(
         excludeTrailingHistoryUser: Boolean,
         runtimeThreadId: String,
         obsoleteRuntimeThreadIds: Set<String>,
+        roomHistory: List<AgentHistoryItem>,
     ): AgentSession = sessionLifecycleMutex.withLock {
         val reusable = activeSession
             ?.takeUnless { excludeTrailingHistoryUser }
@@ -432,11 +441,6 @@ internal class CreationAgentSessionCoordinator(
             "本地创作环境尚未准备完成"
         }
 
-        val roomHistory = creatorService.loadCreatorConversationAgentHistory(
-            workspaceId = workspaceId,
-            conversationId = conversationId,
-            excludeTrailingUser = excludeTrailingHistoryUser,
-        )
         val created = agentSessionFactory.create(
             sessionOptionsFactory.create(
                 workspaceId = workspaceId,

@@ -32,17 +32,16 @@ fun SubagentInvocationDetail(
     appearance: AppearanceTheme,
     onOpenItem: (CreationTimelineItem) -> Unit,
 ) {
+    val returnResult = item.subagentReturnResult()
     Column(verticalArrangement = Arrangement.spacedBy(13.dp)) {
-        DetailTextBlock(
-            label = when {
-                item.failed -> "子 Agent 运行失败"
-                item.running -> "子 Agent 正在处理"
-                else -> "子 Agent 已完成"
-            },
-            text = delegation.description,
-            appearance = appearance,
-            monospace = false,
-        )
+        if (delegation.prompt.isNotBlank()) {
+            DetailTextBlock(
+                label = "委派指令",
+                text = delegation.prompt,
+                appearance = appearance,
+                monospace = false,
+            )
+        }
         DetailTextBlock(
             label = "使用模型",
             text = item.delegatedModel.ifBlank { "跟随主模型" },
@@ -57,7 +56,7 @@ fun SubagentInvocationDetail(
         )
         if (item.childTimeline.isNotEmpty()) {
             Text(
-                text = "执行过程",
+                text = "子 Agent 思考与完整回复",
                 color = appearance.mobileMuted,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
@@ -69,7 +68,7 @@ fun SubagentInvocationDetail(
                     ?.diff
                     .orEmpty(),
                 isLive = item.running,
-                includeAssistantMessages = false,
+                includeAssistantMessages = true,
                 appearance = appearance,
                 onOpenItem = onOpenItem,
             )
@@ -80,30 +79,12 @@ fun SubagentInvocationDetail(
                 fontSize = 13.sp,
             )
         }
-        if (delegation.prompt.isNotBlank()) {
-            DetailTextBlock(
-                label = "委派指令",
-                text = delegation.prompt,
-                appearance = appearance,
-                monospace = false,
-            )
-        }
-        item.completedAtMillis
-            ?.takeIf { completed -> item.createdAtMillis > 0L && completed >= item.createdAtMillis }
-            ?.let { completed ->
-                DetailTextBlock(
-                    label = "耗时",
-                    text = formatCreationElapsedTime(completed - item.createdAtMillis),
-                    appearance = appearance,
-                    monospace = false,
-                )
-            }
-        if (item.detail.isNotBlank()) {
+        if (returnResult.isNotBlank()) {
             DetailTextBlock(
                 label = if (item.failed) "失败原因" else "返回结果",
-                text = item.detail,
+                text = returnResult,
                 appearance = appearance,
-                monospace = false,
+                monospace = item.failed,
             )
         }
     }

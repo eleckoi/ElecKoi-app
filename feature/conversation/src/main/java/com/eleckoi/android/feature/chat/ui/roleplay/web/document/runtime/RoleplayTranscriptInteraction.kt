@@ -59,7 +59,7 @@ internal val RoleplayTranscriptInteraction = """    const onViewportResize = () 
           const binary = atob(chunks.join('')), bytes = new Uint8Array(binary.length);
           for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
           target(JSON.parse(new TextDecoder().decode(bytes)));
-        } catch (_) { post({ type: 'rendererError' }); }
+        } catch (error) { failRenderer(error, 'native-command-ingress'); }
       },
     };
     const presentToolbar = (turn, message, expanded) => {

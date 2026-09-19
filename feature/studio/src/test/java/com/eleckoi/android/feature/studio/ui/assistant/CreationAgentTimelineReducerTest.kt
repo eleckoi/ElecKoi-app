@@ -960,4 +960,50 @@ class CreationAgentTimelineReducerTest {
         assertEquals("child-session", restored.delegatedSessionId)
         assertEquals("read", restored.childTimeline.last().toolName)
     }
+
+    @Test
+    fun `delegated turn completion settles child reasoning`() {
+        val parent = CreationAgentTimelineReducer.apply(
+            timeline = emptyList(),
+            event = AgentSessionEvent.WorkItemStarted(
+                threadId = "parent",
+                turnId = "parent-turn",
+                itemId = "delegate-call",
+                type = AgentWorkItemType.Tool,
+                label = "subagent",
+                toolName = "subagent",
+            ),
+        )
+        val reasoning = CreationAgentTimelineReducer.apply(
+            timeline = parent,
+            event = AgentSessionEvent.DelegatedSessionEvent(
+                lineage = listOf("delegate-call"),
+                childSessionId = "child-session",
+                event = AgentSessionEvent.ReasoningTextDelta(
+                    threadId = "child-session",
+                    turnId = "child-turn",
+                    itemId = "reasoning",
+                    contentIndex = 0,
+                    delta = "已经完成任务",
+                ),
+            ),
+        )
+        val completed = CreationAgentTimelineReducer.apply(
+            timeline = reasoning,
+            event = AgentSessionEvent.DelegatedSessionEvent(
+                lineage = listOf("delegate-call"),
+                childSessionId = "child-session",
+                event = AgentSessionEvent.TurnCompleted(
+                    threadId = "child-session",
+                    turnId = "child-turn",
+                    status = AgentWorkStatus.Completed,
+                    completedAtMillis = 100L,
+                ),
+            ),
+        )
+
+        val childReasoning = completed.single().childTimeline.single()
+        assertFalse(childReasoning.running)
+        assertEquals(100L, childReasoning.completedAtMillis)
+    }
 }

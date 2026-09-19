@@ -5,6 +5,7 @@ import androidx.compose.runtime.remember
 import com.eleckoi.android.feature.chat.model.ChatImageAttachment
 import com.eleckoi.android.feature.chat.model.ChatMessage
 import com.eleckoi.android.feature.chat.ui.roleplay.web.host.RoleplayWebChatHost
+import com.eleckoi.android.feature.chat.ui.roleplay.web.model.RoleplayRendererFailure
 
 internal class RoleplayWebChatController {
     private var host: RoleplayWebChatHost? = null
@@ -42,5 +43,5 @@ internal data class RoleplayWebChatCallbacks(
     ) -> Unit,
     val onUserAvatarClick: () -> Unit,
     val onAssistantAvatarClick: () -> Unit,
-    val onRendererUnavailable: () -> Unit,
+    val onRendererUnavailable: (RoleplayRendererFailure) -> Unit,
 )

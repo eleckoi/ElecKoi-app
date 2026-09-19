@@ -6,6 +6,7 @@ import android.graphics.Color as AndroidColor
 import android.net.Uri
 import android.webkit.MimeTypeMap
 import android.webkit.RenderProcessGoneDetail
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -16,6 +17,8 @@ import com.eleckoi.android.feature.chat.ui.web.installDesktopAlignedWindowOpenHa
 import com.eleckoi.android.feature.chat.ui.web.isDesktopAllowedAuthorFrontendResource
 import com.eleckoi.android.feature.chat.ui.web.openDesktopAlignedExternalUri
 import com.eleckoi.android.feature.chat.ui.roleplay.web.document.buildRoleplayTranscriptDocument
+import com.eleckoi.android.feature.chat.ui.roleplay.web.model.RoleplayRendererFailure
+import com.eleckoi.android.feature.chat.ui.roleplay.web.model.RoleplayRendererFailureKind
 import com.eleckoi.android.feature.chat.ui.roleplay.web.model.RoleplayTranscriptAssetPath
 import com.eleckoi.android.feature.chat.ui.roleplay.web.model.RoleplayTranscriptMediaPath
 import com.eleckoi.android.feature.chat.ui.roleplay.web.model.RoleplayTranscriptModel
@@ -101,7 +104,15 @@ internal class RoleplayWebChatHost(
         }
         val bridgeAvailable = bridge.install(this)
         if (!bridgeAvailable) {
-            post { callbacks.onRendererUnavailable() }
+            post {
+                callbacks.onRendererUnavailable(
+                    RoleplayRendererFailure(
+                        kind = RoleplayRendererFailureKind.BridgeUnavailable,
+                        message = "当前 Android System WebView 不支持聊天页面所需的消息桥接能力",
+                        context = webViewDiagnosticContext(),
+                    ),
+                )
+            }
         }
         webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(
@@ -173,6 +184,49 @@ internal class RoleplayWebChatHost(
                 }
             }
 
+            override fun onReceivedError(
+                view: WebView,
+                request: WebResourceRequest,
+                error: WebResourceError,
+            ) {
+                super.onReceivedError(view, request, error)
+                if (!request.isForMainFrame) return
+                pageReady = false
+                callbacks.onRendererUnavailable(
+                    RoleplayRendererFailure(
+                        kind = RoleplayRendererFailureKind.PageLoad,
+                        message = error.description?.toString().orEmpty().ifBlank {
+                            "聊天页面主文档加载失败"
+                        },
+                        context = webViewDiagnosticContext() + mapOf(
+                            "WebView 错误码" to error.errorCode.toString(),
+                            "失败地址" to request.url.toString(),
+                        ),
+                    ),
+                )
+            }
+
+            override fun onReceivedHttpError(
+                view: WebView,
+                request: WebResourceRequest,
+                errorResponse: WebResourceResponse,
+            ) {
+                super.onReceivedHttpError(view, request, errorResponse)
+                if (!request.isForMainFrame || errorResponse.statusCode < 400) return
+                pageReady = false
+                callbacks.onRendererUnavailable(
+                    RoleplayRendererFailure(
+                        kind = RoleplayRendererFailureKind.PageLoad,
+                        message = "聊天页面主文档加载失败（HTTP ${errorResponse.statusCode}）",
+                        context = webViewDiagnosticContext() + mapOf(
+                            "HTTP 状态" to errorResponse.statusCode.toString(),
+                            "HTTP 原因" to errorResponse.reasonPhrase.orEmpty(),
+                            "失败地址" to request.url.toString(),
+                        ),
+                    ),
+                )
+            }
+
             override fun onRenderProcessGone(
                 view: WebView,
                 detail: RenderProcessGoneDetail,
@@ -181,7 +235,20 @@ internal class RoleplayWebChatHost(
                 bridge.resetPage()
                 pendingPresentationReady = null
                 visualStateRequestId += 1
-                callbacks.onRendererUnavailable()
+                callbacks.onRendererUnavailable(
+                    RoleplayRendererFailure(
+                        kind = RoleplayRendererFailureKind.RenderProcessGone,
+                        message = if (detail.didCrash()) {
+                            "WebView 渲染进程发生崩溃"
+                        } else {
+                            "WebView 渲染进程被系统终止"
+                        },
+                        context = webViewDiagnosticContext() + mapOf(
+                            "是否崩溃" to detail.didCrash().toString(),
+                            "退出时优先级" to detail.rendererPriorityAtExit().toString(),
+                        ),
+                    ),
+                )
                 return true
             }
         }
@@ -192,6 +259,18 @@ internal class RoleplayWebChatHost(
             "UTF-8",
             null,
         )
+    }
+
+    private fun webViewDiagnosticContext(): Map<String, String> {
+        val packageInfo = androidx.webkit.WebViewCompat.getCurrentWebViewPackage(appContext)
+        return buildMap {
+            packageInfo?.packageName?.takeIf(String::isNotBlank)?.let {
+                put("WebView 包名", it)
+            }
+            packageInfo?.versionName?.takeIf(String::isNotBlank)?.let {
+                put("WebView 版本", it)
+            }
+        }
     }
 
     fun updateCallbacks(next: RoleplayWebChatCallbacks) {

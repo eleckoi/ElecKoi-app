@@ -16,6 +16,7 @@ import com.eleckoi.android.feature.chat.ui.ChatIntent
 import com.eleckoi.android.feature.chat.ui.ChatPresentationReadinessState
 import com.eleckoi.android.feature.chat.ui.ChatUiState
 import com.eleckoi.android.feature.chat.ui.ChatVisualReplyState
+import com.eleckoi.android.feature.chat.ui.roleplay.web.model.RoleplayRendererFailure
 import com.eleckoi.android.feature.chat.ui.roleplay.web.surface.RoleplayWebChatController
 import com.eleckoi.android.feature.chat.ui.roleplay.web.surface.rememberRoleplayWebChatController
 import com.eleckoi.android.feature.preferences.ChatLayoutMode
@@ -36,7 +37,7 @@ internal class ChatTimelineRuntime(
     val visibleMessages: List<ChatMessage>,
     val roleplay: Boolean,
     val roleplayWebActive: Boolean,
-    val roleplayWebRendererFailed: Boolean,
+    val roleplayWebRendererFailure: RoleplayRendererFailure?,
     val roleplayWebRendererRevision: Int,
     val roleplayWebController: RoleplayWebChatController,
     val roleplayWebCanScrollForward: Boolean,
@@ -47,7 +48,7 @@ internal class ChatTimelineRuntime(
     val replyPresentationActive: Boolean,
     val latestRegenerableMessage: ChatMessage?,
     val onRoleplayScrollStateChanged: (Boolean, Boolean) -> Unit,
-    val onRoleplayRendererUnavailable: () -> Unit,
+    val onRoleplayRendererUnavailable: (RoleplayRendererFailure) -> Unit,
     val retryRoleplayRenderer: () -> Unit,
     val onRoleplayMessageRendered: (String) -> Unit,
     val resumeToEnd: () -> Unit,
@@ -69,8 +70,8 @@ internal fun rememberChatTimelineRuntime(
     val webController = rememberRoleplayWebChatController()
     var webBrowsingHistory by remember(sessionId) { mutableStateOf(false) }
     var webCanScrollForward by remember(sessionId) { mutableStateOf(false) }
-    var webRendererFailed by remember(sessionId, state.chatLayoutMode) {
-        mutableStateOf(false)
+    var webRendererFailure by remember(sessionId, state.chatLayoutMode) {
+        mutableStateOf<RoleplayRendererFailure?>(null)
     }
     var webRendererRevision by remember(sessionId, state.chatLayoutMode) {
         mutableIntStateOf(0)
@@ -185,7 +186,7 @@ internal fun rememberChatTimelineRuntime(
         visibleMessages = visibleMessages,
         roleplay = roleplay,
         roleplayWebActive = webActive,
-        roleplayWebRendererFailed = webRendererFailed,
+        roleplayWebRendererFailure = webRendererFailure,
         roleplayWebRendererRevision = webRendererRevision,
         roleplayWebController = webController,
         roleplayWebCanScrollForward = webCanScrollForward,
@@ -199,9 +200,9 @@ internal fun rememberChatTimelineRuntime(
             webBrowsingHistory = browsing
             webCanScrollForward = canScroll
         },
-        onRoleplayRendererUnavailable = { webRendererFailed = true },
+        onRoleplayRendererUnavailable = { failure -> webRendererFailure = failure },
         retryRoleplayRenderer = {
-            webRendererFailed = false
+            webRendererFailure = null
             webRendererRevision += 1
         },
         onRoleplayMessageRendered = acknowledgeMessageRendered,

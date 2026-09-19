@@ -341,7 +341,7 @@ fun ChatScreen(
                     draft = draft,
                     showLoadingStatus = showLoadingStatus,
                     webTranscriptReady = roleplayWebActive && roleplayTranscriptModel != null,
-                    webRendererFailed = timeline.roleplayWebRendererFailed,
+                    webRendererFailure = timeline.roleplayWebRendererFailure,
                     presentationReadiness = timeline.presentationReadiness,
                     onCreateChat = { viewModel.onIntent(ChatIntent.CreateChat) },
                     onRetryWebRenderer = timeline.retryRoleplayRenderer,

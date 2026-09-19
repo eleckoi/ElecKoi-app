@@ -27,7 +27,7 @@ internal val RoleplayTranscriptBootstrap = """
       state.readyPosted = false;
       presentation.watchdog = setTimeout(() => {
         if (!initialPresentationActive() || state.fault) return;
-        failRenderer(new Error('initial presentation did not settle'));
+        failRenderer(new Error('initial presentation did not settle'), 'initial-presentation-watchdog');
       }, 5000);
     };
     const initialViewportTurns = () => Array.from(turns.querySelectorAll(':scope > .turn')).filter(turn => {

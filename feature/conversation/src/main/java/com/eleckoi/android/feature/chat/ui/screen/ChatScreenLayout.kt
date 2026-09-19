@@ -1,5 +1,9 @@
 package com.eleckoi.android.feature.chat.ui.screen
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
@@ -22,11 +26,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.eleckoi.android.feature.chat.model.ChatDraft
 import com.eleckoi.android.feature.chat.ui.ChatPresentationReadinessState
 import com.eleckoi.android.feature.chat.ui.ChatUiState
 import com.eleckoi.android.feature.chat.ui.layout.ChatTopBar
+import com.eleckoi.android.feature.chat.ui.roleplay.web.model.RoleplayRendererFailure
 import com.eleckoi.android.foundation.design.AppearanceTheme
 
 @Composable
@@ -71,7 +79,7 @@ internal fun ChatConversationStateContent(
     draft: ChatDraft?,
     showLoadingStatus: Boolean,
     webTranscriptReady: Boolean,
-    webRendererFailed: Boolean,
+    webRendererFailure: RoleplayRendererFailure?,
     presentationReadiness: ChatPresentationReadinessState,
     onCreateChat: () -> Unit,
     onRetryWebRenderer: () -> Unit,
@@ -106,9 +114,10 @@ internal fun ChatConversationStateContent(
             )
             Box(Modifier.fillMaxSize()) {
                 webContent(draft, presentationAlpha)
-                if (webRendererFailed) {
+                webRendererFailure?.let { failure ->
                     ChatWebRendererFailure(
                         appearance = state.appearance,
+                        failure = failure,
                         onRetry = onRetryWebRenderer,
                     )
                 }
@@ -120,8 +129,10 @@ internal fun ChatConversationStateContent(
 @Composable
 private fun ChatWebRendererFailure(
     appearance: AppearanceTheme,
+    failure: RoleplayRendererFailure,
     onRetry: () -> Unit,
 ) {
+    val context = LocalContext.current
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -132,10 +143,30 @@ private fun ChatWebRendererFailure(
         Text(text = "聊天渲染失败", color = appearance.mobileText)
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "未切换到另一套排版引擎",
+            text = failure.kind.displayName,
             color = appearance.mobileMuted,
         )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            modifier = Modifier.padding(horizontal = 32.dp),
+            text = failure.displayMessage,
+            color = appearance.mobileMuted,
+            maxLines = 6,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+        )
         Spacer(Modifier.height(10.dp))
+        TextButton(
+            onClick = {
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(
+                    ClipData.newPlainText("ElecKoi renderer error", failure.copyDetails()),
+                )
+                Toast.makeText(context, "完整报错已复制", Toast.LENGTH_SHORT).show()
+            },
+        ) {
+            Text(text = "复制完整报错", color = appearance.mobileBlue)
+        }
         TextButton(onClick = onRetry) {
             Text(text = "重新加载", color = appearance.mobileBlue)
         }

@@ -13,6 +13,7 @@ import com.eleckoi.android.feature.chat.model.OpeningMessageId
 import com.eleckoi.android.feature.chat.ui.ChatIntent
 import com.eleckoi.android.feature.chat.ui.ChatPresentationReadinessState
 import com.eleckoi.android.feature.chat.ui.blocks.image.rememberGeneratedImageDownloader
+import com.eleckoi.android.feature.chat.ui.roleplay.web.model.RoleplayRendererFailure
 import com.eleckoi.android.feature.chat.ui.roleplay.web.model.RoleplayTranscriptModel
 import com.eleckoi.android.feature.chat.ui.roleplay.web.surface.RoleplayWebChatCallbacks
 import com.eleckoi.android.feature.chat.ui.roleplay.web.surface.RoleplayWebChatController
@@ -41,7 +42,7 @@ internal fun ChatRoleplayConversationSurface(
     onOpenProcess: (String) -> Unit,
     onOpenUserAvatars: () -> Unit,
     onOpenCharacterSettings: (String) -> Unit,
-    onRendererUnavailable: () -> Unit,
+    onRendererUnavailable: (RoleplayRendererFailure) -> Unit,
     messageGateway: AuthorChatGateway,
     modifier: Modifier = Modifier,
 ) {

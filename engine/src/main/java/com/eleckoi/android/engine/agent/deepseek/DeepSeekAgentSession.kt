@@ -4,7 +4,9 @@ import com.eleckoi.android.engine.agent.api.AgentApprovalDecision
 import com.eleckoi.android.engine.agent.api.AgentApprovalKind
 import com.eleckoi.android.engine.agent.api.AgentContextInjection
 import com.eleckoi.android.engine.agent.api.AgentHarnessId
+import com.eleckoi.android.engine.agent.api.AgentHistoryItem
 import com.eleckoi.android.engine.agent.api.AgentPermissionMode
+import com.eleckoi.android.engine.agent.api.AgentMessagePhase
 import com.eleckoi.android.engine.agent.api.AgentSession
 import com.eleckoi.android.engine.agent.api.AgentPrompt
 import com.eleckoi.android.engine.agent.api.AgentSessionEvent
@@ -14,12 +16,15 @@ import com.eleckoi.android.engine.agent.api.AgentSubagentTool
 import com.eleckoi.android.engine.agent.api.AgentThreadStart
 import com.eleckoi.android.engine.agent.api.AgentTurnHandle
 import com.eleckoi.android.engine.agent.api.AgentTurnSteerUnavailableException
+import com.eleckoi.android.engine.agent.api.AgentWorkItemType
+import com.eleckoi.android.engine.agent.api.AgentWorkStatus
 import com.eleckoi.android.engine.agent.deepseek.protocol.DeepSeekApprovalOutcome
 import com.eleckoi.android.engine.agent.deepseek.protocol.DeepSeekHarnessEventMapper
 import com.eleckoi.android.engine.agent.deepseek.protocol.DeepSeekHistoryEncoding
 import com.eleckoi.android.engine.agent.deepseek.protocol.DeepSeekNotification
 import com.eleckoi.android.engine.agent.deepseek.protocol.DeepSeekPromptMode
 import com.eleckoi.android.engine.agent.deepseek.protocol.DeepSeekPermissionPreset
+import com.eleckoi.android.engine.agent.deepseek.protocol.assistantTextContent
 import com.eleckoi.android.engine.agent.deepseek.protocol.withDeepSeekProtocolTimeout
 import java.nio.charset.StandardCharsets
 import java.util.ArrayDeque
@@ -67,6 +72,8 @@ internal class DeepSeekAgentSession(
     private var pendingUserHistoryText: String? = null
     private val pendingSubagentCalls = mutableMapOf<String, ArrayDeque<String>>()
     private val subagentLineageBySession = mutableMapOf<String, List<String>>()
+    private val subagentTurnBySession = mutableMapOf<String, String>()
+    private val subagentAssistantTextBySession = mutableMapOf<String, MutableMap<String, String>>()
     private val pendingApprovalIds = ConcurrentHashMap.newKeySet<Long>()
 
     override val state: StateFlow<AgentSessionState> = _state.asStateFlow()
@@ -124,7 +131,11 @@ internal class DeepSeekAgentSession(
     override suspend fun send(text: String, contextInjections: List<AgentContextInjection>): AgentTurnHandle =
         send(AgentPrompt(text), contextInjections)
 
-    override suspend fun send(prompt: AgentPrompt, contextInjections: List<AgentContextInjection>): AgentTurnHandle =
+    override suspend fun send(
+        prompt: AgentPrompt,
+        contextInjections: List<AgentContextInjection>,
+        authoritativeHistoryItems: List<AgentHistoryItem>?,
+    ): AgentTurnHandle =
         actionMutex.withLock {
             val ready = _state.value as? AgentSessionState.Ready
                 ?: error("Agent 会话尚未就绪或正在执行任务")
@@ -132,7 +143,7 @@ internal class DeepSeekAgentSession(
             val prepared = requireNotNull(backend)
             requestCaptureId = prepared.beginTurn(
                 userMessage = prompt.text,
-                history = options.initialHistoryItems,
+                history = authoritativeHistoryItems ?: options.initialHistoryItems,
                 contextInjections = contextInjections,
             )
             pendingUserHistoryText = prompt.text
@@ -236,7 +247,10 @@ internal class DeepSeekAgentSession(
             bindStartedSubagent(notification)
             return
         }
-        if (notification.method == "subagent.finished") return
+        if (notification.method == "subagent.finished") {
+            finishSubagent(notification)
+            return
+        }
         if (notification.method == "session.status") {
             val notificationSessionId = notification.params.stringValue("sessionId")
             if (notificationSessionId != threadId) return
@@ -247,6 +261,7 @@ internal class DeepSeekAgentSession(
                 val lineage = subagentLineageBySession[notificationSessionId] ?: return
                 eventMapper.map(notification).forEach { childEvent ->
                     registerPendingSubagentCall(childEvent)
+                    rememberSubagentEvent(notificationSessionId, childEvent)
                     _events.emit(
                         AgentSessionEvent.DelegatedSessionEvent(
                             lineage = lineage,
@@ -366,6 +381,76 @@ internal class DeepSeekAgentSession(
         pendingSubagentCalls
             .getOrPut(started.threadId, ::ArrayDeque)
             .addLast(started.itemId)
+    }
+
+    private fun rememberSubagentEvent(
+        childSessionId: String,
+        event: AgentSessionEvent,
+    ) {
+        when (event) {
+            is AgentSessionEvent.TurnStarted -> subagentTurnBySession[childSessionId] = event.turnId
+            is AgentSessionEvent.AssistantDelta -> if (event.visible && event.delta.isNotEmpty()) {
+                val messages = subagentAssistantTextBySession.getOrPut(childSessionId, ::linkedMapOf)
+                messages[event.itemId] = messages[event.itemId].orEmpty() + event.delta
+            }
+            is AgentSessionEvent.WorkItemCompleted -> if (
+                event.type == AgentWorkItemType.AssistantMessage && event.summary.isNotBlank()
+            ) {
+                subagentAssistantTextBySession
+                    .getOrPut(childSessionId, ::linkedMapOf)[event.itemId] = event.summary
+            }
+            else -> Unit
+        }
+    }
+
+    private suspend fun finishSubagent(notification: DeepSeekNotification) {
+        val childSessionId = notification.params.stringValue("childSessionId") ?: return
+        val lineage = subagentLineageBySession.remove(childSessionId) ?: return
+        val turnId = subagentTurnBySession.remove(childSessionId) ?: "subagent-turn-$childSessionId"
+        val result = notification.params["lastAssistantMessage"].assistantTextContent().trim()
+        val observedMessages = subagentAssistantTextBySession.remove(childSessionId).orEmpty()
+        val resultItemId = observedMessages.entries
+            .lastOrNull { (_, text) -> text.trim() == result }
+            ?.key
+            ?: "subagent-result-$childSessionId"
+        val status = if (notification.params.stringValue("status") == "ok") {
+            AgentWorkStatus.Completed
+        } else {
+            AgentWorkStatus.Failed
+        }
+        val completedAtMillis = System.currentTimeMillis()
+        if (result.isNotBlank()) {
+            _events.emit(
+                AgentSessionEvent.DelegatedSessionEvent(
+                    lineage = lineage,
+                    childSessionId = childSessionId,
+                    event = AgentSessionEvent.WorkItemCompleted(
+                        threadId = childSessionId,
+                        turnId = turnId,
+                        itemId = resultItemId,
+                        type = AgentWorkItemType.AssistantMessage,
+                        status = status,
+                        summary = result,
+                        messagePhase = AgentMessagePhase.FinalAnswer,
+                        completedAtMillis = completedAtMillis,
+                    ),
+                ),
+            )
+        }
+        _events.emit(
+            AgentSessionEvent.DelegatedSessionEvent(
+                lineage = lineage,
+                childSessionId = childSessionId,
+                event = AgentSessionEvent.TurnCompleted(
+                    threadId = childSessionId,
+                    turnId = turnId,
+                    status = status,
+                    errorMessage = notification.params.stringValue("stopReason")
+                        ?.takeUnless { status == AgentWorkStatus.Completed },
+                    completedAtMillis = completedAtMillis,
+                ),
+            ),
+        )
     }
 
     private fun kotlinx.serialization.json.JsonObject.stringValue(name: String): String? =

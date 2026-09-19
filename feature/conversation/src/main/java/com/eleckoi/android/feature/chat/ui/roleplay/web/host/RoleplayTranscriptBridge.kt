@@ -9,6 +9,8 @@ import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import com.eleckoi.android.feature.chat.model.ChatMessage
 import com.eleckoi.android.feature.chat.ui.author.toAuthorSnapshot
+import com.eleckoi.android.feature.chat.ui.roleplay.web.model.RoleplayRendererFailure
+import com.eleckoi.android.feature.chat.ui.roleplay.web.model.RoleplayRendererFailureKind
 import com.eleckoi.android.feature.chat.ui.roleplay.web.model.RoleplayTranscriptOrigin
 import com.eleckoi.android.feature.chat.ui.roleplay.web.surface.RoleplayWebChatCallbacks
 import com.eleckoi.android.feature.chat.ui.web.openDesktopAlignedExternalUri
@@ -55,7 +57,27 @@ internal class RoleplayTranscriptBridge(
                     value.optLong("transactionId"),
                     value.optString("sessionId"),
                 )
-                "rendererError" -> callbacksProvider().onRendererUnavailable()
+                "rendererError" -> callbacksProvider().onRendererUnavailable(
+                    RoleplayRendererFailure(
+                        kind = RoleplayRendererFailureKind.JavaScript,
+                        message = value.optString("message").ifBlank {
+                            "页面脚本报告了未提供说明的渲染错误"
+                        },
+                        context = buildMap {
+                            value.optString("phase")
+                                .takeIf(String::isNotBlank)
+                                ?.let { put("执行阶段", it) }
+                            value.optString("sessionId")
+                                .takeIf(String::isNotBlank)
+                                ?.let { put("会话 ID", it) }
+                            if (value.has("transactionId") && !value.isNull("transactionId")) {
+                                put("事务 ID", value.optLong("transactionId").toString())
+                            }
+                        },
+                        stackTrace = value.optString("stack"),
+                        rawPayload = value.toString(2),
+                    ),
+                )
                 "transactionCommitted" -> onTransactionCommitted(
                     value.optLong("transactionId"),
                     value.optString("sessionId"),

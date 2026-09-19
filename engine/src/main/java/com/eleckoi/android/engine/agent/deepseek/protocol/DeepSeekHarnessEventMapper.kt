@@ -722,7 +722,7 @@ private fun JsonObject.int(name: String): Int? = this[name]?.jsonPrimitive?.intO
 private fun JsonObject.long(name: String): Long? = this[name]?.jsonPrimitive?.longOrNull
 private fun JsonObject.obj(name: String): JsonObject? = this[name] as? JsonObject
 
-private fun JsonElement?.assistantTextContent(): String = when (this) {
+internal fun JsonElement?.assistantTextContent(): String = when (this) {
     is JsonArray -> mapNotNull { block ->
         val payload = runCatching { block.jsonObject }.getOrNull() ?: return@mapNotNull null
         payload.string("text").takeIf { payload.string("type") == "text" }

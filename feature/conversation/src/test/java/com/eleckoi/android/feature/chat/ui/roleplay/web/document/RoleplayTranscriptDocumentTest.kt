@@ -7,6 +7,25 @@ import java.util.Base64
 
 class RoleplayTranscriptDocumentTest {
     @Test
+    fun rendererFailuresIncludeTheOriginalMessageStackAndExecutionPhase() {
+        val document = buildRoleplayTranscriptDocument("")
+
+        assertTrue(document.contains("stack: String(error?.stack || '')"))
+        assertTrue(document.contains("phase: String(phase || '')"))
+        assertTrue(document.contains("state.committedTransactionId"))
+        assertTrue(document.contains("state.sessionId"))
+        assertTrue(document.contains("'author-sdk-evaluation'"))
+        assertTrue(document.contains("'native-command-ingress'"))
+        assertTrue(document.contains("'window-error'"))
+        assertTrue(document.contains("'unhandled-promise-rejection'"))
+        assertFalse(document.contains("post({ type: 'rendererError' });"))
+        assertTrue(
+            document.indexOf("addEventListener('error'") <
+                document.indexOf("TanStack Virtual runtime failed to load"),
+        )
+    }
+
+    @Test
     fun inlineCodeUsesAQuietThemeTintInsteadOfTheDarkCodeBlockSurface() {
         val document = buildRoleplayTranscriptDocument("")
 
