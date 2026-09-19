@@ -1,6 +1,36 @@
 package com.eleckoi.android.feature.chat.ui.roleplay.web.document.runtime
 
-internal val RoleplayTranscriptContent = """    const createImageGallery = (message, images) => {
+internal val RoleplayTranscriptContent = """    const applyImageGalleryGeometry = (gallery, message, images) => {
+      const count = images.length;
+      const reservedContentWidth = Math.max(1, Math.round(estimatedImageContentWidth(message)));
+      gallery.style.width = reservedContentWidth + 'px';
+      gallery.style.maxWidth = '100%';
+      if (count === 1) {
+        const frame = gallery.querySelector(':scope > .story-image-frame');
+        const image = images[0];
+        if (frame && image) {
+          frame.style.width = Math.max(
+            1,
+            Math.round(reservedContentWidth * singleImageWidthFraction(image)),
+          ) + 'px';
+          frame.style.maxWidth = '100%';
+          frame.style.flex = '0 0 auto';
+        }
+      }
+      return reservedContentWidth;
+    };
+    const refreshImageGalleryGeometry = () => {
+      turns.querySelectorAll(':scope > .turn').forEach(turn => {
+        const message = state.byId.get(turn.dataset.id || '');
+        if (!message) return;
+        const imageParts = (message.parts || []).filter(part => part.type === 'images');
+        turn.querySelectorAll('.story-images').forEach((gallery, index) => {
+          const images = imageParts[index]?.images || [];
+          if (images.length) applyImageGalleryGeometry(gallery, message, images);
+        });
+      });
+    };
+    const createImageGallery = (message, images) => {
       const gallery = document.createElement('div');
       gallery.className = 'content-part story-images';
       const count = images.length;
@@ -11,10 +41,7 @@ internal val RoleplayTranscriptContent = """    const createImageGallery = (mess
         frame.className = 'story-image-frame';
         frame.dataset.imageId = image.id || '';
         frame.dataset.status = image.status || '';
-        frame.style.aspectRatio = String(image.aspectRatio || .68);
-        if (count === 1 && Number(image.frameCount) > 1) {
-          frame.style.width = Number(image.aspectRatio) < .85 ? '74%' : '88%';
-        }
+        frame.style.aspectRatio = String(normalizedImageAspectRatio(image));
         if (image.status === 'ready' && image.url) {
           const element = document.createElement('img');
           element.className = 'story-image'; element.src = image.url; element.alt = '本轮剧情插图';
@@ -30,6 +57,7 @@ internal val RoleplayTranscriptContent = """    const createImageGallery = (mess
         }
         gallery.append(frame);
       });
+      applyImageGalleryGeometry(gallery, message, images);
       return gallery;
     };
     const splitMarkdownBlocks = raw => {

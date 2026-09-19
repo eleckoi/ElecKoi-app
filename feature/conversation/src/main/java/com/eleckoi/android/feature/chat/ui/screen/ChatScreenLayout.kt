@@ -6,20 +6,22 @@ import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.boundsInRoot
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.eleckoi.android.feature.chat.model.ChatDraft
 import com.eleckoi.android.feature.chat.ui.ChatPresentationReadinessState
@@ -68,11 +70,12 @@ internal fun ChatConversationStateContent(
     state: ChatUiState,
     draft: ChatDraft?,
     showLoadingStatus: Boolean,
-    roleplayWebActive: Boolean,
+    webTranscriptReady: Boolean,
+    webRendererFailed: Boolean,
     presentationReadiness: ChatPresentationReadinessState,
     onCreateChat: () -> Unit,
-    roleplayContent: @Composable (ChatDraft, Float) -> Unit,
-    nativeContent: @Composable (ChatDraft, Float) -> Unit,
+    onRetryWebRenderer: () -> Unit,
+    webContent: @Composable (ChatDraft, Float) -> Unit,
 ) {
     when {
         state.isDraftLoading -> if (showLoadingStatus) {
@@ -89,22 +92,52 @@ internal fun ChatConversationStateContent(
         )
 
         else -> {
+            if (!webTranscriptReady) {
+                ChatCenteredStatus(
+                    text = "正在准备聊天渲染...",
+                    appearance = state.appearance,
+                )
+                return
+            }
             val presentationAlpha by animateFloatAsState(
                 targetValue = if (presentationReadiness.revealed) 1f else 0f,
-                animationSpec = if (roleplayWebActive) {
-                    snap()
-                } else if (presentationReadiness.revealed) {
-                    tween(durationMillis = 120)
-                } else {
-                    snap()
-                },
+                animationSpec = snap(),
                 label = "chat-presentation",
             )
-            if (roleplayWebActive) {
-                roleplayContent(draft, presentationAlpha)
-            } else {
-                nativeContent(draft, presentationAlpha)
+            Box(Modifier.fillMaxSize()) {
+                webContent(draft, presentationAlpha)
+                if (webRendererFailed) {
+                    ChatWebRendererFailure(
+                        appearance = state.appearance,
+                        onRetry = onRetryWebRenderer,
+                    )
+                }
             }
+        }
+    }
+}
+
+@Composable
+private fun ChatWebRendererFailure(
+    appearance: AppearanceTheme,
+    onRetry: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(appearance.mobileChatBg.copy(alpha = 0.96f)),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+    ) {
+        Text(text = "聊天渲染失败", color = appearance.mobileText)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = "未切换到另一套排版引擎",
+            color = appearance.mobileMuted,
+        )
+        Spacer(Modifier.height(10.dp))
+        TextButton(onClick = onRetry) {
+            Text(text = "重新加载", color = appearance.mobileBlue)
         }
     }
 }
@@ -112,13 +145,10 @@ internal fun ChatConversationStateContent(
 @Composable
 internal fun ChatComposerBar(
     visible: Boolean,
-    roleplayWebActive: Boolean,
     userBrowsedAwayFromBottom: Boolean,
     roleplayWebCanScrollForward: Boolean,
     appearance: AppearanceTheme,
     onJumpToBottom: () -> Unit,
-    onComposerHeightChanged: (Int) -> Unit,
-    onComposerTopChanged: (Float) -> Unit,
     composer: @Composable (Modifier) -> Unit,
 ) {
     AnimatedVisibility(
@@ -126,67 +156,27 @@ internal fun ChatComposerBar(
         enter = fadeIn(tween(180)),
         exit = fadeOut(tween(100)),
     ) {
-        if (roleplayWebActive) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .navigationBarsPadding(),
-            ) {
-                composer(Modifier.fillMaxWidth())
-                if (userBrowsedAwayFromBottom && roleplayWebCanScrollForward) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(end = 16.dp)
-                            .offset(
-                                y = -(ChatJumpToBottomButtonSize + ChatJumpToBottomButtonGap),
-                            ),
-                    ) {
-                        ChatJumpToBottomButton(
-                            appearance = appearance,
-                            onClick = onJumpToBottom,
-                        )
-                    }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding(),
+        ) {
+            composer(Modifier.fillMaxWidth())
+            if (userBrowsedAwayFromBottom && roleplayWebCanScrollForward) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(end = 16.dp)
+                        .offset(
+                            y = -(ChatJumpToBottomButtonSize + ChatJumpToBottomButtonGap),
+                        ),
+                ) {
+                    ChatJumpToBottomButton(
+                        appearance = appearance,
+                        onClick = onJumpToBottom,
+                    )
                 }
             }
-        } else {
-            composer(
-                Modifier
-                    .fillMaxWidth()
-                    .onSizeChanged { onComposerHeightChanged(it.height) }
-                    .onGloballyPositioned { coordinates ->
-                        onComposerTopChanged(coordinates.boundsInRoot().top)
-                    },
-            )
         }
-    }
-}
-
-@Composable
-internal fun BoxScope.ChatNativeJumpToBottom(
-    visible: Boolean,
-    composerTopPx: Float,
-    appearance: AppearanceTheme,
-    onClick: () -> Unit,
-) {
-    val density = LocalDensity.current
-    val jumpToBottomTop = with(density) {
-        (composerTopPx - ChatJumpToBottomButtonSize.toPx() - ChatJumpToBottomButtonGap.toPx())
-            .coerceAtLeast(0f)
-            .toDp()
-    }
-    AnimatedVisibility(
-        visible = visible,
-        modifier = Modifier
-            .align(Alignment.TopEnd)
-            .padding(end = 16.dp)
-            .offset(y = jumpToBottomTop),
-        enter = fadeIn(tween(durationMillis = 180)),
-        exit = fadeOut(tween(durationMillis = 140)),
-    ) {
-        ChatJumpToBottomButton(
-            appearance = appearance,
-            onClick = onClick,
-        )
     }
 }

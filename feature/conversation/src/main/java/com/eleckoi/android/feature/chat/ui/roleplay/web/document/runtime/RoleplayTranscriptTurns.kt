@@ -54,11 +54,19 @@ internal val RoleplayTranscriptTurns = """    const missingAvatar = () => '<svg 
       }
       return body;
     };
+    const createAgentFooter = message => {
+      const footer = document.createElement('footer');
+      footer.className = 'agent-footer';
+      footer.innerHTML = agentFooterContent(message);
+      footer.hidden = !footer.innerHTML;
+      return footer;
+    };
     const createTurn = message => {
       const turn = document.createElement('article');
       const pagerVisible = message.openingOptionIds && message.openingOptionIds.length > 1 && message.selectedOpeningIndex >= 0;
       const expanded = state.expandedToolbarId === message.id;
-      turn.className = 'turn' + (state.cardPanel ? ' card' : '') + (pagerVisible ? ' has-pager' : '');
+      turn.className = 'turn role-' + String(message.role || 'assistant') +
+        (state.cardPanel ? ' card' : '') + (pagerVisible ? ' has-pager' : '');
       turn.dataset.id = message.id; turn.dataset.revision = String(message.revision || '');
       const lane = document.createElement('div'); lane.className = 'portrait-lane';
       const avatar = document.createElement('button'); avatar.className = 'avatar'; avatar.type = 'button'; avatar.dataset.action = 'avatar';
@@ -67,13 +75,13 @@ internal val RoleplayTranscriptTurns = """    const missingAvatar = () => '<svg 
       lane.append(avatar);
       if (pagerVisible) {
         const pager = document.createElement('div'); pager.className = 'pager';
-        pager.innerHTML = `<button data-action="opening-prev" aria-label="上一条开场白" ${'$'}{message.selectedOpeningIndex <= 0 ? 'disabled' : ''}></button><button class="pager-index" data-action="opening-jump" aria-label="第 ${'$'}{message.selectedOpeningIndex + 1} 条，共 ${'$'}{message.openingOptionIds.length} 条开场白，点击跳转">${'$'}{message.selectedOpeningIndex + 1}/${'$'}{message.openingOptionIds.length}</button><button data-action="opening-next" aria-label="下一条开场白" ${'$'}{message.selectedOpeningIndex >= message.openingOptionIds.length - 1 ? 'disabled' : ''}></button>`;
+        pager.innerHTML = `<button data-action="opening-prev" aria-label="上一条开场白" ${'$'}{message.selectedOpeningIndex <= 0 ? 'disabled' : ''}>${'$'}{svgIcon('chevronLeft', 12, 1.85)}</button><button class="pager-index" data-action="opening-jump" aria-label="第 ${'$'}{message.selectedOpeningIndex + 1} 条，共 ${'$'}{message.openingOptionIds.length} 条开场白，点击跳转">${'$'}{message.selectedOpeningIndex + 1}/${'$'}{message.openingOptionIds.length}</button><button data-action="opening-next" aria-label="下一条开场白" ${'$'}{message.selectedOpeningIndex >= message.openingOptionIds.length - 1 ? 'disabled' : ''}>${'$'}{svgIcon('chevronRight', 12, 1.85)}</button>`;
         lane.append(pager);
       }
       const main = document.createElement('section'); main.className = 'turn-main';
       const header = document.createElement('header'); header.className = 'turn-header' + (expanded ? ' toolbar-expanded' : '');
       header.innerHTML = `<div class="name">${'$'}{escapeHtml(message.name)}</div><div class="tools"><div class="tool-strip">${'$'}{toolbarContent(message, expanded)}</div></div>`;
-      main.append(header, createBody(message)); turn.append(lane, main);
+      main.append(header, createBody(message), createAgentFooter(message)); turn.append(lane, main);
       applyCachedRichHeights(turn, message);
       restoreTurnSnapshot(turn);
       return turn;
@@ -136,6 +144,9 @@ internal val RoleplayTranscriptTurns = """    const missingAvatar = () => '<svg 
     const patchTurn = (existing, previousMessage, message) => {
       const pagerVisible = message.openingOptionIds && message.openingOptionIds.length > 1 && message.selectedOpeningIndex >= 0;
       existing.dataset.revision = String(message.revision || '');
+      existing.classList.toggle('role-user', message.role === 'user');
+      existing.classList.toggle('role-assistant', message.role === 'assistant');
+      existing.classList.toggle('role-system', message.role === 'system');
       existing.classList.toggle('card', state.cardPanel);
       existing.classList.toggle('has-pager', !!pagerVisible);
       const name = existing.querySelector(':scope > .turn-main > .turn-header .name');
@@ -157,6 +168,20 @@ internal val RoleplayTranscriptTurns = """    const missingAvatar = () => '<svg 
       ) {
         const strip = existing.querySelector(':scope > .turn-main > .turn-header .tool-strip');
         if (strip) strip.innerHTML = toolbarContent(message, state.expandedToolbarId === message.id);
+      }
+      if (
+        previousMessage.pending !== message.pending ||
+        previousMessage.role !== message.role ||
+        previousMessage.hasAgentProcess !== message.hasAgentProcess ||
+        previousMessage.regenerateEnabled !== message.regenerateEnabled ||
+        previousMessage.selectedOpeningIndex !== message.selectedOpeningIndex ||
+        JSON.stringify(previousMessage.openingOptionIds || []) !== JSON.stringify(message.openingOptionIds || [])
+      ) {
+        const footer = existing.querySelector(':scope > .turn-main > .agent-footer');
+        if (footer) {
+          footer.innerHTML = agentFooterContent(message);
+          footer.hidden = !footer.innerHTML;
+        }
       }
       const body = existing.querySelector(':scope > .turn-main > .message-body');
       if (!body) return existing;

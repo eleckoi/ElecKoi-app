@@ -37,9 +37,8 @@ import com.eleckoi.android.foundation.design.components.BottomTab
 import com.eleckoi.android.foundation.design.components.FilledSvgIcon
 import com.eleckoi.android.foundation.design.components.MobileRootBackdrop
 import com.eleckoi.android.foundation.design.components.MobileRootActionHeader
-import com.eleckoi.android.foundation.design.components.MobileRootGlassBar
-import com.eleckoi.android.foundation.design.components.MobileRootGlassPlacement
-import com.eleckoi.android.foundation.design.components.MobileRootGlassProvider
+import com.eleckoi.android.foundation.design.components.MobileRootChromeBar
+import com.eleckoi.android.foundation.design.components.MobileRootChromePlacement
 import com.eleckoi.android.foundation.design.components.MobileRootTopBar
 import com.eleckoi.android.foundation.design.components.StrokeSvgIcon
 import com.eleckoi.android.foundation.design.components.mobileTabBarContainerColor
@@ -58,7 +57,7 @@ internal fun ProportionalHomePreview(
             .border(1.dp, appearance.mobileMuted.copy(alpha = 0.18f), previewShape)
             .clearAndSetSemantics { contentDescription = "主页预览" },
     ) {
-        MobileRootGlassProvider(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxSize()) {
             MobileRootBackdrop(
                 appearance = appearance,
                 previewModel = previewBitmap,
@@ -152,9 +151,9 @@ private fun MockTabBar(
     appearance: AppearanceTheme,
 ) {
     val inactiveColor = lerp(appearance.mobileMuted, appearance.mobileSoft, 0.55f)
-    MobileRootGlassBar(
+    MobileRootChromeBar(
         appearance = appearance,
-        placement = MobileRootGlassPlacement.Bottom,
+        placement = MobileRootChromePlacement.Bottom,
         chromeColor = mobileTabBarContainerColor(appearance),
         modifier = Modifier
             .fillMaxWidth()

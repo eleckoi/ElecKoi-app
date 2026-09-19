@@ -12,6 +12,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -33,9 +34,9 @@ internal fun CharacterGroupHeader(
     title: String,
     count: Int,
     appearance: AppearanceTheme,
+    containerColor: Color = appearance.mobileSurface,
     collapsed: Boolean,
     modifier: Modifier = Modifier,
-    trailingText: String? = null,
     clickEnabled: Boolean = true,
     onClick: () -> Unit,
 ) {
@@ -43,29 +44,33 @@ internal fun CharacterGroupHeader(
         modifier = modifier
             .fillMaxWidth()
             .height(46.dp)
-            .background(appearance.mobileSurface)
+            .background(containerColor)
             .characterHeaderTap(enabled = clickEnabled, onClick = onClick)
             .padding(start = 17.dp, end = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        StrokeSvgIcon(
-            paths = AppIconPaths.ChevronRight,
-            color = appearance.mobileSoft,
-            iconSize = 17.dp,
-            strokeWidth = 1.9f,
-            modifier = Modifier.graphicsLayer(rotationZ = if (collapsed) 0f else 90f),
-        )
-        Text(
-            "$title ($count)",
-            modifier = Modifier.weight(1f).padding(start = 7.dp),
-            color = appearance.mobileMuted,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Normal,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        if (trailingText != null) {
-            Text(trailingText, color = appearance.mobileMuted, fontSize = 11.sp, maxLines = 1)
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "$title ($count)",
+                modifier = Modifier.weight(1f, fill = false),
+                color = appearance.mobileMuted,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Normal,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            StrokeSvgIcon(
+                paths = AppIconPaths.ChevronRight,
+                color = appearance.mobileSoft,
+                iconSize = 15.dp,
+                strokeWidth = 1.9f,
+                modifier = Modifier
+                    .padding(start = 6.dp)
+                    .graphicsLayer(rotationZ = if (collapsed) 0f else 90f),
+            )
         }
     }
 }

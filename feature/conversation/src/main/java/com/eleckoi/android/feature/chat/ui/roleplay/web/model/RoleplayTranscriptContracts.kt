@@ -6,6 +6,7 @@ import java.io.File
 
 internal data class RoleplayTranscriptModel(
     val sessionId: String,
+    val layoutMode: String = "roleplay",
     val messages: List<RoleplayTranscriptMessage>,
     val style: RoleplayTranscriptStyle,
     val media: Map<String, File>,
@@ -82,6 +83,8 @@ internal data class RoleplayTranscriptImage(
 internal data class RoleplayTranscriptStyle(
     val text: String,
     val bodyText: String,
+    val assistantText: String = bodyText,
+    val userText: String = bodyText,
     val italicText: String,
     val underlineText: String,
     val quoteText: String,
@@ -90,6 +93,8 @@ internal data class RoleplayTranscriptStyle(
     val soft: String,
     val accent: String,
     val panel: String,
+    val assistantBubble: String = panel,
+    val userBubble: String = panel,
     val line: String,
     val jumpSurface: String,
     val avatarBackground: String,
@@ -107,6 +112,8 @@ internal data class RoleplayTranscriptStyle(
     val horizontalPaddingPx: Float,
     val replySpacingPx: Float,
     val turnSpacingPx: Float,
+    val bubbleRadiusPx: Float = 12f,
+    val assistantBubbleEnabled: Boolean = false,
     val cardPanel: Boolean,
     val codeForeground: String,
     val codeBackground: String,

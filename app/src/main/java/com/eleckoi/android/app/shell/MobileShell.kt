@@ -4,7 +4,6 @@ import com.eleckoi.android.foundation.design.components.*
 import com.eleckoi.android.foundation.design.isVisuallyDark
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -108,6 +107,7 @@ internal fun MobileShell(
     val moreOpen = shellState.moreOpen
     val backStack = rememberNavBackStack(MobileRoute.Root)
     val route = backStack.lastOrNull() as? MobileRoute ?: MobileRoute.Root
+    val morePanelVisible = shouldShowMorePanel(moreOpen = moreOpen, route = route)
     val currentShellState = rememberUpdatedState(shellState)
     val currentCharactersState = rememberUpdatedState(charactersState)
     val currentSettingLibraryState = rememberUpdatedState(settingLibraryState)
@@ -239,6 +239,11 @@ internal fun MobileShell(
         bottomChromeOpen -> mobileTabBarContainerColor(appearance)
         else -> appearance.mobileBg
     }
+    val systemNavigationBarColor = if (morePanelVisible) {
+        mobileDrawerContainerColor(appearance)
+    } else {
+        navigationBarColor
+    }
     val routeContext = MobileShellRouteContext(
         currentShellState = currentShellState,
         currentCharactersState = currentCharactersState,
@@ -294,8 +299,8 @@ internal fun MobileShell(
         onOpenPresetToolsDialog = { presetToolsDialogOpen = true },
     )
     SyncSystemBars(
-        navigationBarColor = navigationBarColor,
-        darkStatusBarIcons = if (moreOpen) {
+        navigationBarColor = systemNavigationBarColor,
+        darkStatusBarIcons = if (morePanelVisible) {
             !appearance.mobileSurface.isVisuallyDark()
         } else if (route == MobileRoute.Chat) {
             !appearance.asRoleplayReadingTheme().mobileChatHeaderBg.isVisuallyDark()
@@ -309,7 +314,7 @@ internal fun MobileShell(
     )
 
     MobileBackHandler(
-        enabled = moreOpen,
+        enabled = morePanelVisible,
         onBack = { shellViewModel.onIntent(ShellIntent.SetMoreOpen(false)) },
     )
 
@@ -319,9 +324,7 @@ internal fun MobileShell(
         label = "presetToolsBackdropBlur",
     )
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(appearance.mobileBg)
+        modifier = Modifier.fillMaxSize()
     ) {
         Box(
             modifier = Modifier.fillMaxSize().then(
@@ -332,44 +335,80 @@ internal fun MobileShell(
                 },
             ),
         ) {
-            NavDisplay(
-                modifier = Modifier.then(
-                    if (bottomChromeOpen || route == MobileRoute.Chat) {
-                        Modifier
-                    } else {
-                        Modifier.navigationBarsPadding()
-                    },
-                ),
-                backStack = backStack,
-                onBack = ::goBackInsideApp,
-                transitionSpec = { elecKoiForwardRoute() },
-                popTransitionSpec = { elecKoiBackRoute() },
-                predictivePopTransitionSpec = { elecKoiBackRoute() },
-                entryProvider = { key ->
-                    mobileShellRouteEntry(key as? MobileRoute, routeContext)
-                },
-            )
-
-            MobileShellOverlays(
-                characterImportSourceOpen = characterImportSourceOpen,
-                onCloseCharacterImportSource = { characterImportSourceOpen = false },
-                agentPresetImportSourceOpen = agentPresetImportSourceOpen,
-                onCloseAgentPresetImportSource = { agentPresetImportSourceOpen = false },
-                charactersState = charactersState,
-                useCoverArtwork = shellState.listCharacterArtwork == com.eleckoi.android.feature.preferences.ListCharacterArtwork.Cover,
-                agentPresetState = agentPresetState,
-                appearance = appearance,
-                moreOpen = moreOpen,
+            MobileMorePanel(
+                visible = morePanelVisible,
+                gesturesEnabled = route == MobileRoute.Root,
                 user = user,
+                characters = charactersState.characters,
+                useCoverArtwork = shellState.listCharacterArtwork == com.eleckoi.android.feature.preferences.ListCharacterArtwork.Cover,
+                appearance = appearance,
                 appUpdateAvailable = appUpdateState.updateAvailable,
-                navigationBarColor = navigationBarColor,
-                shellViewModel = shellViewModel,
-                charactersViewModel = charactersViewModel,
-                agentPresetViewModel = agentPresetViewModel,
-                characterCardActions = characterCardActions,
-                agentPresetDocumentActions = agentPresetDocumentActions,
-                navigateTo = ::navigateTo,
-            )
+                onOpen = { shellViewModel.onIntent(ShellIntent.SetMoreOpen(true)) },
+                onClose = { shellViewModel.onIntent(ShellIntent.SetMoreOpen(false)) },
+                onOpenProfile = { navigateTo(MobileRoute.Profile) },
+                onToggleAllCharactersExpanded = {
+                    charactersViewModel.onIntent(CharactersIntent.ToggleAllCharactersExpanded)
+                },
+                onToggleCharacterGroupExpanded = { group ->
+                    charactersViewModel.onIntent(CharactersIntent.ToggleCharacterGroupExpanded(group))
+                },
+                onOpenCharacter = { characterId ->
+                    shellViewModel.onIntent(ShellIntent.SetMoreOpen(false))
+                    charactersViewModel.onIntent(CharactersIntent.SelectCharacter(characterId))
+                },
+                onSaveCharacters = { payload ->
+                    charactersViewModel.onIntent(CharactersIntent.SaveCharacterCollection(payload))
+                },
+                onOpenSettings = {
+                    shellViewModel.onIntent(ShellIntent.SetMoreOpen(false))
+                    navigateTo(MobileRoute.Settings)
+                },
+                onOpenUpdate = {
+                    shellViewModel.onIntent(ShellIntent.SetMoreOpen(false))
+                    navigateTo(MobileRoute.AppUpdate)
+                },
+            ) {
+                NavDisplay(
+                    modifier = Modifier.then(
+                        if (bottomChromeOpen || route == MobileRoute.Chat) {
+                            Modifier
+                        } else {
+                            Modifier.navigationBarsPadding()
+                        },
+                    ),
+                    backStack = backStack,
+                    onBack = ::goBackInsideApp,
+                    transitionSpec = { elecKoiForwardRoute() },
+                    popTransitionSpec = {
+                        elecKoiBackRoute(
+                            restoreMorePanel = shouldRestoreMorePanelAtomically(moreOpen),
+                        )
+                    },
+                    predictivePopTransitionSpec = {
+                        elecKoiBackRoute(
+                            restoreMorePanel = shouldRestoreMorePanelAtomically(moreOpen),
+                        )
+                    },
+                    entryProvider = { key ->
+                        mobileShellRouteEntry(key as? MobileRoute, routeContext)
+                    },
+                )
+
+                MobileShellOverlays(
+                    characterImportSourceOpen = characterImportSourceOpen,
+                    onCloseCharacterImportSource = { characterImportSourceOpen = false },
+                    agentPresetImportSourceOpen = agentPresetImportSourceOpen,
+                    onCloseAgentPresetImportSource = { agentPresetImportSourceOpen = false },
+                    charactersState = charactersState,
+                    agentPresetState = agentPresetState,
+                    appearance = appearance,
+                    navigationBarColor = systemNavigationBarColor,
+                    charactersViewModel = charactersViewModel,
+                    agentPresetViewModel = agentPresetViewModel,
+                    characterCardActions = characterCardActions,
+                    agentPresetDocumentActions = agentPresetDocumentActions,
+                )
+            }
         }
         if (presetToolsDialogOpen) {
             currentAgentPresetState.value.activePreset?.let { preset ->
@@ -419,3 +458,10 @@ internal fun MobileShell(
         )
     }
 }
+
+internal fun shouldShowMorePanel(
+    moreOpen: Boolean,
+    route: MobileRoute,
+): Boolean = moreOpen && route == MobileRoute.Root
+
+internal fun shouldRestoreMorePanelAtomically(moreOpen: Boolean): Boolean = moreOpen

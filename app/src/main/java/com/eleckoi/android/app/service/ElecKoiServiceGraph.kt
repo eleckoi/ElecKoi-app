@@ -36,7 +36,7 @@ import com.eleckoi.android.feature.chat.data.ChatInputImageStore
 import com.eleckoi.android.feature.chat.data.ChatGenerationStatsStore
 import com.eleckoi.android.engine.agent.eleckoi.conversation.ConversationAttachmentCleanup
 import com.eleckoi.android.engine.agent.eleckoi.conversation.RoomConversationLedger
-import com.eleckoi.android.feature.chat.ui.blocks.markdown.MarkdownRebuildableCaches
+import com.eleckoi.android.feature.chat.ui.cache.ChatDeletionCaches
 import com.eleckoi.android.feature.chat.data.GenerationAttemptRepository
 import com.eleckoi.android.feature.chat.model.ChatDraft
 import com.eleckoi.android.feature.chat.model.ChatListItem
@@ -132,7 +132,7 @@ internal class ElecKoiServiceGraph(
         onSessionsDeleted = { ids ->
             requireConversationsIdle(ids)
             uiPreferences.removeChatSessionIds(ids)
-            MarkdownRebuildableCaches.clearAfterConversationDeletion(ids)
+            ChatDeletionCaches.clearAfterConversationDeletion(ids)
             clearChatProjectionCaches()
         },
     )

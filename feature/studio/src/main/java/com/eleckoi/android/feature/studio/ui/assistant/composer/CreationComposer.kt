@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -28,11 +29,9 @@ import com.eleckoi.android.engine.agent.api.AgentPermissionMode
 import com.eleckoi.android.feature.chat.ui.composer.shared.UnifiedChatComposerBody
 import com.eleckoi.android.feature.chat.ui.composer.shared.UnifiedChatComposerSurface
 import com.eleckoi.android.feature.chat.ui.composer.shared.unifiedChatComposerPlacement
+import com.eleckoi.android.feature.chat.ui.composer.ChatComposerMenuSurface
 import com.eleckoi.android.feature.conversation.composer.AgentPermissionModeControl
 import com.eleckoi.android.feature.chat.model.ChatUserImageAttachment
-import com.eleckoi.android.feature.chat.ui.layout.ChatGlassMenuCornerRadius
-import com.eleckoi.android.feature.chat.ui.layout.ChatGlassPanel
-import com.eleckoi.android.feature.chat.ui.layout.chatGlassColors
 import com.eleckoi.android.feature.studio.ui.assistant.CreationContextWindowUsage
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.foundation.design.components.AboveAnchorPopupPositionProvider
@@ -76,7 +75,8 @@ internal fun CreationComposer(
         appearance = appearance,
         modifier = Modifier
             .navigationBarsPadding()
-            .unifiedChatComposerPlacement(),
+            .unifiedChatComposerPlacement()
+            .padding(bottom = 10.dp),
         menuContent = {
             CreationComposerMenu(
                 expanded = menuOpen,
@@ -157,10 +157,8 @@ private fun CreationComposerMenu(
         onDismissRequest = onDismiss,
         properties = PopupProperties(focusable = true),
     ) {
-        ChatGlassPanel(
-            cornerRadius = ChatGlassMenuCornerRadius,
-            colors = chatGlassColors(appearance),
-            opaqueBase = true,
+        ChatComposerMenuSurface(
+            appearance = appearance,
             modifier = Modifier.width(154.dp),
         ) {
             Column {

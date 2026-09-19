@@ -54,7 +54,7 @@ enum class ChatAvatarShape(val storageKey: String) {
 
     fun shape(width: Dp): Shape = when (this) {
         Circle -> CircleShape
-        RoundedSquare -> RoundedCornerShape(width * 0.28f)
+        RoundedSquare -> RoundedCornerShape(width * RoundedSquareCornerRatio)
         Portrait -> RoundedCornerShape(width * 0.14f)
     }
 
@@ -69,6 +69,7 @@ enum class ChatAvatarShape(val storageKey: String) {
 
     companion object {
         val Default: ChatAvatarShape = Circle
+        const val RoundedSquareCornerRatio = 0.12f
 
         fun fromStorageKey(value: String?): ChatAvatarShape =
             entries.firstOrNull { it.storageKey == value } ?: Default

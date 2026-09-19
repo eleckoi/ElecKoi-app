@@ -14,6 +14,9 @@ internal object RoleplayTranscriptPatchPlanner {
         next: RoleplayTranscriptModel,
     ): JSONObject? {
         val patch = JSONObject()
+        if (baseline.layoutMode != next.layoutMode) {
+            patch.put("layoutMode", next.layoutMode)
+        }
         if (baseline.style != next.style) {
             patch.put("style", next.style.toJson())
         }

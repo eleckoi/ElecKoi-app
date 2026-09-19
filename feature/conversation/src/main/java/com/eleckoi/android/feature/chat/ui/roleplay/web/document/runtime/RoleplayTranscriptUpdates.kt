@@ -52,6 +52,7 @@ internal val RoleplayTranscriptUpdates = """    const authorApiIdle = () => {
         state.snapshots.clear();
       }
       state.sessionId = payload.sessionId; state.messages = payload.messages || [];
+      applyLayoutMode(payload.layoutMode);
       state.deleteMode = !!payload.deleteMode;
       state.deleteFromMessageId = String(payload.deleteFromMessageId || '');
       state.deleteFromIndex = state.deleteMode
@@ -94,6 +95,7 @@ internal val RoleplayTranscriptUpdates = """    const authorApiIdle = () => {
       if (typeof payload.deleteFromMessageId === 'string') {
         state.deleteFromMessageId = payload.deleteFromMessageId;
       }
+      if (typeof payload.layoutMode === 'string') applyLayoutMode(payload.layoutMode);
       if (payload.style) applyStyle(payload.style);
 
       const previousById = state.byId;
@@ -157,7 +159,8 @@ internal val RoleplayTranscriptUpdates = """    const authorApiIdle = () => {
       empty.style.display = state.messages.length ? 'none' : 'block';
       requestGeometryCommit({
         renderRange: true,
-        forceRender: Array.isArray(payload.order) || !!payload.style || deleteSelectionChanged,
+        forceRender: Array.isArray(payload.order) || !!payload.style ||
+          typeof payload.layoutMode === 'string' || deleteSelectionChanged,
         afterCommit: () => {
           incoming.forEach(message => post({ type: 'messageRendered', messageId: message.id }));
           commitTransaction(payload);

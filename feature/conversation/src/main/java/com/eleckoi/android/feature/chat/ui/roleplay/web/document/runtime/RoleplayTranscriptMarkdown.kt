@@ -334,4 +334,25 @@ internal val RoleplayTranscriptMarkdown = """    const markdownConverter = new w
       actions += toolButton('copy', '复制', 'copy');
       return actions + edit;
     };
+    const agentActionButton = (action, label, icon, disabled = false) =>
+      `<button class="agent-action" data-action="${'$'}{action}" aria-label="${'$'}{label}" ${'$'}{disabled ? 'disabled' : ''}>${'$'}{svgIcon(icon, 20, 1.85)}</button>`;
+    const agentOpeningPager = message => {
+      const count = Array.isArray(message.openingOptionIds) ? message.openingOptionIds.length : 0;
+      const index = Number(message.selectedOpeningIndex);
+      if (count <= 1 || index < 0) return '';
+      return `<div class="agent-opening-pager" aria-label="开场白 ${'$'}{index + 1}/${'$'}{count}">` +
+        `<button class="agent-pager-action" data-action="opening-prev" aria-label="上一条开场白" ${'$'}{index <= 0 ? 'disabled' : ''}>${'$'}{svgIcon('chevronLeft', 20, 1.85)}</button>` +
+        `<button class="agent-pager-index" data-action="opening-jump" aria-label="第 ${'$'}{index + 1} 条，共 ${'$'}{count} 条开场白，点击跳转">${'$'}{index + 1}/${'$'}{count}</button>` +
+        `<button class="agent-pager-action" data-action="opening-next" aria-label="下一条开场白" ${'$'}{index >= count - 1 ? 'disabled' : ''}>${'$'}{svgIcon('chevronRight', 20, 1.85)}</button>` +
+        `</div>`;
+    };
+    const agentFooterContent = message => {
+      if (message.pending || message.role !== 'assistant') return '';
+      let leading = agentOpeningPager(message);
+      leading += agentActionButton('copy', '复制', 'copy');
+      if (message.hasAgentProcess) leading += agentActionButton('history', '查看过程', 'history');
+      leading += agentActionButton('speaker', '朗读', 'speaker');
+      return `<div class="agent-footer-leading">${'$'}{leading}</div>` +
+        agentActionButton('regenerate', '重新生成', 'refresh', !message.regenerateEnabled);
+    };
 """

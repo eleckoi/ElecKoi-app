@@ -2,22 +2,26 @@ package com.eleckoi.android.feature.chat.ui.composer.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.eleckoi.android.feature.conversation.R
 import com.eleckoi.android.feature.chat.ui.composer.ChatPhosphorIcon
 import com.eleckoi.android.feature.chat.ui.composer.ChatPhosphorIconPaths
+import com.eleckoi.android.feature.chat.ui.composer.chatComposerPalette
 import com.eleckoi.android.foundation.design.AppearanceTheme
-import com.eleckoi.android.foundation.design.components.AppIconPaths
-import com.eleckoi.android.foundation.design.components.FilledSvgIcon
 import com.eleckoi.android.foundation.design.components.noRippleClickable
 
 @Composable
@@ -27,15 +31,23 @@ internal fun ComposerChip(
     onClick: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
+    val palette = chatComposerPalette(appearance.isDark)
     Box(
         modifier = modifier
-            .height(30.dp)
-            .clip(RoundedCornerShape(999.dp))
-            .background(appearance.mobileSearchBg)
+            .height(36.dp)
             .then(if (onClick != null) Modifier.noRippleClickable(onClick = onClick) else Modifier),
         contentAlignment = Alignment.Center,
     ) {
-        content()
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(32.dp)
+                .clip(RoundedCornerShape(999.dp))
+                .background(palette.secondaryContainer),
+            contentAlignment = Alignment.Center,
+        ) {
+            content()
+        }
     }
 }
 
@@ -50,15 +62,16 @@ internal fun ComposerCircleButton(
     bare: Boolean = false,
     enabled: Boolean = true,
 ) {
+    val palette = chatComposerPalette(appearance.isDark)
     Box(
         modifier = modifier
-            .size(34.dp)
+            .size(36.dp)
             .clip(RoundedCornerShape(999.dp))
             .background(
                 when {
                     bare -> Color.Transparent
-                    filled -> appearance.mobileText
-                    else -> appearance.mobileSearchBg
+                    filled -> palette.content
+                    else -> palette.secondaryContainer
                 },
             )
             .then(if (enabled) Modifier.noRippleClickable(onClick = onClick) else Modifier)
@@ -68,11 +81,11 @@ internal fun ComposerCircleButton(
         ChatPhosphorIcon(
             path = path,
             color = when {
-                !enabled -> appearance.mobileSoft
-                filled && !bare -> appearance.mobileSurface
-                else -> appearance.mobileText
+                !enabled -> palette.placeholder.copy(alpha = 0.4f)
+                filled && !bare -> palette.container
+                else -> palette.content
             },
-            size = if (bare) 19.dp else 16.dp,
+            size = if (bare) 17.dp else 16.dp,
         )
     }
 }
@@ -81,7 +94,6 @@ internal fun ComposerCircleButton(
 internal fun ComposerPrimaryActionButton(
     isSending: Boolean,
     stopEnabled: Boolean,
-    inputFocused: Boolean,
     hasText: Boolean,
     submitEnabled: Boolean,
     voiceInputEnabled: Boolean,
@@ -91,27 +103,16 @@ internal fun ComposerPrimaryActionButton(
     onVoiceInput: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val action = when {
-        isSending -> ComposerPrimaryAction.Stop
-        inputFocused -> ComposerPrimaryAction.Send
-        else -> ComposerPrimaryAction.Voice
-    }
+    val palette = chatComposerPalette(appearance.isDark)
+    val action = composerPrimaryAction(isSending = isSending, hasContent = hasText)
     val enabled = when (action) {
         ComposerPrimaryAction.Stop -> stopEnabled
         ComposerPrimaryAction.Send -> hasText && submitEnabled
         ComposerPrimaryAction.Voice -> voiceInputEnabled
     }
-    if (action == ComposerPrimaryAction.Voice) {
-        ComposerVoiceButton(
-            enabled = enabled,
-            onClick = onVoiceInput,
-            modifier = modifier,
-        )
-        return
-    }
     Box(
         modifier = modifier
-            .size(30.dp)
+            .size(36.dp)
             .then(
                 if (enabled) {
                     Modifier.noRippleClickable(
@@ -135,46 +136,49 @@ internal fun ComposerPrimaryActionButton(
         contentAlignment = Alignment.Center,
     ) {
         when (action) {
-            ComposerPrimaryAction.Send -> FilledSvgIcon(
-                paths = AppIconPaths.MessageSendPaperPlane,
-                color = if (enabled) appearance.mobileText else appearance.mobileSoft,
-                iconSize = 23.dp,
-                viewportSize = 520f,
+            ComposerPrimaryAction.Voice -> Icon(
+                painter = painterResource(R.drawable.ic_chat_composer_voice),
+                contentDescription = null,
+                tint = palette.content,
+                modifier = Modifier
+                    .size(26.dp)
+                    .alpha(if (enabled) 1f else 0.4f),
             )
-            ComposerPrimaryAction.Stop -> ChatPhosphorIcon(
-                path = ChatPhosphorIconPaths.Stop,
-                color = if (enabled) appearance.mobileText else appearance.mobileSoft,
-                size = 14.dp,
-            )
-            ComposerPrimaryAction.Voice -> Unit
+            ComposerPrimaryAction.Send,
+            ComposerPrimaryAction.Stop -> Box(
+                modifier = Modifier
+                    .size(30.dp)
+                    .alpha(if (enabled) 1f else 0.4f)
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(palette.sendContainer),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (action == ComposerPrimaryAction.Send) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_chat_composer_send),
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp),
+                    )
+                } else {
+                    ChatPhosphorIcon(
+                        path = ChatPhosphorIconPaths.Stop,
+                        color = Color.White,
+                        size = 12.dp,
+                    )
+                }
+            }
         }
     }
 }
 
-private enum class ComposerPrimaryAction { Voice, Send, Stop }
+internal enum class ComposerPrimaryAction { Voice, Send, Stop }
 
-private val ComposerVoiceButtonBackground = Color(0xFF17191D)
-
-@Composable
-private fun ComposerVoiceButton(
-    enabled: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier
-            .size(34.dp)
-            .clip(RoundedCornerShape(999.dp))
-            .background(ComposerVoiceButtonBackground)
-            .then(if (enabled) Modifier.noRippleClickable(onClick = onClick) else Modifier)
-            .semantics { contentDescription = "语音输入" },
-        contentAlignment = Alignment.Center,
-    ) {
-        FilledSvgIcon(
-            paths = AppIconPaths.VoiceInputWaveform,
-            color = Color.White,
-            iconSize = 20.dp,
-            viewportSize = 1024f,
-        )
-    }
+internal fun composerPrimaryAction(
+    isSending: Boolean,
+    hasContent: Boolean,
+): ComposerPrimaryAction = when {
+    isSending -> ComposerPrimaryAction.Stop
+    hasContent -> ComposerPrimaryAction.Send
+    else -> ComposerPrimaryAction.Voice
 }

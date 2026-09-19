@@ -1,11 +1,14 @@
 package com.eleckoi.android.feature.chat.ui.composer
 
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -22,23 +25,32 @@ internal fun ChatGenerationStatsLine(
     enabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    if (!enabled) return
     val groups = generationStatsGroups(metrics)
-    if (groups.isEmpty()) return
-    Text(
-        text = groups.joinToString("  |  "),
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(start = 20.dp, end = 20.dp, top = 1.dp, bottom = 7.dp)
-            .horizontalScroll(rememberScrollState()),
-        color = appearance.mobileMuted.copy(alpha = 0.88f),
-        fontSize = 10.5.sp,
-        lineHeight = 14.sp,
-        maxLines = 1,
-        softWrap = false,
-        overflow = TextOverflow.Clip,
-    )
+            .height(ChatGenerationStatsSlotHeight),
+    ) {
+        if (enabled && groups.isNotEmpty()) {
+            Text(
+                text = groups.joinToString("  |  "),
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .horizontalScroll(rememberScrollState()),
+                color = appearance.mobileMuted.copy(alpha = 0.88f),
+                fontSize = 10.5.sp,
+                lineHeight = 14.sp,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Clip,
+            )
+        }
+    }
 }
+
+internal val ChatGenerationStatsSlotHeight = 22.dp
 
 internal fun generationStatsGroups(metrics: ChatGenerationMetrics): List<String> = buildList {
     if (metrics.steps > 0) {

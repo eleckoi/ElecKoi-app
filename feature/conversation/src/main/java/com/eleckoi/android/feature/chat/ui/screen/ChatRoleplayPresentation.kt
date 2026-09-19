@@ -16,7 +16,7 @@ internal data class ChatRoleplayPresentation(
     val transcript: RoleplayTranscriptModel?,
 )
 
-/** Builds only the WebView projection; the native timeline stays cold while roleplay owns output. */
+/** Builds the single WebView projection used by every ordinary-chat layout. */
 @Composable
 internal fun rememberChatRoleplayPresentation(
     active: Boolean,
@@ -56,6 +56,7 @@ internal fun rememberChatRoleplayPresentation(
         draft.openingOptions,
         draft.selectedOpeningOptionId,
         draft.openingSelectionEnabled,
+        state.chatLayoutMode,
         state.appearance,
         state.chatAvatarShape,
         state.chatAvatarSize,
@@ -68,6 +69,8 @@ internal fun rememberChatRoleplayPresentation(
         state.chatLineHeightMultiplier,
         state.chatLetterSpacing,
         state.chatParagraphSpacing,
+        state.assistantBubbleEnabled,
+        state.chatBubbleCornerRadius,
         state.chatRoleplayCardPanel,
         renderingPreferences,
         frontendWorkspace.messageRendererEnabled,
@@ -79,6 +82,7 @@ internal fun rememberChatRoleplayPresentation(
         buildRoleplayTranscriptModel(
             draft = draft,
             messages = presentedMessages,
+            layoutMode = state.chatLayoutMode,
             appearance = state.appearance,
             avatarShape = state.chatAvatarShape,
             avatarSize = state.chatAvatarSize,
@@ -91,7 +95,10 @@ internal fun rememberChatRoleplayPresentation(
             lineHeightMultiplier = state.chatLineHeightMultiplier,
             letterSpacing = state.chatLetterSpacing,
             paragraphSpacing = state.chatParagraphSpacing,
-            cardPanel = state.chatRoleplayCardPanel,
+            assistantBubbleEnabled = state.assistantBubbleEnabled,
+            bubbleCornerRadius = state.chatBubbleCornerRadius,
+            cardPanel = state.chatRoleplayCardPanel &&
+                state.chatLayoutMode == com.eleckoi.android.feature.preferences.ChatLayoutMode.Roleplay,
             renderingPreferences = renderingPreferences,
             frontendRendererEnabled = frontendWorkspace.messageRendererEnabled,
             historyHasMore = state.historyHasMore,

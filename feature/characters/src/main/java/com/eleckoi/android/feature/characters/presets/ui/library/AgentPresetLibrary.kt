@@ -177,7 +177,6 @@ internal fun AgentPresetLibrary(
         MobileRootTopBar(
             appearance = appearance,
             chromeColor = if (onBack != null) mobileRootContentColor(appearance) else null,
-            glassEnabled = onBack == null,
         ) {
             if (searchOpen) {
                 StorySearchHeader(

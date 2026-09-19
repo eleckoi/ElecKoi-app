@@ -5,31 +5,6 @@ internal data class ChatVisualReplyKey(
     val generation: Int,
 )
 
-internal enum class ChatVisualReplyPhase {
-    Process,
-    FinalAnswer,
-}
-
-/**
- * A pre-draw anchor belongs to a visible phase boundary, while measured height following remains
- * owned by [replyKey] for the whole generation. Separating them prevents the final hand-off from
- * resetting the live height owner.
- */
-internal data class ChatVisualReplyPhaseAnchor(
-    val replyKey: ChatVisualReplyKey,
-    val phase: ChatVisualReplyPhase,
-)
-
-internal fun ChatVisualReplyKey.phaseAnchor(finalAnswerVisible: Boolean): ChatVisualReplyPhaseAnchor =
-    ChatVisualReplyPhaseAnchor(
-        replyKey = this,
-        phase = if (finalAnswerVisible) {
-            ChatVisualReplyPhase.FinalAnswer
-        } else {
-            ChatVisualReplyPhase.Process
-        },
-    )
-
 internal data class ChatVisualReplyState(
     private val generationsByMessageId: Map<String, Int> = emptyMap(),
     val activeKey: ChatVisualReplyKey? = null,

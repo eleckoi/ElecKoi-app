@@ -11,6 +11,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Route
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -23,9 +24,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import com.eleckoi.android.engine.agent.api.AgentPermissionMode
-import com.eleckoi.android.feature.chat.ui.layout.ChatGlassMenuCornerRadius
-import com.eleckoi.android.feature.chat.ui.layout.ChatGlassPanel
-import com.eleckoi.android.feature.chat.ui.layout.chatGlassColors
+import com.eleckoi.android.feature.chat.ui.composer.ChatComposerMenuSurface
 import com.eleckoi.android.feature.conversation.composer.AgentPermissionModeControl
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.foundation.design.components.AboveAnchorPopupPositionProvider
@@ -65,16 +64,13 @@ internal fun ChatComposerMenu(
             anchorInsetPx = 0,
         )
     }
-    val glassColors = chatGlassColors(appearance)
     Popup(
         popupPositionProvider = positionProvider,
         onDismissRequest = onDismiss,
         properties = PopupProperties(focusable = true),
     ) {
-        ChatGlassPanel(
-            cornerRadius = ChatGlassMenuCornerRadius,
-            colors = glassColors,
-            opaqueBase = true,
+        ChatComposerMenuSurface(
+            appearance = appearance,
             modifier = Modifier.width(154.dp),
         ) {
             Column {
@@ -87,10 +83,17 @@ internal fun ChatComposerMenu(
                     onClick = onPickImages,
                 )
                 RoleplayMenuAction(
-                    label = "记录",
-                    paths = AppIconPaths.History,
+                    label = "聊天记录",
                     appearance = appearance,
                     onDismiss = onDismiss,
+                    leadingContent = { color ->
+                        Icon(
+                            imageVector = Icons.Outlined.ChatBubbleOutline,
+                            contentDescription = null,
+                            tint = color,
+                            modifier = Modifier.width(17.dp).height(17.dp),
+                        )
+                    },
                     onClick = onOpenHistory,
                 )
                 HorizontalDivider(color = appearance.mobileLine)

@@ -29,6 +29,7 @@ internal object RoleplayRichHeightCache {
     private val writerMutex = Mutex()
     @Volatile
     private var persistentDao: RoleplayRichHeightDao? = null
+    private val deletedSessions = ConcurrentHashMap.newKeySet<String>()
     private val deletedMessages = ConcurrentHashMap.newKeySet<String>()
     private val heights = object : LinkedHashMap<String, Int>(MaxEntries, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Int>?): Boolean =
@@ -42,13 +43,20 @@ internal object RoleplayRichHeightCache {
 
     fun putPersistent(context: Context, key: String, heightPx: Int) {
         val parsed = parseKey(key) ?: return
-        if (deletedKey(parsed.sessionId, parsed.messageId) in deletedMessages) return
+        if (
+            parsed.sessionId in deletedSessions ||
+            deletedKey(parsed.sessionId, parsed.messageId) in deletedMessages
+        ) return
         if (heightPx !in 1..MaxHeightPx) return
         if (!rememberIfChanged(key, heightPx)) return
         val entity = parsed.toEntity(heightPx)
         val appContext = context.applicationContext
         writerScope.launch(start = CoroutineStart.UNDISPATCHED) {
             writerMutex.withLock {
+                if (
+                    parsed.sessionId in deletedSessions ||
+                    deletedKey(parsed.sessionId, parsed.messageId) in deletedMessages
+                ) return@withLock
                 runCatching {
                     dao(appContext).deleteOtherRevisions(
                         entity.sessionId,
@@ -78,11 +86,26 @@ internal object RoleplayRichHeightCache {
         }
     }
 
+    /** Prevents deleted conversations from surviving in either cache tier. */
+    suspend fun discardSessions(sessionIds: Collection<String>) {
+        val ids = sessionIds.filter(String::isNotBlank).toSet()
+        if (ids.isEmpty()) return
+        writerMutex.withLock {
+            synchronized(this) {
+                deletedSessions += ids
+                val keys = heights.keys.filter { key -> parseKey(key)?.sessionId in ids }
+                keys.forEach { heights.remove(it) }
+            }
+            persistentDao?.deleteForSessions(ids.toList())
+        }
+    }
+
     @Synchronized
     private fun rememberIfChanged(key: String, heightPx: Int): Boolean {
         val parsed = parseKey(key)
         if (
             parsed == null ||
+            parsed.sessionId in deletedSessions ||
             deletedKey(parsed.sessionId, parsed.messageId) in deletedMessages ||
             heightPx !in 1..MaxHeightPx ||
             heights[key] == heightPx
@@ -94,7 +117,7 @@ internal object RoleplayRichHeightCache {
     }
 
     suspend fun restoreSession(context: Context, sessionId: String): JSONObject {
-        if (sessionId.isBlank()) return JSONObject()
+        if (sessionId.isBlank() || sessionId in deletedSessions) return JSONObject()
         val stored = try {
             withContext(Dispatchers.IO) {
                 dao(context).heightsForSession(sessionId)
@@ -110,6 +133,7 @@ internal object RoleplayRichHeightCache {
                 val key = entity.cacheKey().encoded()
                 if (
                     parseKey(key) != null &&
+                    entity.sessionId !in deletedSessions &&
                     deletedKey(entity.sessionId, entity.messageId) !in deletedMessages &&
                     entity.heightPx in 1..MaxHeightPx
                 ) {
@@ -136,6 +160,7 @@ internal object RoleplayRichHeightCache {
     @Synchronized
     internal fun clearForTest() {
         heights.clear()
+        deletedSessions.clear()
         deletedMessages.clear()
     }
 
@@ -151,6 +176,7 @@ internal object RoleplayRichHeightCache {
             val encoded = key.encoded()
             if (
                 parseKey(encoded) != null &&
+                entity.sessionId !in deletedSessions &&
                 deletedKey(entity.sessionId, entity.messageId) !in deletedMessages &&
                 entity.heightPx in 1..MaxHeightPx &&
                 encoded !in heights

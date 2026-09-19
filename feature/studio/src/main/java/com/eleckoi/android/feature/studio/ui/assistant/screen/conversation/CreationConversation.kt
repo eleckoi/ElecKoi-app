@@ -38,11 +38,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.eleckoi.android.feature.chat.ui.BindLazyListEndFollow
+import com.eleckoi.android.feature.chat.ui.BindLazyListKeyboardViewport
 import com.eleckoi.android.feature.chat.ui.LocalStaticListExpansionObserver
 import com.eleckoi.android.feature.chat.ui.rememberLazyListEndFollowState
 import com.eleckoi.android.feature.chat.ui.blocks.markdown.LocalMarkdownHostScrollInProgress
 import com.eleckoi.android.feature.chat.ui.blocks.markdown.rememberMarkdownHistoryListController
-import com.eleckoi.android.feature.chat.ui.screen.BindChatKeyboardViewport
 import com.eleckoi.android.feature.chat.ui.screen.ChatJumpToBottomButton
 import com.eleckoi.android.feature.chat.ui.screen.ChatJumpToBottomButtonGap
 import com.eleckoi.android.feature.conversation.markdown.CreationMarkdownNode
@@ -155,8 +155,8 @@ fun CreationConversation(
             appliedBottomContentPadding = bottomContentPadding
         }
     }
-    BindChatKeyboardViewport(
-        sessionId = conversationId,
+    BindLazyListKeyboardViewport(
+        scopeKey = conversationId,
         listState = listState,
         userBrowsedAwayFromBottom = endFollowState.userBrowsingHistory,
         isDragged = endFollowBinding.isDragged,

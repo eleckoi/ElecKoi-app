@@ -12,12 +12,7 @@ import com.eleckoi.android.feature.chat.model.ChatMessage
 import com.eleckoi.android.feature.chat.model.OpeningMessageId
 import com.eleckoi.android.feature.chat.ui.ChatIntent
 import com.eleckoi.android.feature.chat.ui.ChatPresentationReadinessState
-import com.eleckoi.android.feature.chat.ui.ChatUiState
-import com.eleckoi.android.feature.chat.ui.ChatVisualReplyKey
-import com.eleckoi.android.feature.chat.ui.ChatVisualReplyState
 import com.eleckoi.android.feature.chat.ui.blocks.image.rememberGeneratedImageDownloader
-import com.eleckoi.android.feature.chat.ui.message.ChatTimelineItem
-import com.eleckoi.android.feature.chat.ui.message.RoleplayToolbarController
 import com.eleckoi.android.feature.chat.ui.roleplay.web.model.RoleplayTranscriptModel
 import com.eleckoi.android.feature.chat.ui.roleplay.web.surface.RoleplayWebChatCallbacks
 import com.eleckoi.android.feature.chat.ui.roleplay.web.surface.RoleplayWebChatController
@@ -31,6 +26,7 @@ internal fun ChatRoleplayConversationSurface(
     draft: ChatDraft,
     model: RoleplayTranscriptModel,
     visibleMessages: List<ChatMessage>,
+    rendererRevision: Int,
     updatesPaused: Boolean,
     controller: RoleplayWebChatController,
     presentationReadiness: ChatPresentationReadinessState,
@@ -56,6 +52,7 @@ internal fun ChatRoleplayConversationSurface(
 
     RoleplayWebChatSurface(
         model = model,
+        rendererRevision = rendererRevision,
         updatesPaused = updatesPaused,
         controller = controller,
         callbacks = RoleplayWebChatCallbacks(
@@ -110,60 +107,5 @@ internal fun ChatRoleplayConversationSurface(
         ),
         messageGateway = messageGateway,
         modifier = modifier.graphicsLayer { alpha = presentationAlpha },
-    )
-}
-
-/** Keeps the native LazyColumn row contract behind one screen-level adapter. */
-@Composable
-internal fun ChatNativeConversationSurface(
-    state: ChatUiState,
-    draft: ChatDraft,
-    messages: List<ChatMessage>,
-    timelineItems: List<ChatTimelineItem>,
-    markdownCacheScopeKey: String,
-    visualReplyState: ChatVisualReplyState,
-    roleplayToolbarController: RoleplayToolbarController,
-    staticExpansionObserver: (Any, Boolean) -> Unit,
-    layout: ChatConversationListLayout,
-    presentationReadiness: ChatPresentationReadinessState,
-    presentationAlpha: Float,
-    onIntent: (ChatIntent) -> Unit,
-    onVisualReplyCompleted: (ChatVisualReplyKey) -> Unit,
-    onRegenerate: (ChatMessage) -> Unit,
-    onSelectText: (String) -> Unit,
-    onOpenUserAvatars: () -> Unit,
-    onOpenCharacterSettings: (String) -> Unit,
-    messageGateway: AuthorChatGateway,
-) {
-    ChatConversationList(
-        state = state,
-        draft = draft,
-        messages = messages,
-        timelineItems = timelineItems,
-        markdownCacheScopeKey = markdownCacheScopeKey,
-        visualReplyState = visualReplyState,
-        roleplayToolbarController = roleplayToolbarController,
-        staticExpansionObserver = staticExpansionObserver,
-        layout = layout,
-        actions = ChatConversationListActions(
-            onAssistantVisualComplete = { messageId, generation ->
-                onVisualReplyCompleted(ChatVisualReplyKey(messageId, generation))
-            },
-            onTimelineItemContentReady = presentationReadiness::markItemReady,
-            onRegenerate = onRegenerate,
-            onRegenerateImage = { messageId, attachmentId ->
-                onIntent(ChatIntent.RegenerateImage(messageId, attachmentId))
-            },
-            onSelectOpeningOption = { onIntent(ChatIntent.SelectOpeningOption(it)) },
-            onEdit = { onIntent(ChatIntent.OpenEditMessage(it)) },
-            onSelectText = onSelectText,
-            onOpenUserAvatars = onOpenUserAvatars,
-            onOpenCharacterSettings = onOpenCharacterSettings,
-            onSelectDeleteFrom = {
-                onIntent(ChatIntent.SelectDeleteFromMessage(it))
-            },
-        ),
-        authorGateway = messageGateway,
-        modifier = Modifier.graphicsLayer { alpha = presentationAlpha },
     )
 }

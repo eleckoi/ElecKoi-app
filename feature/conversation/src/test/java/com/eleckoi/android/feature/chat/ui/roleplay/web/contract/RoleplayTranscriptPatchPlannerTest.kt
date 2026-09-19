@@ -85,6 +85,18 @@ class RoleplayTranscriptPatchPlannerTest {
         assertFalse(patch.has("order"))
     }
 
+    @Test
+    fun layoutChangeProducesAStateOnlyPatch() {
+        val baseline = model(listOf(message("one", "same")))
+        val next = baseline.copy(layoutMode = "agent")
+
+        val patch = requireNotNull(RoleplayTranscriptPatchPlanner.plan(baseline, next))
+
+        assertEquals("agent", patch.getString("layoutMode"))
+        assertFalse(patch.has("messages"))
+        assertFalse(patch.has("order"))
+    }
+
     private fun model(messages: List<RoleplayTranscriptMessage>) = RoleplayTranscriptModel(
         sessionId = "session",
         messages = messages,

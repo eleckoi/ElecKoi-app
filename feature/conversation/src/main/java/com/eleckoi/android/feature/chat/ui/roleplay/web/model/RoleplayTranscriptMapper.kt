@@ -15,6 +15,7 @@ import com.eleckoi.android.feature.chat.model.OpeningMessageId
 import com.eleckoi.android.feature.chat.roleplay.protocol.stripRoleplayImageMarkers
 import com.eleckoi.android.feature.chat.ui.ChatRenderingPreferences
 import com.eleckoi.android.feature.chat.ui.layout.asRoleplayReadingTheme
+import com.eleckoi.android.feature.chat.ui.layout.resolveChatBubblePalette
 import com.eleckoi.android.feature.chat.ui.layout.resolveChatBodyFontSizeSp
 import com.eleckoi.android.feature.chat.ui.layout.resolveChatBodyLineHeightSp
 import com.eleckoi.android.feature.chat.ui.message.chatAgentTimelineItems
@@ -25,6 +26,7 @@ import com.eleckoi.android.feature.chat.ui.roleplay.web.display.withoutRoleplayD
 import com.eleckoi.android.feature.chat.ui.roleplay.web.display.withoutRoleplayRichReplacementFences
 import com.eleckoi.android.feature.preferences.ChatAvatarShape
 import com.eleckoi.android.feature.preferences.ChatCodeBlockStyle
+import com.eleckoi.android.feature.preferences.ChatLayoutMode
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.foundation.design.markdownReadingColors
 import com.eleckoi.android.foundation.design.selectionPalette
@@ -152,6 +154,7 @@ private fun List<RoleplayTranscriptMessageProjection>.toRoleplayTranscriptListPr
 internal fun buildRoleplayTranscriptModel(
     draft: ChatDraft,
     messages: List<ChatMessage>,
+    layoutMode: ChatLayoutMode = ChatLayoutMode.Roleplay,
     appearance: AppearanceTheme,
     avatarShape: ChatAvatarShape,
     avatarSize: Float,
@@ -164,6 +167,8 @@ internal fun buildRoleplayTranscriptModel(
     lineHeightMultiplier: Float,
     letterSpacing: Float,
     paragraphSpacing: Float,
+    assistantBubbleEnabled: Boolean = false,
+    bubbleCornerRadius: Float = 12f,
     cardPanel: Boolean,
     renderingPreferences: ChatRenderingPreferences,
     frontendRendererEnabled: Boolean,
@@ -326,9 +331,16 @@ internal fun buildRoleplayTranscriptModel(
     if (projectionCache != null && messages !is ImmutableAppendedList<*>) {
         projectionCache.retain(messages.mapTo(hashSetOf()) { message -> message.id })
     }
-    val reading = appearance.asRoleplayReadingTheme()
+    val reading = if (layoutMode == ChatLayoutMode.Roleplay) {
+        appearance.asRoleplayReadingTheme()
+    } else {
+        appearance
+    }
     val selection = reading.selectionPalette()
     val readingColors = reading.markdownReadingColors(isUser = false)
+    val userReadingColors = reading.markdownReadingColors(isUser = true)
+    val assistantBubblePalette = resolveChatBubblePalette(reading, layoutMode, user = false)
+    val userBubblePalette = resolveChatBubblePalette(reading, layoutMode, user = true)
     val codeDark = readingColors.codeBackground.luminance() < 0.5f
     val codeBorder = (if (codeDark) Color.White else Color.Black)
         .copy(alpha = if (codeDark) 0.18f else 0.16f)
@@ -344,15 +356,27 @@ internal fun buildRoleplayTranscriptModel(
     val resolvedAvatarHeight = resolvedAvatarWidth / avatarShape.widthToHeight
     val radius = when (avatarShape) {
         ChatAvatarShape.Circle -> resolvedAvatarWidth / 2f
-        ChatAvatarShape.RoundedSquare -> resolvedAvatarWidth * 0.28f
+        ChatAvatarShape.RoundedSquare ->
+            resolvedAvatarWidth * ChatAvatarShape.RoundedSquareCornerRatio
         ChatAvatarShape.Portrait -> resolvedAvatarWidth * 0.14f
     }
     return RoleplayTranscriptModel(
         sessionId = draft.session.id,
+        layoutMode = layoutMode.storageKey,
         messages = transcriptMessages,
         style = RoleplayTranscriptStyle(
-            text = reading.mobileText.toCssColor(),
-            bodyText = readingColors.text.toCssColor(),
+            text = if (layoutMode == ChatLayoutMode.Agent) {
+                assistantBubblePalette.content.toCssColor()
+            } else {
+                reading.mobileText.toCssColor()
+            },
+            bodyText = if (layoutMode == ChatLayoutMode.Agent) {
+                assistantBubblePalette.content.toCssColor()
+            } else {
+                readingColors.text.toCssColor()
+            },
+            assistantText = assistantBubblePalette.content.toCssColor(),
+            userText = userBubblePalette.content.toCssColor(),
             italicText = readingColors.italic.toCssColor(),
             underlineText = readingColors.underline.toCssColor(),
             quoteText = readingColors.quote.toCssColor(),
@@ -361,6 +385,8 @@ internal fun buildRoleplayTranscriptModel(
             soft = reading.mobileSoft.toCssColor(),
             accent = reading.mobileBlue.toCssColor(),
             panel = reading.mobileChatMessageBg.toCssColor(),
+            assistantBubble = assistantBubblePalette.container.toCssColor(),
+            userBubble = userBubblePalette.container.toCssColor(),
             line = reading.mobileLine.toCssColor(),
             jumpSurface = appearance.mobileSurface.copy(alpha = 0.96f).toCssColor(),
             avatarBackground = selection.activeContainer.toCssColor(),
@@ -378,6 +404,8 @@ internal fun buildRoleplayTranscriptModel(
             horizontalPaddingPx = horizontalPadding.coerceIn(0f, 40f),
             replySpacingPx = replySpacing.coerceIn(0f, 32f),
             turnSpacingPx = turnSpacing.coerceIn(0f, 48f),
+            bubbleRadiusPx = bubbleCornerRadius.coerceIn(0f, 24f),
+            assistantBubbleEnabled = assistantBubbleEnabled,
             cardPanel = cardPanel,
             codeForeground = readingColors.codeForeground.toCssColor(),
             codeBackground = readingColors.codeBackground.toCssColor(),

@@ -8,8 +8,6 @@ import com.eleckoi.android.feature.chat.ui.blocks.markdown.layout.MarkdownRender
 import com.eleckoi.android.feature.chat.ui.blocks.markdown.layout.MarkdownRenderPlanCache
 import com.eleckoi.android.feature.chat.ui.blocks.markdown.render.code.CanvasCodePaintPool
 import com.eleckoi.android.feature.chat.ui.blocks.markdown.render.mermaid.MermaidBitmapCache
-import com.eleckoi.android.feature.chat.ui.message.clearChatTimelinePreparationCache
-import com.eleckoi.android.feature.chat.ui.message.clearChatTimelinePreparationCacheScopes
 
 /** Releases rebuildable renderer data only when Android reports real process memory pressure. */
 object MarkdownRebuildableCaches {
@@ -21,7 +19,6 @@ object MarkdownRebuildableCaches {
         MarkdownRenderBlockCache.clear()
         MermaidBitmapCache.clear()
         CanvasCodePaintPool.clear()
-        clearChatTimelinePreparationCache()
     }
 
     /** Removes deleted chat text without making every other active conversation cold. */
@@ -37,7 +34,6 @@ object MarkdownRebuildableCaches {
         ChatContentBlockCache.removeScopes(scopeKeys)
         MarkdownRenderPlanCache.removeScopes(scopeKeys)
         MarkdownRenderBlockCache.removeScopes(scopeKeys)
-        clearChatTimelinePreparationCacheScopes(scopeKeys)
         // Mermaid caches are content-addressed rather than session-addressed and their keys can
         // contain the original diagram source, so deletion clears that small global tier too.
         MermaidBitmapCache.clear()

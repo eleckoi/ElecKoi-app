@@ -5,12 +5,11 @@ import com.eleckoi.android.feature.chat.model.ChatDraft
 import com.eleckoi.android.feature.chat.model.ChatListItem
 import com.eleckoi.android.feature.chat.model.ChatMessage
 import com.eleckoi.android.feature.chat.data.markdown.CompletedMarkdownDocumentLoader
+import com.eleckoi.android.feature.chat.data.presentation.assembleChatContentBlocks
 import com.eleckoi.android.feature.chat.data.stream.StreamingMarkupAssembler
 import com.eleckoi.android.feature.chat.data.rich.detectRichMessageDocument
 import com.eleckoi.android.feature.chat.model.content.ChatContentBlock
-import com.eleckoi.android.feature.chat.ui.message.assembleChatContentBlocks
 import com.eleckoi.android.feature.chat.ui.blocks.markdown.markdownCacheOwnerKey
-import com.eleckoi.android.feature.chat.ui.message.prewarmChatTimelineItems
 import java.time.Duration
 import java.time.Instant
 import kotlinx.coroutines.CancellationException
@@ -169,10 +168,6 @@ internal class RecentChatPrewarmer(
                     messages = messages,
                     cacheScopeKey = "chat:$sessionId",
                 )
-                prewarmChatTimelineItems(
-                    messages = messages,
-                    cacheScopeKey = "chat:$sessionId",
-                )
             }
         } catch (cancellation: CancellationException) {
             throw cancellation
@@ -182,7 +177,7 @@ internal class RecentChatPrewarmer(
     }
 }
 
-/** Warms the same ordinary text blocks and exact owner keys consumed by [ChatMessageContent]. */
+/** Warms completed Markdown documents for rebuildable caches and exact conversation owner keys. */
 internal suspend fun prewarmCompletedMessageDocuments(
     messages: List<ChatMessage>,
     cacheScopeKey: String,

@@ -26,6 +26,7 @@ internal fun buildRoleplayTranscriptDocument(
 private val RoleplayTranscriptDocument = buildString {
     append(RoleplayTranscriptMarkupStart)
     append(RoleplayTranscriptStyles)
+    append(RoleplayTranscriptLayoutStyles)
     append(RoleplayTranscriptMarkupMiddle)
     append(RoleplayTranscriptRuntimeCore)
     append(RoleplayTranscriptMarkdown)

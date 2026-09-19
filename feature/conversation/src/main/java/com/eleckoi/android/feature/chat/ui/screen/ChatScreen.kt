@@ -30,12 +30,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
@@ -43,13 +39,9 @@ import com.eleckoi.android.feature.characters.model.AppDefaultChatBackground
 import com.eleckoi.android.feature.characters.model.CustomChatBackground
 import com.eleckoi.android.feature.characters.model.GlobalChatBackground
 import com.eleckoi.android.feature.preferences.NewCharacterBackground
-import com.eleckoi.android.feature.chat.ui.layout.ChatBackdrop
 import com.eleckoi.android.feature.chat.ui.layout.ChatBackdropSpec
 import com.eleckoi.android.feature.chat.ui.layout.ChatBackground
-import com.eleckoi.android.feature.chat.ui.layout.LocalChatBackdrop
-import com.eleckoi.android.feature.chat.ui.layout.positionOnScreenOf
 import com.eleckoi.android.feature.chat.ui.layout.asRoleplayReadingTheme
-import com.eleckoi.android.feature.chat.ui.message.dismissRoleplayToolbarOnOutsidePress
 import com.eleckoi.android.feature.chat.ui.trajectory.trajectoryRuntimeThreadId
 import com.eleckoi.android.feature.chat.model.MessageRole
 import com.eleckoi.android.feature.chat.data.MaxChatInputImages
@@ -121,13 +113,11 @@ fun ChatScreen(
     val sessionId = timeline.sessionId
     val presentedMessages = timeline.presentedMessages
     val visibleMessages = timeline.visibleMessages
-    val timelineItems = timeline.timelineItems
     val roleplay = timeline.roleplay
     val roleplayWebActive = timeline.roleplayWebActive
     val userBrowsedAwayFromBottom = timeline.userBrowsedAwayFromBottom
     val trajectoryRuntimeThreadId = draft.trajectoryRuntimeThreadId()
     var showTrajectory by rememberSaveable(sessionId) { mutableStateOf(false) }
-    val markdownCacheScopeKey = "chat:$sessionId"
     var showLoadingStatus by remember { mutableStateOf(false) }
     val documentActions = rememberChatHistoryDocumentActions(viewModel)
     var selectedUserMessageText by remember(sessionId) { mutableStateOf<String?>(null) }
@@ -227,12 +217,6 @@ fun ChatScreen(
             }.orEmpty()
         }
     }
-    val hasEffectiveBackgroundImage = remember(effectiveBackgroundPath) {
-        effectiveBackgroundPath
-            .takeIf(String::isNotBlank)
-            ?.let { java.io.File(it) }
-            ?.exists() == true
-    }
     val backdropSpec = ChatBackdropSpec(
         appearance = topBarAppearance,
         characterBackgroundPath = characterBackgroundPath,
@@ -242,20 +226,6 @@ fun ChatScreen(
         characterBackgroundScrim = characterPersona?.chatBackgroundScrim ?: 0.22f,
         characterBackgroundResolved = characterPersona != null,
     )
-    // Where the wallpaper landed, so a glass panel anywhere on screen — including one inside a
-    // Popup, which has its own window — can redraw the matching slice of it behind itself.
-    var backdropOriginOnScreen by remember { mutableStateOf(Offset.Zero) }
-    var backdropSizePx by remember { mutableStateOf(IntSize.Zero) }
-    val chatBackdrop = if (hasEffectiveBackgroundImage && backdropSizePx != IntSize.Zero) {
-        ChatBackdrop(
-            spec = backdropSpec,
-            originOnScreen = backdropOriginOnScreen,
-            sizePx = backdropSizePx,
-        )
-    } else {
-        null
-    }
-
     val renderingPreferences = LocalChatRenderingPreferences.current
     val roleplayPresentation = rememberChatRoleplayPresentation(
         active = roleplayWebActive,
@@ -272,10 +242,7 @@ fun ChatScreen(
         ChatScreenComposer(
             state = state,
             draft = draft,
-            roleplay = roleplay,
-            roleplayWebActive = roleplayWebActive,
-            roleplayWaitingSlotReserved = timeline.waitingReplySlotReserved,
-            nativeWaitingSlotReserved = timeline.nativeWaitingReplySlotReserved,
+            webWaitingSlotReserved = timeline.waitingReplySlotReserved,
             waitingIndicatorVisible = timeline.waitingIndicatorVisible,
             replyPresentationActive = timeline.replyPresentationActive,
             appearance = topBarAppearance,
@@ -315,10 +282,7 @@ fun ChatScreen(
         )
     }
 
-    CompositionLocalProvider(
-        LocalFocusDismissRegistry provides focusDismissRegistry,
-        LocalChatBackdrop provides chatBackdrop,
-    ) {
+    CompositionLocalProvider(LocalFocusDismissRegistry provides focusDismissRegistry) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -332,7 +296,6 @@ fun ChatScreen(
                         }
                     },
                 )
-                .dismissRoleplayToolbarOnOutsidePress(timeline.roleplayToolbarController)
                 .background(state.appearance.mobileChatBg)
         ) {
         Box(
@@ -346,14 +309,7 @@ fun ChatScreen(
                     },
                 ),
         ) {
-        val backdropView = LocalView.current
-        ChatBackground(
-            spec = backdropSpec,
-            modifier = Modifier.onGloballyPositioned { coordinates ->
-                backdropOriginOnScreen = coordinates.positionOnScreenOf(backdropView)
-                backdropSizePx = coordinates.size
-            },
-        )
+        ChatBackground(spec = backdropSpec)
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -384,16 +340,19 @@ fun ChatScreen(
                     state = state,
                     draft = draft,
                     showLoadingStatus = showLoadingStatus,
-                    roleplayWebActive = roleplayWebActive && roleplayTranscriptModel != null,
+                    webTranscriptReady = roleplayWebActive && roleplayTranscriptModel != null,
+                    webRendererFailed = timeline.roleplayWebRendererFailed,
                     presentationReadiness = timeline.presentationReadiness,
                     onCreateChat = { viewModel.onIntent(ChatIntent.CreateChat) },
-                    roleplayContent = { currentDraft, presentationAlpha ->
+                    onRetryWebRenderer = timeline.retryRoleplayRenderer,
+                    webContent = { currentDraft, presentationAlpha ->
                         roleplayTranscriptModel?.let { transcript ->
                             ChatRoleplayConversationSurface(
                                 context = context,
                                 draft = currentDraft,
                                 model = transcript,
                                 visibleMessages = visibleMessages,
+                                rendererRevision = timeline.roleplayWebRendererRevision,
                                 updatesPaused = roleplayProcessMessageId != null,
                                 controller = timeline.roleplayWebController,
                                 presentationReadiness = timeline.presentationReadiness,
@@ -416,63 +375,18 @@ fun ChatScreen(
                             )
                         }
                     },
-                    nativeContent = { currentDraft, presentationAlpha ->
-                        ChatNativeConversationSurface(
-                            state = state,
-                            draft = currentDraft,
-                            messages = presentedMessages,
-                            timelineItems = timelineItems,
-                            markdownCacheScopeKey = markdownCacheScopeKey,
-                            visualReplyState = timeline.visualReplyState,
-                            roleplayToolbarController = timeline.roleplayToolbarController,
-                            staticExpansionObserver = timeline.staticExpansionObserver,
-                            layout = ChatConversationListLayout(
-                                listState = timeline.listState,
-                                endFollowBinding = timeline.endFollowBinding,
-                                bottomContentPadding = ChatComposerTimelineGap,
-                                keepFooterAnchoredOnItemResize =
-                                    timeline.waitingUserTurnOwnsBottom,
-                                measuredItemHeightsPx = timeline.timelineItemHeightsPx,
-                                onLiveReplyHeightChanged = timeline.onLiveReplyHeightChanged,
-                            ),
-                            presentationReadiness = timeline.presentationReadiness,
-                            presentationAlpha = presentationAlpha,
-                            onIntent = viewModel::onIntent,
-                            onVisualReplyCompleted = timeline.onVisualReplyCompleted,
-                            onRegenerate = timeline.regenerate,
-                            onSelectText = { selectedUserMessageText = it },
-                            onOpenUserAvatars = onOpenUserAvatars,
-                            onOpenCharacterSettings = onOpenCharacterSettings,
-                            messageGateway = viewModel,
-                        )
-                    },
                 )
             }
             ChatComposerBar(
                 visible = draft != null && !state.isDraftLoading,
-                roleplayWebActive = roleplayWebActive,
                 userBrowsedAwayFromBottom = userBrowsedAwayFromBottom && !state.deleteMessagesOpen,
                 roleplayWebCanScrollForward = timeline.roleplayWebCanScrollForward,
                 appearance = state.appearance,
                 onJumpToBottom = timeline.resumeToEnd,
-                onComposerHeightChanged = timeline.onComposerHeightChanged,
-                onComposerTopChanged = timeline.onComposerTopChanged,
                 composer = chatComposer,
             )
         }
 
-        ChatNativeJumpToBottom(
-            visible = draft != null &&
-                !state.isDraftLoading &&
-                !state.deleteMessagesOpen &&
-                !roleplayWebActive &&
-                timeline.composerTopPx > 0f &&
-                userBrowsedAwayFromBottom &&
-                timeline.listState.canScrollForward,
-            composerTopPx = timeline.composerTopPx,
-            appearance = state.appearance,
-            onClick = timeline.resumeToEnd,
-        )
     }
 
         ChatScreenOverlays(

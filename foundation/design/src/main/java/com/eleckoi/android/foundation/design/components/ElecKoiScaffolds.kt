@@ -12,20 +12,15 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.eleckoi.android.foundation.design.AppearanceTheme
-import com.skydoves.cloudy.Sky
-import com.skydoves.cloudy.cloudy
-import com.skydoves.cloudy.sky
 import java.io.File
 
 @Composable
@@ -55,22 +50,9 @@ fun PinnedStatusScaffold(
     }
 }
 
-val LocalMobileRootGlassSky = staticCompositionLocalOf<Sky?> { null }
-
-enum class MobileRootGlassPlacement {
+enum class MobileRootChromePlacement {
     Top,
     Bottom,
-}
-
-@Composable
-fun MobileRootGlassProvider(
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit,
-) {
-    val sky = com.skydoves.cloudy.rememberSky()
-    CompositionLocalProvider(LocalMobileRootGlassSky provides sky) {
-        Box(modifier = modifier, content = { content() })
-    }
 }
 
 @Composable
@@ -79,19 +61,16 @@ fun MobileRootBackdrop(
     modifier: Modifier = Modifier,
     previewModel: Any? = null,
 ) {
-    val sky = LocalMobileRootGlassSky.current
     val storedFile = remember(appearance.rootBackgroundImagePath) {
         appearance.rootBackgroundImagePath
             .takeIf(String::isNotBlank)
             ?.let(::File)
             ?.takeIf(File::exists)
     }
-    val model = previewModel
-        ?: storedFile
+    val model = previewModel ?: storedFile
     Box(
         modifier = modifier
             .fillMaxSize()
-            .then(if (sky != null) Modifier.sky(sky) else Modifier)
             .background(mobileRootContentColor(appearance)),
     ) {
         if (model != null) {
@@ -99,7 +78,6 @@ fun MobileRootBackdrop(
                 model = model,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                onSuccess = { sky?.invalidate() },
                 modifier = Modifier
                     .fillMaxSize()
                     .blur(
@@ -124,74 +102,18 @@ fun MobileRootBackdrop(
 }
 
 @Composable
-private fun Modifier.mobileRootLiquidGlass(
-    appearance: AppearanceTheme,
-    chromeColor: Color,
-): Modifier {
-    val sky = LocalMobileRootGlassSky.current
-        ?: return background(chromeColor)
-    return cloudy(
-            sky = sky,
-            radius = 26,
-            tint = chromeColor.copy(alpha = if (appearance.isDark) 0.30f else 0.22f),
-            cpuBlurEnabled = false,
-            shape = RectangleShape,
-        )
-        .background(chromeColor.copy(alpha = if (appearance.isDark) 0.16f else 0.10f))
-}
-
-/**
- * Paints the root wallpaper at this composable's screen position without sampling foreground list
- * items. Sticky content can therefore remain visually continuous with the page while still being
- * opaque enough to cover rows scrolling underneath it.
- */
-@Composable
-fun Modifier.mobileRootBackdropSample(appearance: AppearanceTheme): Modifier {
-    val sky = LocalMobileRootGlassSky.current
-        ?: return background(appearance.mobilePinnedBg)
-    return cloudy(
-        sky = sky,
-        radius = 1,
-        tint = Color.Transparent,
-        cpuBlurEnabled = false,
-        shape = RectangleShape,
-    )
-}
-
-@Composable
-fun MobileRootGlassBar(
+fun MobileRootChromeBar(
     appearance: AppearanceTheme,
     modifier: Modifier = Modifier,
-    placement: MobileRootGlassPlacement = MobileRootGlassPlacement.Top,
+    placement: MobileRootChromePlacement = MobileRootChromePlacement.Top,
     chromeColor: Color? = null,
-    glassEnabled: Boolean = true,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val resolvedChromeColor = chromeColor ?: when (placement) {
-        MobileRootGlassPlacement.Top -> appearance.mobileTopbarBg
-        MobileRootGlassPlacement.Bottom -> appearance.mobileTabbarBg
+        MobileRootChromePlacement.Top -> appearance.mobileTopbarBg
+        MobileRootChromePlacement.Bottom -> appearance.mobileTabbarBg
     }
-    if (!glassEnabled || (appearance.isDark && resolvedChromeColor == Color.Black)) {
-        Box(modifier = modifier.background(resolvedChromeColor), content = content)
-        return
-    }
-    val stableAlpha = if (appearance.isDark) 0.88f else 0.92f
-    val stableFill = Modifier.background(resolvedChromeColor.copy(alpha = stableAlpha))
-    Box(modifier = modifier) {
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .mobileRootLiquidGlass(appearance, resolvedChromeColor),
-        )
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                // A high-alpha semantic fill is the stable base colour. The glass still samples the
-                // wallpaper through the remaining fraction, but can no longer disappear into rows.
-                .then(stableFill),
-        )
-        content()
-    }
+    Box(modifier = modifier.background(resolvedChromeColor), content = content)
 }
 
 /** Root-page chrome that paints behind the status bar with the page title. */
@@ -201,14 +123,12 @@ fun MobileRootTopBar(
     modifier: Modifier = Modifier,
     includeStatusBarInset: Boolean = true,
     chromeColor: Color? = null,
-    glassEnabled: Boolean = true,
     content: @Composable () -> Unit,
 ) {
-    MobileRootGlassBar(
+    MobileRootChromeBar(
         appearance = appearance,
-        placement = MobileRootGlassPlacement.Top,
+        placement = MobileRootChromePlacement.Top,
         chromeColor = chromeColor ?: mobileRootTopBarContainerColor(appearance),
-        glassEnabled = glassEnabled,
         modifier = modifier.fillMaxWidth(),
     ) {
         Box(

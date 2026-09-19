@@ -1,4 +1,4 @@
-package com.eleckoi.android.feature.chat.ui.message
+package com.eleckoi.android.feature.chat.data.presentation
 
 import com.eleckoi.android.feature.chat.data.stream.StreamingMarkupAssembler
 import com.eleckoi.android.feature.chat.model.ChatMessage
@@ -6,28 +6,6 @@ import com.eleckoi.android.feature.chat.model.MessageRole
 import com.eleckoi.android.feature.chat.model.content.ChatContentBlock
 import com.eleckoi.android.feature.chat.roleplay.protocol.RoleplayImagePlacementPart
 import com.eleckoi.android.feature.chat.roleplay.protocol.parseRoleplayImagePlacements
-
-/**
- * The inline process is a transient waiting phase, not a header attached to the reply.
- *
- * Request liveness alone cannot own its visibility: the request remains pending while the final
- * answer streams. Once answer content arrives, retaining the process until `pending` becomes false
- * creates a guaranteed terminal height collapse above already-visible text.
- */
-internal fun shouldShowInlineAgentProcess(
-    message: ChatMessage,
-    displayedText: String,
-): Boolean =
-        message.pending &&
-        message.role == MessageRole.Assistant &&
-        message.shouldShowProcessedTimeline() &&
-        message.hasVisibleLiveAgentProcessRecord() &&
-        displayedText.isBlank()
-
-internal fun shouldKeepNativeLayerDuringRichHandoff(
-    richDocumentAvailable: Boolean,
-    richReady: Boolean,
-): Boolean = !richDocumentAvailable || !richReady
 
 internal fun assembleChatContentBlocks(
     message: ChatMessage,
@@ -59,14 +37,10 @@ private fun placeRoleplayImages(
                 addPlacementBlock(block)
                 return@forEach
             }
-            val parts = parseRoleplayImagePlacements(
+            parseRoleplayImagePlacements(
                 raw = block.markdown,
                 streaming = message.pending,
-            )
-            // Normalize the first text segment before any IMAGE marker arrives. When the marker
-            // later closes, that segment keeps the same Compose/native-Markdown identity instead
-            // of being disposed and replaced by an equal-height blank placeholder.
-            parts.forEachIndexed { index, part ->
+            ).forEachIndexed { index, part ->
                 when (part) {
                     is RoleplayImagePlacementPart.Text -> addPlacementBlock(
                         ChatContentBlock.Text(
@@ -115,4 +89,3 @@ private fun MutableList<ChatContentBlock>.addPlacementBlock(block: ChatContentBl
         add(block)
     }
 }
-

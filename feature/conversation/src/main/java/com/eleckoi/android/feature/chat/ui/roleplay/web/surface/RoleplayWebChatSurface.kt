@@ -14,13 +14,14 @@ import com.eleckoi.android.sdk.author.AuthorChatGateway
 @Composable
 internal fun RoleplayWebChatSurface(
     model: RoleplayTranscriptModel,
+    rendererRevision: Int = 0,
     updatesPaused: Boolean,
     controller: RoleplayWebChatController,
     callbacks: RoleplayWebChatCallbacks,
     messageGateway: AuthorChatGateway,
     modifier: Modifier = Modifier,
 ) {
-    key(model.sessionId) {
+    key(model.sessionId, rendererRevision) {
         RoleplayWebChatSessionSurface(
             model = model,
             updatesPaused = updatesPaused,

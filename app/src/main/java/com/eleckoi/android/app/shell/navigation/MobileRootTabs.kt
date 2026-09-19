@@ -2,6 +2,8 @@ package com.eleckoi.android.app.shell
 
 import com.eleckoi.android.foundation.design.components.*
 import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -87,7 +89,7 @@ internal fun MobileRootTabs(
         animationSpec = tween(durationMillis = 180),
         label = "modelProviderBackdropBlur",
     )
-    MobileRootGlassProvider(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize()) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -259,7 +261,12 @@ internal fun elecKoiForwardRoute(): ContentTransform {
     )
 }
 
-internal fun elecKoiBackRoute(): ContentTransform {
+internal fun elecKoiBackRoute(
+    restoreMorePanel: Boolean = false,
+): ContentTransform {
+    if (restoreMorePanel) {
+        return EnterTransition.None.togetherWith(ExitTransition.None)
+    }
     return (
         slideInHorizontally { width -> -width } +
             fadeIn(initialAlpha = 0.90f)

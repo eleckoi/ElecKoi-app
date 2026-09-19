@@ -27,6 +27,7 @@ internal val RoleplayTranscriptRuntimeCore = """
         phase: 'idle', transactionId: 0, sessionId: '', required: new Set(),
         epoch: 0, stableEpoch: -1, checkQueued: false, watchdog: 0,
       },
+      layoutMode: 'roleplay',
       cardPanel: false,
       frontendRendererEnabled: true,
       deleteMode: false,
@@ -58,7 +59,55 @@ internal val RoleplayTranscriptRuntimeCore = """
       },
       icons: {}, style: {}, expandedToolbarId: null, activeAuthorMessageId: '',
     };
-    const estimateHeight = message => Math.max(150, Math.min(900, 105 + ((message.copyText || '').length / 16)));
+    const normalizedImageAspectRatio = image => {
+      const value = Number(image?.aspectRatio);
+      return Number.isFinite(value) && value > 0 ? Math.max(.2, Math.min(5, value)) : 1;
+    };
+    const singleImageWidthFraction = image => {
+      if (Number(image?.frameCount) <= 1) return 1;
+      return normalizedImageAspectRatio(image) < .85 ? .74 : .88;
+    };
+    const estimatedImageContentWidth = message => {
+      const horizontalPadding = Math.max(0, Number(state.style.horizontalPaddingPx) || 0);
+      const available = Math.max(120, window.innerWidth - (horizontalPadding * 2));
+      if (state.layoutMode === 'agent') {
+        const bubblePadding = message.role === 'user' || state.style.assistantBubbleEnabled ? 24 : 0;
+        const width = message.role === 'user' ? available * .88 : available;
+        return Math.max(80, width - bubblePadding);
+      }
+      const avatarLane = Math.max(0, Number(state.style.avatarWidthPx) || 0) +
+        Math.max(0, Number(state.style.avatarGapPx) || 0);
+      const main = Math.max(120, available - avatarLane);
+      if (state.layoutMode === 'social') return Math.max(80, (main * .88) - 24);
+      return main;
+    };
+    const estimateImageGalleryHeight = (message, images) => {
+      const items = Array.isArray(images) ? images : [];
+      if (!items.length) return 0;
+      const contentWidth = estimatedImageContentWidth(message);
+      if (items.length === 1) {
+        const image = items[0];
+        return (contentWidth * singleImageWidthFraction(image)) / normalizedImageAspectRatio(image);
+      }
+      const columns = items.length === 2 || items.length === 4 ? 2 : 3;
+      const cellWidth = Math.max(1, (contentWidth - ((columns - 1) * 4)) / columns);
+      let height = 0;
+      for (let index = 0; index < items.length; index += columns) {
+        const row = items.slice(index, index + columns);
+        height += Math.max(...row.map(image => cellWidth / normalizedImageAspectRatio(image)));
+        if (index + columns < items.length) height += 4;
+      }
+      return height;
+    };
+    const estimateHeight = message => {
+      const textHeight = Math.max(150, 105 + ((message.copyText || '').length / 16));
+      const imageParts = (message.parts || []).filter(part => part.type === 'images');
+      const imageHeight = imageParts.reduce(
+        (height, part) => height + estimateImageGalleryHeight(message, part.images),
+        0,
+      );
+      return Math.max(150, Math.min(4000, textHeight + imageHeight + (imageParts.length * 4)));
+    };
     const measureTurnHeight = (turn, entry) => {
       const style = getComputedStyle(turn);
       const marginTop = Number.parseFloat(style.marginTop) || 0;
@@ -311,13 +360,27 @@ internal val RoleplayTranscriptRuntimeCore = """
       }
       virtualizer.setOptions(virtualizerOptions(state.messages, followEnd));
     };
+    const applyLayoutMode = value => {
+      const layoutMode = ['social', 'agent', 'roleplay'].includes(value) ? value : 'roleplay';
+      state.layoutMode = layoutMode;
+      document.body.dataset.layout = layoutMode;
+      document.documentElement.style.setProperty(
+        '--roleplay-text-shadow',
+        layoutMode === 'roleplay' && state.style.dark ? '0 0 1px rgba(0,0,0,.3)' : 'none',
+      );
+      if (typeof refreshImageGalleryGeometry === 'function') refreshImageGalleryGeometry();
+    };
     const applyStyle = style => {
       const root = document.documentElement.style;
+      const avatarHeight = Math.max(0, Number(style.avatarHeightPx) || 0);
+      const socialTailCenter = avatarHeight / 2;
       const properties = {
         '--text': style.text, '--body-text': style.bodyText, '--italic-text': style.italicText,
+        '--assistant-text': style.assistantText, '--user-text': style.userText,
         '--underline-text': style.underlineText, '--quote-text': style.quoteText,
         '--inline-code-text': style.inlineCodeText, '--muted': style.muted, '--soft': style.soft,
         '--accent': style.accent, '--panel': style.panel, '--line': style.line,
+        '--assistant-bubble': style.assistantBubble, '--user-bubble': style.userBubble,
         '--eleckoi-foreground': style.bodyText, '--eleckoi-muted': style.muted,
         '--eleckoi-accent': style.accent,
         '--jump-surface': style.jumpSurface,
@@ -329,13 +392,22 @@ internal val RoleplayTranscriptRuntimeCore = """
         '--name-size': style.nameFontSizePx + 'px', '--name-line-height': style.nameLineHeightPx + 'px',
         '--avatar-width': style.avatarWidthPx + 'px',
         '--avatar-height': style.avatarHeightPx + 'px', '--avatar-radius': style.avatarRadiusPx + 'px',
+        '--social-tail-top': Math.max(0, socialTailCenter - 5) + 'px',
+        '--social-tail-center': socialTailCenter + 'px',
+        '--social-tail-bottom': socialTailCenter + 5 + 'px',
         '--avatar-gap': style.avatarGapPx + 'px', '--horizontal-padding': style.horizontalPaddingPx + 'px',
         '--reply-gap': style.replySpacingPx + 'px', '--turn-gap': style.turnSpacingPx + 'px',
+        '--bubble-radius': style.bubbleRadiusPx + 'px',
       };
       Object.entries(properties).forEach(([key, value]) => root.setProperty(key, value));
-      root.setProperty('--roleplay-text-shadow', style.dark ? '0 0 1px rgba(0,0,0,.3)' : 'none');
+      root.setProperty(
+        '--roleplay-text-shadow',
+        state.layoutMode === 'roleplay' && style.dark ? '0 0 1px rgba(0,0,0,.3)' : 'none',
+      );
       document.documentElement.style.colorScheme = style.dark ? 'dark' : 'light';
+      document.body.classList.toggle('assistant-bubbles', !!style.assistantBubbleEnabled);
       state.cardPanel = !!style.cardPanel; state.style = style;
+      if (typeof refreshImageGalleryGeometry === 'function') refreshImageGalleryGeometry();
     };
     const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({
       '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'

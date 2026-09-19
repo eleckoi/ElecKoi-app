@@ -14,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -33,6 +34,7 @@ internal fun CharacterGroupedList(
     listAllExpanded: Boolean,
     expandedGroupNames: Set<String>,
     appearance: AppearanceTheme,
+    containerColor: Color = appearance.mobileSurface,
     useCoverArtwork: Boolean,
     onToggleGroup: (String, Set<String>?) -> Unit,
     onOpenCharacter: (String) -> Unit,
@@ -438,6 +440,7 @@ internal fun CharacterGroupedList(
             draggingCharacter = draggingCharacter,
             draggingGroup = draggingGroup,
             appearance = appearance,
+            containerColor = containerColor,
             useCoverArtwork = useCoverArtwork,
             onToggleGroup = ::toggleGroupFromHeader,
             onOpenCharacter = onOpenCharacter,

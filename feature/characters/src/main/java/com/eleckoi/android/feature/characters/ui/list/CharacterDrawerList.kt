@@ -3,6 +3,7 @@ package com.eleckoi.android.feature.characters.ui.list
 import androidx.compose.runtime.Composable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import com.eleckoi.android.feature.characters.model.CharactersPayload
 import com.eleckoi.android.foundation.design.AppearanceTheme
 
@@ -10,7 +11,9 @@ import com.eleckoi.android.foundation.design.AppearanceTheme
 @Composable
 fun CharacterDrawerList(
     characters: CharactersPayload?,
+    keyword: String = "",
     appearance: AppearanceTheme,
+    containerColor: Color = appearance.mobileSurface,
     useCoverArtwork: Boolean,
     onToggleAllCharactersExpanded: () -> Unit,
     onToggleCharacterGroupExpanded: (String) -> Unit,
@@ -23,10 +26,11 @@ fun CharacterDrawerList(
             characters = characters?.items.orEmpty(),
             groups = buildCharacterGroups(characters),
             payload = characters,
-            keyword = "",
+            keyword = keyword,
             listAllExpanded = characters?.listAllExpanded ?: true,
             expandedGroupNames = characters?.expandedGroupNames.orEmpty().toSet(),
             appearance = appearance,
+            containerColor = containerColor,
             useCoverArtwork = useCoverArtwork,
             onToggleGroup = { group, _ ->
                 if (group == ALL_CHARACTERS) {

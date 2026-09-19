@@ -100,6 +100,7 @@ fun ChatPreviewBubble(
 ) {
     val roleplay = metrics.layoutMode == ChatLayoutMode.Roleplay
     val bubbleVisible = !roleplay && (user || metrics.assistantBubbleEnabled)
+    val bubblePalette = resolveChatBubblePalette(appearance, metrics.layoutMode, user)
     Box(
         modifier = modifier.fillMaxWidth(),
         contentAlignment = if (user && !roleplay) Alignment.CenterEnd else Alignment.CenterStart,
@@ -110,10 +111,7 @@ fun ChatPreviewBubble(
                     if (bubbleVisible) {
                         Modifier
                             .clip(RoundedCornerShape(metrics.cornerRadius))
-                            .background(
-                                if (user) appearance.mobileChatUserBg
-                                else appearance.mobileChatMessageBg,
-                            )
+                            .background(bubblePalette.container)
                             .padding(horizontal = 12.dp, vertical = 9.dp)
                     } else {
                         Modifier
@@ -124,8 +122,7 @@ fun ChatPreviewBubble(
                 text,
                 color = when {
                     !bubbleVisible -> appearance.mobileText
-                    user -> appearance.mobileChatUserFg
-                    else -> appearance.mobileChatMessageFg
+                    else -> bubblePalette.content
                 },
                 fontSize = metrics.fontSize,
                 lineHeight = metrics.lineHeight,
@@ -207,12 +204,13 @@ private fun PreviewTurn(
     val roleplay = metrics.layoutMode == ChatLayoutMode.Roleplay
     val social = metrics.layoutMode == ChatLayoutMode.Social
     val bubbleVisible = !roleplay && (user || metrics.assistantBubbleEnabled)
+    val bubblePalette = resolveChatBubblePalette(appearance, metrics.layoutMode, user)
     val bubble: @Composable () -> Unit = {
         if (bubbleVisible) {
             val shape = if (social) {
                 SocialChatBubbleShape(
                     user = user,
-                    cornerRadius = metrics.cornerRadius,
+                    cornerRadius = minOf(metrics.cornerRadius, SocialBubbleCornerRadiusMax),
                     tailCenterY = metrics.avatarShape.heightFor(metrics.avatarSize) / 2f,
                 )
             } else {
@@ -221,9 +219,7 @@ private fun PreviewTurn(
             Box(
                 modifier = Modifier
                     .clip(shape)
-                    .background(
-                        if (user) appearance.mobileChatUserBg else appearance.mobileChatMessageBg,
-                    )
+                    .background(bubblePalette.container)
                     .padding(
                         start = 12.dp + if (social && !user) SocialBubbleTailWidth else 0.dp,
                         top = 9.dp,
@@ -359,6 +355,7 @@ private fun PreviewBody(
 ) {
     val bubbleVisible = metrics.layoutMode != ChatLayoutMode.Roleplay &&
         (user || metrics.assistantBubbleEnabled)
+    val bubblePalette = resolveChatBubblePalette(appearance, metrics.layoutMode, user)
     Text(
         text,
         // The bubble foreground colours are picked to sit on the bubble. With no bubble under it the
@@ -366,8 +363,7 @@ private fun PreviewBody(
         // was contrast-checked.
         color = when {
             !bubbleVisible -> appearance.mobileText
-            user -> appearance.mobileChatUserFg
-            else -> appearance.mobileChatMessageFg
+            else -> bubblePalette.content
         },
         fontSize = metrics.fontSize,
         lineHeight = metrics.lineHeight,

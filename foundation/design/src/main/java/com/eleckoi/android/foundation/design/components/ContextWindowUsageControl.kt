@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -55,12 +56,18 @@ fun ContextWindowUsageControl(
     modifier: Modifier = Modifier,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    Box(modifier = modifier) {
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center,
+    ) {
         Box(
             modifier = Modifier
-                .size(34.dp)
-                .noRippleClickable { expanded = true }
-                .semantics { contentDescription = "上下文窗口用量" },
+                .size(36.dp)
+                .noRippleClickable { expanded = toggleContextWindowUsageExpanded(expanded) }
+                .semantics {
+                    contentDescription = "上下文窗口用量"
+                    stateDescription = if (expanded) "已展开" else "已收起"
+                },
             contentAlignment = Alignment.Center,
         ) {
             ContextWindowRing(usage = usage, appearance = appearance)
@@ -126,15 +133,26 @@ private fun ContextWindowUsagePopup(
     Popup(
         popupPositionProvider = positionProvider,
         onDismissRequest = onDismissRequest,
-        properties = PopupProperties(focusable = false),
+        // Consume the outside tap that dismisses the panel. Without a focusable popup, the same
+        // tap continues through to the ring and immediately opens the panel again.
+        properties = PopupProperties(focusable = true),
     ) {
+        val popupShape = RoundedCornerShape(16.dp)
         Surface(
-            modifier = Modifier.width(272.dp),
-            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier
+                .width(272.dp)
+                .contextUsagePopupShadow(
+                    shape = popupShape,
+                    isDark = appearance.isDark,
+                ),
+            shape = popupShape,
             color = appearance.mobileSurface,
             tonalElevation = 0.dp,
-            shadowElevation = 8.dp,
-            border = BorderStroke(1.dp, appearance.mobileLine),
+            shadowElevation = 0.dp,
+            border = BorderStroke(
+                0.5.dp,
+                contextUsagePopupBorderColor(appearance),
+            ),
         ) {
             val presentation = usage.toContextWindowUsagePresentation()
             Column(modifier = Modifier.padding(horizontal = 17.dp, vertical = 15.dp)) {
@@ -207,6 +225,41 @@ private fun ContextWindowUsagePopup(
         }
     }
 }
+
+private fun Modifier.contextUsagePopupShadow(
+    shape: RoundedCornerShape,
+    isDark: Boolean,
+): Modifier = if (isDark) {
+    // On a dark surface one broad, quiet shadow plus the light hairline above is enough to express
+    // elevation. Stacking dark bands here produces a muddy halo.
+    dropShadow(
+        shape = shape,
+        color = Color.Black.copy(alpha = 0.20f),
+        blur = 18.dp,
+        offsetY = 6.dp,
+        spread = (-2).dp,
+    )
+} else {
+    // A broad ambient layer and a faint near-contact layer avoid the hard lower band produced by
+    // Material elevation while still separating the card from text and wallpaper underneath.
+    dropShadow(
+        shape = shape,
+        color = Color(0xFF263248).copy(alpha = 0.052f),
+        blur = 22.dp,
+        offsetY = 8.dp,
+        spread = (-2).dp,
+    ).dropShadow(
+        shape = shape,
+        color = Color.Black.copy(alpha = 0.030f),
+        blur = 6.dp,
+        offsetY = 2.dp,
+        spread = (-1).dp,
+    )
+}
+
+internal fun toggleContextWindowUsageExpanded(expanded: Boolean): Boolean = !expanded
+
+internal fun contextUsagePopupBorderColor(appearance: AppearanceTheme): Color = appearance.mobileLine
 
 @Composable
 private fun ContextUsageProgress(

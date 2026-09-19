@@ -5,9 +5,9 @@ import com.eleckoi.android.foundation.design.AppearanceTheme
 object SocialLayoutDefaults {
     // Social layout always renders a conversation bubble. Only Agent exposes an on/off choice.
     const val AssistantBubbleEnabled = true
-    val AvatarShape = ChatAvatarShape.Circle
+    val AvatarShape = ChatAvatarShape.RoundedSquare
     val TimelineThinkingAnimation = ChatTimelineThinkingAnimation.Default
-    const val BubbleCornerRadius = 10f
+    const val BubbleCornerRadius = 6f
     const val AvatarSize = 40f
     const val NameFontSize = 13f
     const val NameAvatarSpacing = 8f
@@ -25,14 +25,14 @@ object AgentLayoutDefaults {
     val AvatarShape = ChatAvatarShape.Circle
     val TimelineThinkingAnimation = ChatTimelineThinkingAnimation.Default
     const val BubbleCornerRadius = 12f
-    const val AvatarSize = 34.5f
-    const val NameFontSize = 13f
+    const val AvatarSize = 40f
+    const val NameFontSize = 16f
     const val NameAvatarSpacing = 8f
     const val HorizontalPadding = 16f
     const val ReplySpacing = 15f
     const val TurnSpacing = 15f
-    const val MessageFontSize = 14f
-    const val LineHeightMultiplier = 1f
+    const val MessageFontSize = 16f
+    const val LineHeightMultiplier = 25f / (MessageFontSize * 1.4f)
     const val LetterSpacing = 0f
     const val ParagraphSpacing = 6f
 }

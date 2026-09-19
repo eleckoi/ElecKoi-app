@@ -23,8 +23,23 @@ class RoleplayTranscriptDocumentTest {
         val document = buildRoleplayTranscriptDocument("")
 
         assertTrue(document.contains("text-shadow: var(--roleplay-text-shadow);"))
-        assertTrue(document.contains("style.dark ? '0 0 1px rgba(0,0,0,.3)' : 'none'"))
+        assertTrue(
+            document.contains(
+                "state.layoutMode === 'roleplay' && style.dark ? " +
+                    "'0 0 1px rgba(0,0,0,.3)' : 'none'",
+            ),
+        )
         assertFalse(document.contains("text-shadow: 0 0 2px rgba(0,0,0,.5);"))
+    }
+
+    @Test
+    fun documentSwitchesLayoutWithoutCreatingAnotherRenderer() {
+        val document = buildRoleplayTranscriptDocument("")
+
+        assertTrue(document.contains("document.body.dataset.layout = layoutMode"))
+        assertTrue(document.contains("body[data-layout=\"agent\"] .turn"))
+        assertTrue(document.contains("body[data-layout=\"social\"] .turn"))
+        assertTrue(document.contains("document.body.classList.toggle('assistant-bubbles'"))
     }
 
     @Test
@@ -51,6 +66,28 @@ class RoleplayTranscriptDocumentTest {
         assertTrue(document.contains("重新生成"))
         assertTrue(document.contains("message.role !== 'user' && message.regenerateEnabled"))
         assertTrue(document.contains("contextmenu"))
+    }
+
+    @Test
+    fun imageMessagesReserveTheirGeometryBeforeOffscreenImagesDecode() {
+        val document = buildRoleplayTranscriptDocument("")
+        val frameWidth = document.indexOf("frame.style.width =")
+        val imageSource = document.indexOf("element.src = image.url")
+
+        assertTrue(document.contains("const normalizedImageAspectRatio = image =>"))
+        assertTrue(document.contains("const singleImageWidthFraction = image =>"))
+        assertTrue(document.contains("if (count === 1) {"))
+        assertTrue(document.contains("frame.style.flex = '0 0 auto'"))
+        assertTrue(document.contains("const applyImageGalleryGeometry = (gallery, message, images) =>"))
+        assertTrue(document.contains("gallery.style.width = reservedContentWidth + 'px'"))
+        assertTrue(document.contains("Math.round(reservedContentWidth * singleImageWidthFraction(image))"))
+        assertTrue(document.contains("refreshImageGalleryGeometry();"))
+        assertTrue(frameWidth >= 0)
+        assertTrue(imageSource > frameWidth)
+        assertTrue(document.contains("const estimateImageGalleryHeight = (message, images) =>"))
+        assertTrue(document.contains("part.type === 'images'"))
+        assertTrue(document.contains("textHeight + imageHeight"))
+        assertFalse(document.contains("Math.min(900, 105 +"))
     }
 
     @Test
@@ -191,12 +228,71 @@ class RoleplayTranscriptDocumentTest {
         val document = buildRoleplayTranscriptDocument("")
 
         assertTrue(document.contains("lane.append(pager)"))
+        assertTrue(document.contains("svgIcon('chevronLeft', 12, 1.85)"))
+        assertTrue(document.contains("svgIcon('chevronRight', 12, 1.85)"))
+        assertTrue(document.contains("grid-template-columns: 12px minmax(0, 1fr) 12px;"))
+        assertTrue(document.contains("font-variant-numeric: tabular-nums;"))
+        assertFalse(document.contains("data-action=\"opening-prev\"]::before"))
+        assertFalse(document.contains("data-action=\"opening-next\"]::before"))
+        assertTrue(document.contains("body[data-layout=\"social\"] .turn-header { display: none; }"))
         assertTrue(document.contains("refreshRichViewport();"))
         assertTrue(document.contains("const previousRichFrameHeights ="))
         assertTrue(document.contains("nextRichRoots.forEach((root, rootIndex) => activateRichRootNow"))
         assertTrue(document.contains("frame.style.height = previousHeight + 'px'"))
         assertTrue(document.contains("openingAnimationWatchdog = setTimeout(cleanup, 400)"))
         assertFalse(document.contains("height: 18px;\n      margin-top: auto;"))
+    }
+
+    @Test
+    fun socialBubbleUsesOneClippedWechatSilhouetteForBodyAndPointer() {
+        val document = buildRoleplayTranscriptDocument("")
+
+        assertTrue(document.contains("padding: 9px 12px 9px 18px;"))
+        assertTrue(document.contains("padding: 9px 18px 9px 12px;"))
+        assertTrue(document.contains("const socialTailCenter = avatarHeight / 2;"))
+        assertTrue(document.contains("0 var(--social-tail-center),"))
+        assertTrue(document.contains("100% var(--social-tail-center),"))
+        assertTrue(document.contains("clip-path: polygon("))
+        assertFalse(document.contains("body[data-layout=\"social\"] .message-body::before"))
+        assertFalse(document.contains("body[data-layout=\"social\"] .message-body::after"))
+    }
+
+    @Test
+    fun agentFooterUsesDeepSeekGeometryAndKeepsOpeningPagerBeforeActions() {
+        val document = buildRoleplayTranscriptDocument("")
+        val footer = document.indexOf("const agentFooterContent = message =>")
+        val pager = document.indexOf("let leading = agentOpeningPager(message);", footer)
+        val copy = document.indexOf("agentActionButton('copy'", footer)
+        val history = document.indexOf("agentActionButton('history'", footer)
+        val speaker = document.indexOf("agentActionButton('speaker'", footer)
+        val regenerate = document.indexOf("agentActionButton('regenerate'", footer)
+
+        assertTrue(footer >= 0)
+        assertTrue(pager in footer until copy)
+        assertTrue(copy < history)
+        assertTrue(history < speaker)
+        assertTrue(speaker < regenerate)
+        assertTrue(document.contains("svgIcon(icon, 20, 1.85)"))
+        assertTrue(document.contains("height: 30px;"))
+        assertTrue(document.contains("gap: 16px;"))
+        assertTrue(document.contains("font: 400 15px/18px sans-serif;"))
+        assertTrue(document.contains("justify-content: space-between;"))
+    }
+
+    @Test
+    fun agentIdentityIsCenteredAndRoleplayHeaderToolsStayOutOfOtherLayouts() {
+        val document = buildRoleplayTranscriptDocument("")
+
+        assertTrue(document.contains("min-height: var(--avatar-height);"))
+        assertTrue(document.contains("align-items: center;"))
+        assertTrue(
+            document.contains(
+                "body[data-layout=\"agent\"] .tools,\n    " +
+                    "body[data-layout=\"social\"] .tools { display: none; }",
+            ),
+        )
+        assertTrue(document.contains("main.append(header, createBody(message), createAgentFooter(message))"))
+        assertTrue(document.contains("body[data-layout=\"agent\"] .portrait-lane > .pager { display: none; }"))
     }
 
     @Test

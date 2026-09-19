@@ -34,10 +34,7 @@ import com.eleckoi.android.foundation.design.components.ContextWindowUsage
 internal fun ChatScreenComposer(
     state: ChatUiState,
     draft: ChatDraft?,
-    roleplay: Boolean,
-    roleplayWebActive: Boolean,
-    roleplayWaitingSlotReserved: Boolean,
-    nativeWaitingSlotReserved: Boolean,
+    webWaitingSlotReserved: Boolean,
     waitingIndicatorVisible: Boolean,
     replyPresentationActive: Boolean,
     appearance: AppearanceTheme,
@@ -70,27 +67,13 @@ internal fun ChatScreenComposer(
         modifier = modifier,
         horizontalAlignment = Alignment.Start,
     ) {
-        if (!state.deleteMessagesOpen && roleplayWebActive && roleplayWaitingSlotReserved) {
+        if (!state.deleteMessagesOpen && webWaitingSlotReserved) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(ChatWaitingReplySlotHeight)
                     .padding(start = 16.dp),
                 contentAlignment = Alignment.TopStart,
-            ) {
-                if (waitingIndicatorVisible) {
-                    ChatWaitingReply(
-                        appearance = appearance,
-                    )
-                }
-            }
-        } else if (!state.deleteMessagesOpen && nativeWaitingSlotReserved) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(ChatWaitingReplySlotHeight)
-                    .padding(start = if (roleplay) 16.dp else 22.dp, bottom = 8.dp),
-                contentAlignment = Alignment.BottomStart,
             ) {
                 if (waitingIndicatorVisible) {
                     ChatWaitingReply(
@@ -148,8 +131,7 @@ internal fun ChatScreenComposer(
             onToggleMore = { onIntent(ChatIntent.ToggleMoreTools) },
             onDismissMore = { onIntent(ChatIntent.DismissMoreTools) },
             modifier = Modifier
-                .fillMaxWidth()
-                .then(if (roleplayWebActive) Modifier else Modifier.navigationBarsPadding()),
+                .fillMaxWidth(),
         )
     }
 }

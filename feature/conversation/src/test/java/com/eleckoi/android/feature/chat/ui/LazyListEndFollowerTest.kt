@@ -1,47 +1,11 @@
 package com.eleckoi.android.feature.chat.ui
 
-import com.eleckoi.android.feature.chat.ui.screen.isCurrentLiveReplyMeasurement
-import com.eleckoi.android.feature.chat.ui.screen.keyboardViewportOwnsLiveTail
-import com.eleckoi.android.feature.chat.ui.screen.keyboardViewportScrollDelta
-import com.eleckoi.android.feature.chat.ui.screen.shouldAnchorGeneratingChatToEnd
-
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LazyListEndFollowerTest {
-    @Test
-    fun `native generation owns the footer only until the reader takes control`() {
-        assertTrue(shouldAnchorGeneratingChatToEnd(true, true, false, false))
-        assertFalse(shouldAnchorGeneratingChatToEnd(true, false, false, false))
-        assertFalse(shouldAnchorGeneratingChatToEnd(true, true, true, false))
-        assertFalse(shouldAnchorGeneratingChatToEnd(true, true, false, true))
-        assertFalse(shouldAnchorGeneratingChatToEnd(false, true, false, false))
-    }
-
-    @Test
-    fun `regenerated reply cannot reuse a height measured by an older generation`() {
-        val oldGeneration = ChatVisualReplyKey(messageId = "assistant-1", generation = 1)
-        val newGeneration = ChatVisualReplyKey(messageId = "assistant-1", generation = 2)
-
-        assertFalse(isCurrentLiveReplyMeasurement(newGeneration, oldGeneration))
-        assertTrue(isCurrentLiveReplyMeasurement(newGeneration, newGeneration))
-        assertFalse(isCurrentLiveReplyMeasurement(null, newGeneration))
-    }
-
-    @Test
-    fun `process and final phase get distinct pre-draw anchors without changing reply owner`() {
-        val replyKey = ChatVisualReplyKey(messageId = "assistant-1", generation = 3)
-        val process = replyKey.phaseAnchor(finalAnswerVisible = false)
-        val finalAnswer = replyKey.phaseAnchor(finalAnswerVisible = true)
-
-        assertEquals(replyKey, process.replyKey)
-        assertEquals(replyKey, finalAnswer.replyKey)
-        assertEquals(ChatVisualReplyPhase.Process, process.phase)
-        assertEquals(ChatVisualReplyPhase.FinalAnswer, finalAnswer.phase)
-    }
-
     @Test
     fun `static expansion remains registered until its matching row closes`() {
         val state = LazyListEndFollowState()
@@ -316,109 +280,4 @@ class LazyListEndFollowerTest {
         )
     }
 
-    @Test
-    fun `keyboard shrink follows the bottom by only the removed viewport height`() {
-        assertEquals(
-            420,
-            keyboardViewportScrollDelta(
-                previousViewportEnd = 960,
-                currentViewportEnd = 540,
-                bottomOwned = true,
-                userBrowsedAwayFromBottom = false,
-                isDragged = false,
-            ),
-        )
-    }
-
-    @Test
-    fun `keyboard live tail ownership ignores unsettled list geometry`() {
-        assertTrue(
-            keyboardViewportOwnsLiveTail(
-                userBrowsedAwayFromBottom = false,
-                isDragged = false,
-            ),
-        )
-        assertFalse(
-            keyboardViewportOwnsLiveTail(
-                userBrowsedAwayFromBottom = true,
-                isDragged = false,
-            ),
-        )
-        assertFalse(
-            keyboardViewportOwnsLiveTail(
-                userBrowsedAwayFromBottom = false,
-                isDragged = true,
-            ),
-        )
-    }
-
-    @Test
-    fun `keyboard shrink moves the visible history together with the composer`() {
-        assertEquals(
-            420,
-            keyboardViewportScrollDelta(
-                previousViewportEnd = 960,
-                currentViewportEnd = 540,
-                bottomOwned = true,
-                userBrowsedAwayFromBottom = true,
-                isDragged = false,
-            ),
-        )
-    }
-
-    @Test
-    fun `keyboard viewport never fights an active finger drag`() {
-        assertEquals(
-            0,
-            keyboardViewportScrollDelta(
-                previousViewportEnd = 960,
-                currentViewportEnd = 540,
-                bottomOwned = true,
-                userBrowsedAwayFromBottom = false,
-                isDragged = true,
-            ),
-        )
-    }
-
-    @Test
-    fun `keyboard shrink leaves a non bottom non history viewport alone`() {
-        assertEquals(
-            0,
-            keyboardViewportScrollDelta(
-                previousViewportEnd = 960,
-                currentViewportEnd = 540,
-                bottomOwned = false,
-                userBrowsedAwayFromBottom = false,
-                isDragged = false,
-            ),
-        )
-    }
-
-    @Test
-    fun `keyboard expansion moves a history viewport back down`() {
-        assertEquals(
-            -420,
-            keyboardViewportScrollDelta(
-                previousViewportEnd = 540,
-                currentViewportEnd = 960,
-                bottomOwned = false,
-                userBrowsedAwayFromBottom = true,
-                isDragged = false,
-            ),
-        )
-    }
-
-    @Test
-    fun `keyboard expansion leaves live tail positioning to measured height follow`() {
-        assertEquals(
-            0,
-            keyboardViewportScrollDelta(
-                previousViewportEnd = 540,
-                currentViewportEnd = 960,
-                bottomOwned = true,
-                userBrowsedAwayFromBottom = false,
-                isDragged = false,
-            ),
-        )
-    }
 }

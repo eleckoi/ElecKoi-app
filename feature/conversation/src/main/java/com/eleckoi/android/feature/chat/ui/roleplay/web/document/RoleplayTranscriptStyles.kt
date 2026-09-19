@@ -13,6 +13,8 @@ internal val RoleplayTranscriptStyles = """
       --soft: #92928d;
       --accent: #b7d8ff;
       --panel: #3c3c3c;
+      --assistant-bubble: #3c3c3c;
+      --user-bubble: #203b4e;
       --line: rgba(255,255,255,.18);
       --jump-surface: rgba(36,36,37,.96);
       --avatar-background: rgba(255,255,255,.075);
@@ -34,6 +36,7 @@ internal val RoleplayTranscriptStyles = """
       --horizontal-padding: 10px;
       --reply-gap: 4px;
       --turn-gap: 5px;
+      --bubble-radius: 12px;
       --roleplay-text-shadow: 0 0 1px rgba(0,0,0,.3);
     }
     * { box-sizing: border-box; }
@@ -79,7 +82,8 @@ internal val RoleplayTranscriptStyles = """
       padding-left: calc(var(--horizontal-padding) + 48px);
     }
     .turn.delete-mode .tools,
-    .turn.delete-mode .pager { visibility: hidden; }
+    .turn.delete-mode .pager,
+    .turn.delete-mode .agent-footer { visibility: hidden; }
     .delete-selector {
       position: absolute;
       inset: 0;
@@ -154,31 +158,27 @@ internal val RoleplayTranscriptStyles = """
     .avatar-placeholder { width: 58%; height: 58%; fill: currentColor; }
     .pager {
       display: grid;
-      grid-template-columns: 14px minmax(24px, 1fr) 14px;
-      column-gap: 2px;
+      grid-template-columns: 12px minmax(0, 1fr) 12px;
+      column-gap: 0;
       align-items: center;
       width: var(--avatar-width);
       min-width: 0;
-      height: 18px;
+      height: 20px;
       color: var(--muted);
       text-shadow: none;
       white-space: nowrap;
       -webkit-text-size-adjust: none;
     }
     .pager button {
-      min-width: 0; width: 14px; height: 18px; padding: 0;
+      min-width: 0; width: 12px; height: 20px; padding: 0;
       display: inline-flex; align-items: center; justify-content: center;
     }
-    .pager button[data-action="opening-prev"]::before,
-    .pager button[data-action="opening-next"]::before {
-      content: ""; display: block; width: 6px; height: 6px;
-      border-left: 1.35px solid currentColor; border-bottom: 1.35px solid currentColor;
-    }
-    .pager button[data-action="opening-prev"]::before { transform: translateX(1px) rotate(45deg); }
-    .pager button[data-action="opening-next"]::before { transform: translateX(-1px) rotate(225deg); }
+    .pager button > .icon { width: 12px; height: 12px; flex: 0 0 12px; }
     .pager .pager-index {
-      width: 100%; min-width: 0; height: 18px; padding: 0;
-      font: 500 10px/16px sans-serif; letter-spacing: 0; text-align: center; white-space: nowrap;
+      width: 100%; min-width: 0; height: 20px; padding: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      font: 400 10px/20px sans-serif; font-variant-numeric: tabular-nums;
+      letter-spacing: 0; text-align: center; white-space: nowrap;
     }
     .pager button:disabled { color: var(--soft); opacity: .42; }
     .icon { display: block; overflow: visible; pointer-events: none; }
@@ -369,6 +369,7 @@ internal val RoleplayTranscriptStyles = """
     .image-menu button { display: flex; width: 100%; min-height: 42px; align-items: center; padding: 0 14px; border-radius: 8px; font-size: 15px; text-align: left; }
     .image-menu button:active { background: color-mix(in srgb, var(--body-text) 9%, transparent); }
     #empty { display: none; padding: 40px var(--horizontal-padding); color: var(--muted); text-align: center; text-shadow: none; }
+
     @media (prefers-reduced-motion: reduce) {
       .tool-strip { transition: none; }
       .pending-dot, .live-status-label, .thinking-mascot, .thinking-mascot *, .thinking-bars, .thinking-bars *,

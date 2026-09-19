@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
@@ -65,6 +66,7 @@ fun AppSearchField(
     fontSize: TextUnit = 15.sp,
     iconSize: Dp = 16.dp,
     inputModifier: Modifier = Modifier,
+    containerColor: Color = appearance.mobileSearchBg,
     clearContentDescription: String = "清除搜索",
     onSearch: (() -> Unit)? = null,
     onKeywordChange: (String) -> Unit,
@@ -78,7 +80,7 @@ fun AppSearchField(
         modifier = modifier
             .height(resolvedHeight)
             .clip(shape)
-            .background(appearance.mobileSearchBg),
+            .background(containerColor),
     ) {
         Row(
             modifier = Modifier

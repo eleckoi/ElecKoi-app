@@ -41,9 +41,9 @@ fun MobileTabBar(
 ) {
     val inactiveColor = lerp(appearance.mobileMuted, appearance.mobileSoft, 0.55f)
     val centerActionColor = appearance.mobileText
-    MobileRootGlassBar(
+    MobileRootChromeBar(
         appearance = appearance,
-        placement = MobileRootGlassPlacement.Bottom,
+        placement = MobileRootChromePlacement.Bottom,
         chromeColor = mobileTabBarContainerColor(appearance),
         modifier = Modifier.fillMaxWidth(),
     ) {

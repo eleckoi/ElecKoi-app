@@ -60,12 +60,14 @@ import com.eleckoi.android.engine.agent.api.AgentGrepVariablesTool
 import com.eleckoi.android.engine.agent.api.AgentReadSettingFilesTool
 import com.eleckoi.android.engine.agent.api.AgentReadVariablesTool
 import com.eleckoi.android.feature.chat.ui.blocks.image.UserInputImageGallery
+import com.eleckoi.android.feature.chat.ui.layout.resolveChatBubblePalette
 import com.eleckoi.android.engine.agent.api.AgentUpdatePlanTool
 import com.eleckoi.android.engine.agent.api.AgentUpdateRoleplayPlanTool
 import com.eleckoi.android.engine.agent.api.AgentWorkItemType
 import com.eleckoi.android.engine.agent.api.singleTypeOrNull
 import com.eleckoi.android.feature.conversation.timeline.model.CreationTimelineItem
 import com.eleckoi.android.feature.conversation.markdown.CreationMarkdownText
+import com.eleckoi.android.feature.preferences.ChatLayoutMode
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.foundation.design.components.DshTimelineIcons
 
@@ -113,6 +115,11 @@ fun UserTimelineItem(
     onEdit: (() -> Unit)? = null,
     onEditBoundsChanged: ((Rect?) -> Unit)? = null,
 ) {
+    val bubblePalette = resolveChatBubblePalette(
+        appearance = appearance,
+        layoutMode = ChatLayoutMode.Agent,
+        user = true,
+    )
     DisposableEffect(item.id, onEditBoundsChanged) {
         onDispose { onEditBoundsChanged?.invoke(null) }
     }
@@ -145,7 +152,7 @@ fun UserTimelineItem(
                                     bottomEnd = 5.dp,
                                 ),
                             )
-                            .background(appearance.mobileChatUserBg)
+                            .background(bubblePalette.container)
                             .then(
                                 if (onEdit != null) {
                                     Modifier
@@ -163,7 +170,7 @@ fun UserTimelineItem(
                                 },
                             )
                             .padding(horizontal = 18.dp, vertical = 11.dp),
-                        color = appearance.mobileText,
+                        color = bubblePalette.content,
                         fontSize = 14.sp,
                         lineHeight = 20.sp,
                     )

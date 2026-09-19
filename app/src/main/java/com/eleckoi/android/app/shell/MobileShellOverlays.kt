@@ -26,19 +26,13 @@ internal fun androidx.compose.foundation.layout.BoxScope.MobileShellOverlays(
     agentPresetImportSourceOpen: Boolean,
     onCloseAgentPresetImportSource: () -> Unit,
     charactersState: com.eleckoi.android.feature.characters.ui.CharactersUiState,
-    useCoverArtwork: Boolean,
     agentPresetState: com.eleckoi.android.feature.characters.presets.ui.AgentPresetUiState,
     appearance: com.eleckoi.android.foundation.design.AppearanceTheme,
-    moreOpen: Boolean,
-    user: com.eleckoi.android.feature.characters.model.UserProfile,
-    appUpdateAvailable: Boolean,
     navigationBarColor: Color,
-    shellViewModel: ShellViewModel,
     charactersViewModel: CharactersViewModel,
     agentPresetViewModel: AgentPresetViewModel,
     characterCardActions: CharacterCardDocumentActions,
     agentPresetDocumentActions: AgentPresetDocumentActions,
-    navigateTo: (MobileRoute) -> Unit,
 ) {
     if (characterImportSourceOpen) {
         CharacterImportSourceDialog(
@@ -164,40 +158,6 @@ internal fun androidx.compose.foundation.layout.BoxScope.MobileShellOverlays(
         )
     }
 
-    MobileMorePanel(
-        visible = moreOpen,
-        user = user,
-        characters = charactersState.characters,
-        useCoverArtwork = useCoverArtwork,
-        appearance = appearance,
-        appUpdateAvailable = appUpdateAvailable,
-        onClose = { shellViewModel.onIntent(ShellIntent.SetMoreOpen(false)) },
-        onOpenProfile = {
-            shellViewModel.onIntent(ShellIntent.SetMoreOpen(false))
-            navigateTo(MobileRoute.Profile)
-        },
-        onToggleAllCharactersExpanded = {
-            charactersViewModel.onIntent(CharactersIntent.ToggleAllCharactersExpanded)
-        },
-        onToggleCharacterGroupExpanded = { group ->
-            charactersViewModel.onIntent(CharactersIntent.ToggleCharacterGroupExpanded(group))
-        },
-        onOpenCharacter = { characterId ->
-            shellViewModel.onIntent(ShellIntent.SetMoreOpen(false))
-            charactersViewModel.onIntent(CharactersIntent.SelectCharacter(characterId))
-        },
-        onSaveCharacters = { payload ->
-            charactersViewModel.onIntent(CharactersIntent.SaveCharacterCollection(payload))
-        },
-        onOpenSettings = {
-            shellViewModel.onIntent(ShellIntent.SetMoreOpen(false))
-            navigateTo(MobileRoute.Settings)
-        },
-        onOpenUpdate = {
-            shellViewModel.onIntent(ShellIntent.SetMoreOpen(false))
-            navigateTo(MobileRoute.AppUpdate)
-        },
-    )
     ThreeButtonNavigationBarProtection(
         color = navigationBarColor,
         modifier = Modifier.align(Alignment.BottomCenter),

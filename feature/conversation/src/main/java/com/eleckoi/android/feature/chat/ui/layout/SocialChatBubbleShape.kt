@@ -11,6 +11,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 
 internal val SocialBubbleTailWidth = 6.dp
+internal val SocialBubbleCornerRadiusMax = 6.dp
 
 internal data class SocialBubbleGeometry(
     val body: Rect,
@@ -58,7 +59,7 @@ internal data class SocialChatBubbleShape(
     val roundTop: Boolean = true,
     val roundBottom: Boolean = true,
     val tailVisible: Boolean = true,
-    val tailCenterY: Dp = 20.dp,
+    val tailCenterY: Dp,
 ) : Shape {
     override fun createOutline(
         size: Size,

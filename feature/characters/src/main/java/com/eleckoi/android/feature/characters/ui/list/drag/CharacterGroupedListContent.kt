@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -49,6 +50,7 @@ internal fun CharacterGroupedListContent(
     draggingCharacter: CharacterDragState?,
     draggingGroup: CharacterGroupDragState?,
     appearance: AppearanceTheme,
+    containerColor: Color,
     useCoverArtwork: Boolean,
     onToggleGroup: (String) -> Unit,
     onOpenCharacter: (String) -> Unit,
@@ -69,8 +71,8 @@ internal fun CharacterGroupedListContent(
                         title = ALL_CHARACTERS,
                         count = 0,
                         appearance = appearance,
+                        containerColor = containerColor,
                         collapsed = false,
-                        trailingText = "长按拖拽排序",
                         clickEnabled = false,
                         onClick = {},
                     )
@@ -83,8 +85,8 @@ internal fun CharacterGroupedListContent(
                     title = ALL_CHARACTERS,
                     count = allCharacters.size,
                     appearance = appearance,
+                    containerColor = containerColor,
                     collapsed = trimmedKeyword.isBlank() && !effectiveListAllExpanded,
-                    trailingText = if (trimmedKeyword.isBlank()) "长按拖拽排序" else null,
                     clickEnabled = allHeaderClickEnabled,
                     onClick = { onToggleGroup(ALL_CHARACTERS) },
                 )
@@ -112,6 +114,7 @@ internal fun CharacterGroupedListContent(
                         title = group,
                         count = groupItems.size,
                         appearance = appearance,
+                        containerColor = containerColor,
                         collapsed = !groupExpanded,
                         modifier = Modifier.graphicsLayer { if (groupDragState != null) alpha = 0f },
                         onClick = { onToggleGroup(group) },
@@ -163,6 +166,7 @@ internal fun CharacterGroupedListContent(
             title = dragState.group,
             count = groupItems.size,
             appearance = appearance,
+            containerColor = containerColor,
             collapsed = true,
             modifier = Modifier
                 .zIndex(3f)

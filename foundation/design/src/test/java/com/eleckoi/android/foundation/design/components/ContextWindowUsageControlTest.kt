@@ -1,11 +1,26 @@
 package com.eleckoi.android.foundation.design.components
 
+import com.eleckoi.android.foundation.design.AppearanceTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ContextWindowUsageControlTest {
+    @Test
+    fun `context usage trigger opens and closes as a toggle`() {
+        assertTrue(toggleContextWindowUsageExpanded(expanded = false))
+        assertFalse(toggleContextWindowUsageExpanded(expanded = true))
+    }
+
+    @Test
+    fun `context popup keeps the theme hairline opacity`() {
+        val appearance = AppearanceTheme()
+
+        assertEquals(appearance.mobileLine, contextUsagePopupBorderColor(appearance))
+        assertTrue(contextUsagePopupBorderColor(appearance).alpha < 0.06f)
+    }
+
     @Test
     fun `native dsh usage is formatted like the pc inspector`() {
         val presentation = ContextWindowUsage(

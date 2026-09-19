@@ -10,6 +10,7 @@ import org.json.JSONObject
 
 internal fun RoleplayTranscriptModel.toBootstrapJson(): String = JSONObject().apply {
     put("sessionId", sessionId)
+    put("layoutMode", layoutMode)
     put("style", style.toJson())
     put("icons", roleplayTranscriptIconsJson())
     put("frontendRendererEnabled", frontendRendererEnabled)
@@ -78,6 +79,8 @@ private fun RoleplayTranscriptImage.toJson(): JSONObject = JSONObject().apply {
 internal fun RoleplayTranscriptStyle.toJson(): JSONObject = JSONObject().apply {
     put("text", text)
     put("bodyText", bodyText)
+    put("assistantText", assistantText)
+    put("userText", userText)
     put("italicText", italicText)
     put("underlineText", underlineText)
     put("quoteText", quoteText)
@@ -86,6 +89,8 @@ internal fun RoleplayTranscriptStyle.toJson(): JSONObject = JSONObject().apply {
     put("soft", soft)
     put("accent", accent)
     put("panel", panel)
+    put("assistantBubble", assistantBubble)
+    put("userBubble", userBubble)
     put("line", line)
     put("jumpSurface", jumpSurface)
     put("avatarBackground", avatarBackground)
@@ -103,6 +108,8 @@ internal fun RoleplayTranscriptStyle.toJson(): JSONObject = JSONObject().apply {
     put("horizontalPaddingPx", horizontalPaddingPx.toDouble())
     put("replySpacingPx", replySpacingPx.toDouble())
     put("turnSpacingPx", turnSpacingPx.toDouble())
+    put("bubbleRadiusPx", bubbleRadiusPx.toDouble())
+    put("assistantBubbleEnabled", assistantBubbleEnabled)
     put("cardPanel", cardPanel)
     put("codeForeground", codeForeground)
     put("codeBackground", codeBackground)

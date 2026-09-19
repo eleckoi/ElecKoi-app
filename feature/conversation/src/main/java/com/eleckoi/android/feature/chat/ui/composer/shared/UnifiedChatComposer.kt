@@ -1,6 +1,5 @@
 package com.eleckoi.android.feature.chat.ui.composer.shared
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
@@ -17,13 +16,9 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.changedToDownIgnoreConsumed
@@ -35,12 +30,11 @@ import androidx.compose.ui.unit.sp
 import com.eleckoi.android.feature.chat.model.ChatUserImageAttachment
 import com.eleckoi.android.feature.chat.ui.blocks.image.UserInputImageGallery
 import com.eleckoi.android.feature.chat.ui.composer.ChatPhosphorIconPaths
+import com.eleckoi.android.feature.chat.ui.composer.chatComposerPalette
+import com.eleckoi.android.feature.chat.ui.composer.chatComposerSurface
 import com.eleckoi.android.feature.chat.ui.composer.components.ComposerChip
 import com.eleckoi.android.feature.chat.ui.composer.components.ComposerCircleButton
 import com.eleckoi.android.feature.chat.ui.composer.components.ComposerPrimaryActionButton
-import com.eleckoi.android.feature.chat.ui.layout.ChatGlassCornerRadius
-import com.eleckoi.android.feature.chat.ui.layout.ChatGlassPanel
-import com.eleckoi.android.feature.chat.ui.layout.chatGlassColors
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.foundation.design.components.ContextWindowUsage
 import com.eleckoi.android.foundation.design.components.ContextWindowUsageControl
@@ -56,23 +50,16 @@ fun UnifiedChatComposerSurface(
     menuContent: (@Composable BoxScope.() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val glassColors = chatGlassColors(appearance)
+    val palette = chatComposerPalette(appearance.isDark)
     Column(modifier = modifier) {
         Box(modifier = Modifier.fillMaxWidth()) {
-            ChatGlassPanel(
-                cornerRadius = ChatGlassCornerRadius,
-                colors = glassColors,
-                refractBackdrop = false,
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .focusDismissInputRegion(),
+                    .focusDismissInputRegion()
+                    .chatComposerSurface(palette),
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 12.dp, end = 12.dp, top = 11.dp, bottom = 10.dp),
-                    content = content,
-                )
+                content()
             }
             menuContent?.invoke(this)
         }
@@ -81,7 +68,7 @@ fun UnifiedChatComposerSurface(
 
 /** Applies the shared composer's screen placement while keeping placement owned by its caller. */
 fun Modifier.unifiedChatComposerPlacement(): Modifier =
-    fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = 12.dp)
+    fillMaxWidth().padding(horizontal = 12.dp)
 
 // The shared input and action row. Screen-specific menu commands never alter these measurements.
 @Composable
@@ -107,20 +94,22 @@ fun ColumnScope.UnifiedChatComposerBody(
     onDismissMore: () -> Unit,
 ) {
     val hasContent = input.trim().isNotEmpty() || inputImages.isNotEmpty()
-    var inputFocused by remember { mutableStateOf(false) }
+    val palette = chatComposerPalette(appearance.isDark)
     val composerInputTextStyle = TextStyle(
-        color = appearance.mobileText,
-        fontSize = 16.sp,
-        lineHeight = 22.sp,
+        color = palette.content,
+        fontSize = 17.sp,
+        lineHeight = 26.sp,
     )
     if (inputImages.isNotEmpty()) {
-        UserInputImageGallery(
-            images = inputImages,
-            appearance = appearance,
-            compact = true,
-            onRemove = onRemoveImage,
-        )
-        Spacer(modifier = Modifier.height(10.dp))
+        Box(modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 12.dp)) {
+            UserInputImageGallery(
+                images = inputImages,
+                appearance = appearance,
+                compact = true,
+                onRemove = onRemoveImage,
+            )
+        }
+        Spacer(modifier = Modifier.height(4.dp))
     }
     BasicTextField(
         value = input,
@@ -131,9 +120,13 @@ fun ColumnScope.UnifiedChatComposerBody(
         enabled = inputEnabled,
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 22.dp)
-            .padding(horizontal = 2.dp)
-            .onFocusChanged { inputFocused = it.isFocused }
+            .heightIn(min = 26.dp)
+            .padding(
+                start = 16.dp,
+                end = 16.dp,
+                top = if (inputImages.isEmpty()) 12.dp else 0.dp,
+                bottom = 12.dp,
+            )
             .pointerInput(moreToolsOpen, onDismissMore) {
                 if (!moreToolsOpen) return@pointerInput
                 awaitPointerEventScope {
@@ -147,7 +140,7 @@ fun ColumnScope.UnifiedChatComposerBody(
             },
         minLines = 1,
         maxLines = 5,
-        cursorBrush = SolidColor(appearance.mobileBlue),
+        cursorBrush = SolidColor(palette.sendContainer),
         textStyle = composerInputTextStyle,
         decorationBox = { innerTextField ->
             Box(
@@ -156,8 +149,8 @@ fun ColumnScope.UnifiedChatComposerBody(
             ) {
                 if (input.isEmpty()) {
                     Text(
-                        text = "发消息…",
-                        style = composerInputTextStyle.copy(color = appearance.mobileMuted),
+                        text = "发消息或按住说话",
+                        style = composerInputTextStyle.copy(color = palette.placeholder),
                     )
                 }
                 innerTextField()
@@ -165,11 +158,10 @@ fun ColumnScope.UnifiedChatComposerBody(
         },
     )
 
-    Spacer(modifier = Modifier.height(13.dp))
-
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(7.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 12.dp, top = 6.dp, end = 12.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ComposerCircleButton(
@@ -183,7 +175,7 @@ fun ColumnScope.UnifiedChatComposerBody(
         ComposerChip(
             appearance = appearance,
             onClick = if (modelSelectorEnabled) onOpenModelPicker else null,
-            modifier = Modifier.widthIn(min = 112.dp, max = 148.dp),
+            modifier = Modifier.widthIn(min = 104.dp, max = 128.dp),
         ) {
             ComposerModelLabel(
                 modelLabel = modelLabel,
@@ -194,11 +186,12 @@ fun ColumnScope.UnifiedChatComposerBody(
         ContextWindowUsageControl(
             usage = contextWindowUsage,
             appearance = appearance,
+            modifier = Modifier.size(36.dp),
         )
+        Spacer(modifier = Modifier.width(8.dp))
         ComposerPrimaryActionButton(
             isSending = isSending,
             stopEnabled = stopEnabled,
-            inputFocused = inputFocused,
             hasText = hasContent,
             submitEnabled = submitEnabled,
             voiceInputEnabled = inputEnabled,
@@ -215,9 +208,10 @@ private fun ComposerModelLabel(
     modelLabel: String,
     appearance: AppearanceTheme,
 ) {
+    val palette = chatComposerPalette(appearance.isDark)
     val iconProviderId = remember(modelLabel) { detectKnownModelProviderId(modelLabel) }
     Row(
-        modifier = Modifier.padding(horizontal = 10.dp),
+        modifier = Modifier.padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (iconProviderId != null) {
@@ -225,14 +219,14 @@ private fun ComposerModelLabel(
                 providerId = iconProviderId,
                 initials = iconProviderId.take(1).uppercase(),
                 appearance = appearance,
-                modifier = Modifier.size(17.dp),
+                modifier = Modifier.size(16.dp),
             )
-            Spacer(modifier = Modifier.width(6.dp))
+            Spacer(modifier = Modifier.width(5.dp))
         }
         Text(
             text = modelLabel.composerShortName(),
-            color = appearance.mobileText,
-            fontSize = 12.sp,
+            color = palette.content,
+            fontSize = 14.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )

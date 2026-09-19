@@ -3,6 +3,7 @@ package com.eleckoi.android.feature.chat.ui.roleplay.web.document.runtime
 internal val RoleplayTranscriptInteraction = """    const onViewportResize = () => {
       const followEnd = followsTail() || isAtPhysicalEnd();
       captureGeometryIntent(followEnd);
+      refreshImageGalleryGeometry();
       if (followEnd) {
         setScrollMode(ScrollMode.VIEWPORT_RESIZE, 'viewport-resize');
         state.forceTail = true;

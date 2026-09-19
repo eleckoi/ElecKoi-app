@@ -10,6 +10,7 @@ import com.eleckoi.android.feature.chat.model.ChatImageAttachment
 import com.eleckoi.android.feature.chat.model.ChatImageStatus
 import com.eleckoi.android.feature.chat.model.ChatMessage
 import com.eleckoi.android.feature.chat.model.ChatToolCallRecord
+import com.eleckoi.android.feature.chat.model.ChatUserImageAttachment
 import com.eleckoi.android.feature.chat.model.MessageRole
 import com.eleckoi.android.feature.chat.model.content.ToolCallState
 import com.eleckoi.android.feature.chat.roleplay.actions.GenerateImageActionName
@@ -17,6 +18,29 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class ChatRoomMapperTest {
+    @Test
+    fun `room restores user image dimensions used to reserve transcript height`() {
+        val user = ChatMessage(
+            id = "user-image",
+            role = MessageRole.User,
+            content = "看图",
+            inputImageAttachments = listOf(
+                ChatUserImageAttachment(
+                    id = "input-1",
+                    localPath = "D:/images/input-1.png",
+                    mediaType = "image/png",
+                    imageWidth = 832,
+                    imageHeight = 1216,
+                ),
+            ),
+        )
+
+        val restored = user.toLedgerMessage().toChatMessage().inputImageAttachments.single()
+
+        assertEquals(832, restored.imageWidth)
+        assertEquals(1216, restored.imageHeight)
+    }
+
     @Test
     fun `room session metadata accepts one indexed ledger page`() {
         val first = ChatMessage(
