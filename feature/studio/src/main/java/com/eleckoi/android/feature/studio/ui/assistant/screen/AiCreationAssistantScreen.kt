@@ -95,6 +95,7 @@ internal fun AiCreationAssistantScreen(
     var showModelPicker by rememberSaveable { mutableStateOf(false) }
     var showCharacterRoots by rememberSaveable { mutableStateOf(false) }
     var showTools by rememberSaveable { mutableStateOf(false) }
+    var showTrajectory by rememberSaveable(state.conversation?.id) { mutableStateOf(false) }
     var drawerOpen by rememberSaveable { mutableStateOf(false) }
     var composerOverlayHeightPx by remember { mutableStateOf(0) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -360,7 +361,8 @@ internal fun AiCreationAssistantScreen(
                                             !state.isRestoringCheckpoint &&
                                             !state.isPreparingInputImages,
                                         modelLabel = state.modelLabel,
-                                        contextWindowUsage = state.contextWindowUsage,
+                                        generationMetrics = state.generationStats.metrics,
+                                        contextWindowUsage = state.generationStats.contextWindowUsage,
                                         permissionMode = state.permissionMode,
                                         isRunning = state.isRunning,
                                         canRegenerate = state.timeline.any {
@@ -396,6 +398,7 @@ internal fun AiCreationAssistantScreen(
                                         onOpenCommand = {
                                             showSnackbar("命令入口将在后续版本继续设计")
                                         },
+                                        onOpenTrajectory = { showTrajectory = true },
                                         onRegenerate = {
                                             viewModel.onIntent(AiCreationAssistantIntent.RegenerateLatest)
                                         },
@@ -454,6 +457,8 @@ internal fun AiCreationAssistantScreen(
             onDismissModelPicker = { showModelPicker = false },
             showCharacterRoots = showCharacterRoots,
             onDismissCharacterRoots = { showCharacterRoots = false },
+            showTrajectory = showTrajectory,
+            onDismissTrajectory = { showTrajectory = false },
         )
     }
 

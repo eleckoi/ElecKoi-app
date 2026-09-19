@@ -3,10 +3,12 @@ package com.eleckoi.android.feature.studio.ui.assistant.screen.overlay
 import androidx.compose.runtime.Composable
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.feature.chat.ui.sheets.EditMessageSheet
+import com.eleckoi.android.feature.chat.ui.trajectory.DshTrajectoryDialog
 import com.eleckoi.android.feature.modelconfig.ui.modelpicker.ModelPickerSheet
 import com.eleckoi.android.feature.studio.ui.assistant.AiCreationAssistantIntent
 import com.eleckoi.android.feature.studio.ui.assistant.AiCreationAssistantUiState
 import com.eleckoi.android.feature.studio.ui.assistant.AiCreationAssistantViewModel
+import com.eleckoi.android.feature.studio.ui.assistant.latestCreationRuntimeThreadId
 import com.eleckoi.android.feature.studio.ui.assistant.composer.CreatorCharacterRootsSheet
 
 /** Hosts modal surfaces so the main screen remains focused on navigation and content layout. */
@@ -19,6 +21,8 @@ internal fun CreationAssistantOverlays(
     onDismissModelPicker: () -> Unit,
     showCharacterRoots: Boolean,
     onDismissCharacterRoots: () -> Unit,
+    showTrajectory: Boolean,
+    onDismissTrajectory: () -> Unit,
 ) {
     if (showModelPicker) {
         ModelPickerSheet(
@@ -72,6 +76,18 @@ internal fun CreationAssistantOverlays(
                 },
             )
         }
+    }
+    if (showTrajectory) {
+        val runtimeThreadId = state.generationStats.runtimeThreadId.ifBlank {
+            state.timeline.latestCreationRuntimeThreadId()
+        }
+        DshTrajectoryDialog(
+            runtimeThreadId = runtimeThreadId,
+            isSending = state.isRunning,
+            appearance = appearance,
+            load = { options -> viewModel.loadDshTrajectory(runtimeThreadId, options) },
+            onDismiss = onDismissTrajectory,
+        )
     }
     state.editingUserMessage?.let { message ->
         EditMessageSheet(

@@ -40,6 +40,7 @@ import com.eleckoi.android.feature.chat.ui.cache.ChatDeletionCaches
 import com.eleckoi.android.feature.chat.data.GenerationAttemptRepository
 import com.eleckoi.android.feature.chat.model.ChatDraft
 import com.eleckoi.android.feature.chat.model.ChatListItem
+import com.eleckoi.android.feature.chat.model.ChatSessionGenerationStats
 import com.eleckoi.android.feature.settings.data.appearance.AppearanceRepository
 import com.eleckoi.android.feature.preferences.UiPreferencesRepository
 import com.eleckoi.android.feature.preferences.NewCharacterBackground
@@ -112,6 +113,9 @@ internal class ElecKoiServiceGraph(
     private val generationAttempts = GenerationAttemptRepository(database)
     private val chatGenerationStats = ChatGenerationStatsStore(
         File(context.filesDir, "chat/sessions"),
+    )
+    private val creatorGenerationStats = ChatGenerationStatsStore(
+        File(context.filesDir, "creator/sessions"),
     )
 
     internal fun setDshModelCapabilityResolver(
@@ -327,4 +331,18 @@ internal class ElecKoiServiceGraph(
     fun chatList(): List<ChatListItem> = chatService.chatList()
 
     suspend fun refreshChatDraft(sessionId: String): ChatDraft = chatService.refreshChatDraft(sessionId)
+
+    fun loadCreatorGenerationStats(
+        conversationId: String,
+        runtimeThreadId: String,
+    ): ChatSessionGenerationStats = creatorGenerationStats.load(conversationId, runtimeThreadId)
+
+    fun persistCreatorGenerationStats(
+        conversationId: String,
+        stats: ChatSessionGenerationStats,
+    ) = creatorGenerationStats.persist(conversationId, stats)
+
+    fun deleteCreatorGenerationStats(conversationId: String) {
+        creatorGenerationStats.deleteConversation(conversationId)
+    }
 }

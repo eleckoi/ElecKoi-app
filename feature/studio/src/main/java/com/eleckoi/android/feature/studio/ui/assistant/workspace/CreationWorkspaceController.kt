@@ -3,7 +3,10 @@ package com.eleckoi.android.feature.studio.ui.assistant.workspace
 import com.eleckoi.android.engine.workspace.model.CreatorWorkspace
 import com.eleckoi.android.feature.studio.api.CreatorAssistantService
 import com.eleckoi.android.feature.conversation.timeline.model.CreationTimelineItem
+import com.eleckoi.android.feature.chat.model.ChatSessionGenerationStats
 import com.eleckoi.android.feature.studio.ui.assistant.AiCreationAssistantUiState
+import com.eleckoi.android.feature.studio.ui.assistant.latestCreationRuntimeThreadId
+import com.eleckoi.android.feature.studio.ui.assistant.session.CreationGenerationStatsController
 import com.eleckoi.android.feature.studio.ui.assistant.session.creationAssistantMessage
 import com.eleckoi.android.feature.studio.ui.assistant.timeline.CreationHistoryController
 import com.eleckoi.android.feature.studio.ui.assistant.timeline.replaceWorkspace
@@ -33,6 +36,7 @@ internal class CreationWorkspaceController(
     private val updateState: ((AiCreationAssistantUiState) -> AiCreationAssistantUiState) -> Unit,
     private val prewarmTimeline: (String, List<CreationTimelineItem>) -> Unit,
     private val persistCurrentConversationSnapshot: suspend () -> Unit,
+    private val generationStats: CreationGenerationStatsController,
 ) {
     private var initialized = false
     private var loadJob: Job? = null
@@ -71,7 +75,7 @@ internal class CreationWorkspaceController(
                         modelChoices = result.modelChoices,
                         permissionMode = result.workspace?.permissionMode
                             ?: com.eleckoi.android.engine.agent.api.AgentPermissionMode.AskForApproval,
-                        contextWindowUsage = null,
+                        generationStats = ChatSessionGenerationStats(),
                         timeline = initialTimeline,
                         historyHasMore = false,
                         historyPageLoading = result.conversation != null,
@@ -79,6 +83,11 @@ internal class CreationWorkspaceController(
                     )
                 }
                 result.conversation?.let { conversation ->
+                    generationStats.prepareConversation(conversation.id)
+                    generationStats.restore(
+                        conversation.id,
+                        initialTimeline.latestCreationRuntimeThreadId(),
+                    )
                     prewarmTimeline(conversation.id, initialTimeline)
                     result.workspace?.let { workspace ->
                         historyController.loadInitial(workspace.id, conversation.id)
@@ -236,6 +245,7 @@ internal class CreationWorkspaceController(
         cancelSessionTurn()
         val previousSessionShutdown = detachSession()
         val projectChanged = state().workspace?.id != workspaceId
+        val selectedTimeline = selectedConversation.timeline.toUiTimeline()
         updateState { current ->
             val selectedPermissionMode = if (current.workspace?.id == workspaceId) {
                 current.permissionMode
@@ -250,11 +260,11 @@ internal class CreationWorkspaceController(
                 projectDirectory = if (projectChanged) null else current.projectDirectory,
                 files = if (projectChanged) emptyList() else current.files,
                 previewEntryFile = if (projectChanged) null else current.previewEntryFile,
-                timeline = selectedConversation.timeline.toUiTimeline(),
+                timeline = selectedTimeline,
                 historyHasMore = false,
                 historyPageLoading = true,
                 permissionMode = selectedPermissionMode,
-                contextWindowUsage = null,
+                generationStats = ChatSessionGenerationStats(),
                 isLoading = projectChanged,
                 isRunning = false,
                 pendingApprovals = emptyList(),
@@ -265,8 +275,13 @@ internal class CreationWorkspaceController(
                 fileDraftDirty = false,
             )
         }
+        generationStats.prepareConversation(conversationId)
         loadJob = scope.launch {
             previousSessionShutdown?.join()
+            generationStats.restore(
+                conversationId,
+                selectedTimeline.latestCreationRuntimeThreadId(),
+            )
             runCatching {
                 val updated = creatorService.selectCreatorConversation(workspaceId, conversationId)
                 val details = if (projectChanged) fileEditingController.loadWorkspaceDetails(updated) else null
@@ -334,6 +349,7 @@ internal class CreationWorkspaceController(
         scope.launch {
             runCatching { creatorService.deleteCreatorConversation(workspaceId, conversationId) }
                 .onSuccess { updated ->
+                    generationStats.deleteConversation(conversationId)
                     historyController.removeConversation(conversationId)
                     val next = updated.conversations.firstOrNull { it.id == updated.activeConversationId }
                     updateState { current ->
@@ -343,12 +359,22 @@ internal class CreationWorkspaceController(
                             conversation = if (deletingActive) next else current.conversation,
                             timeline = if (deletingActive) next?.timeline?.toUiTimeline().orEmpty() else current.timeline,
                             pendingApprovals = if (deletingActive) emptyList() else current.pendingApprovals,
-                            contextWindowUsage = if (deletingActive) null else current.contextWindowUsage,
+                            generationStats = if (deletingActive) {
+                                ChatSessionGenerationStats()
+                            } else {
+                                current.generationStats
+                            },
                             historyHasMore = if (deletingActive) false else current.historyHasMore,
                             historyPageLoading = if (deletingActive) next != null else current.historyPageLoading,
                         )
                     }
                     if (deletingActive && next != null) {
+                        val nextTimeline = next.timeline.toUiTimeline()
+                        generationStats.prepareConversation(next.id)
+                        generationStats.restore(
+                            next.id,
+                            nextTimeline.latestCreationRuntimeThreadId(),
+                        )
                         historyController.loadInitial(updated.id, next.id)
                     }
                 }
@@ -366,10 +392,16 @@ internal class CreationWorkspaceController(
             return
         }
         val deletingCurrent = state().workspace?.id == workspaceId
+        val deletingConversationIds = state().workspaces
+            .firstOrNull { it.id == workspaceId }
+            ?.conversations
+            .orEmpty()
+            .map { it.id }
         if (deletingCurrent) detachSession()
         scope.launch {
             runCatching { creatorService.deleteCreatorWorkspace(workspaceId) }
                 .onSuccess {
+                    generationStats.deleteConversations(deletingConversationIds)
                     val remaining = state().workspaces.filterNot { it.id == workspaceId }
                     val nextPinned = state().pinnedWorkspaceIds - workspaceId
                     val nextExpansionOverrides = state().workspaceExpansionOverrides - workspaceId
@@ -386,7 +418,11 @@ internal class CreationWorkspaceController(
                             files = if (deletingCurrent) emptyList() else current.files,
                             previewEntryFile = if (deletingCurrent) null else current.previewEntryFile,
                             timeline = if (deletingCurrent) emptyList() else current.timeline,
-                            contextWindowUsage = if (deletingCurrent) null else current.contextWindowUsage,
+                            generationStats = if (deletingCurrent) {
+                                ChatSessionGenerationStats()
+                            } else {
+                                current.generationStats
+                            },
                         )
                     }
                     if (deletingCurrent) {

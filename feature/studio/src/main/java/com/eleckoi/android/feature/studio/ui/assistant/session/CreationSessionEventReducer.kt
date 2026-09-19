@@ -4,7 +4,6 @@ import com.eleckoi.android.engine.agent.api.AgentSessionEvent
 import com.eleckoi.android.engine.agent.api.AgentWorkItemType
 import com.eleckoi.android.feature.studio.ui.assistant.AiCreationAssistantUiState
 import com.eleckoi.android.feature.studio.ui.assistant.CreationApprovalRequest
-import com.eleckoi.android.feature.studio.ui.assistant.CreationContextWindowUsage
 import com.eleckoi.android.feature.studio.ui.assistant.approval.CreationApprovalQueueReducer
 import com.eleckoi.android.feature.conversation.timeline.CreationAgentTimelineReducer
 
@@ -103,46 +102,6 @@ internal class CreationSessionEventReducer {
                 ),
                 timeline = CreationAgentTimelineReducer.apply(state.timeline, event),
             )
-        }
-        is AgentSessionEvent.TokenUsageUpdated -> state.copy(
-            contextWindowUsage = CreationContextWindowUsage(
-                threadId = event.threadId,
-                turnId = event.turnId,
-                latestTokens = (
-                    event.last.inputTokens +
-                        event.last.cacheReadTokens +
-                        event.last.cacheWriteTokens
-                    ).coerceAtLeast(0L),
-                totalTokens = event.total.totalTokens.coerceAtLeast(0L),
-                modelContextWindow = event.modelContextWindow
-                    ?: state.contextWindowUsage?.modelContextWindow,
-                systemTokens = state.contextWindowUsage?.systemTokens,
-                toolsTokens = state.contextWindowUsage?.toolsTokens,
-                messageTokens = state.contextWindowUsage?.messageTokens,
-            ),
-        )
-        is AgentSessionEvent.ContextWindowUpdated -> {
-            val latestTokens = event.projectedTokens ?: event.pressureTokens
-            if (latestTokens == null) {
-                state
-            } else {
-                state.copy(
-                    contextWindowUsage = CreationContextWindowUsage(
-                        threadId = event.threadId,
-                        turnId = event.turnId,
-                        latestTokens = latestTokens,
-                        totalTokens = state.contextWindowUsage?.totalTokens ?: 0L,
-                        modelContextWindow = event.modelContextWindow
-                            ?: state.contextWindowUsage?.modelContextWindow,
-                        systemTokens = event.systemTokens
-                            ?: state.contextWindowUsage?.systemTokens,
-                        toolsTokens = event.toolsTokens
-                            ?: state.contextWindowUsage?.toolsTokens,
-                        messageTokens = event.messageTokens
-                            ?: state.contextWindowUsage?.messageTokens,
-                    ),
-                )
-            }
         }
         else -> state.copy(
             timeline = CreationAgentTimelineReducer.apply(state.timeline, event),

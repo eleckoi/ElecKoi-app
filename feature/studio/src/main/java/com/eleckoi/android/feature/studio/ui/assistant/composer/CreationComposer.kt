@@ -10,7 +10,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Route
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -20,6 +23,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -30,9 +34,11 @@ import com.eleckoi.android.feature.chat.ui.composer.shared.UnifiedChatComposerBo
 import com.eleckoi.android.feature.chat.ui.composer.shared.UnifiedChatComposerSurface
 import com.eleckoi.android.feature.chat.ui.composer.shared.unifiedChatComposerPlacement
 import com.eleckoi.android.feature.chat.ui.composer.ChatComposerMenuSurface
+import com.eleckoi.android.feature.chat.ui.composer.ChatGenerationStatsLine
 import com.eleckoi.android.feature.conversation.composer.AgentPermissionModeControl
+import com.eleckoi.android.feature.chat.model.ChatContextWindowUsage
+import com.eleckoi.android.feature.chat.model.ChatGenerationMetrics
 import com.eleckoi.android.feature.chat.model.ChatUserImageAttachment
-import com.eleckoi.android.feature.studio.ui.assistant.CreationContextWindowUsage
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.foundation.design.components.AboveAnchorPopupPositionProvider
 import com.eleckoi.android.foundation.design.components.AppIconPaths
@@ -47,7 +53,8 @@ internal fun CreationComposer(
     inputEnabled: Boolean,
     sendEnabled: Boolean,
     modelLabel: String,
-    contextWindowUsage: CreationContextWindowUsage?,
+    generationMetrics: ChatGenerationMetrics,
+    contextWindowUsage: ChatContextWindowUsage?,
     permissionMode: AgentPermissionMode,
     isRunning: Boolean,
     canRegenerate: Boolean,
@@ -60,6 +67,7 @@ internal fun CreationComposer(
     onRoleSelector: () -> Unit,
     onOpenTools: () -> Unit,
     onOpenCommand: () -> Unit,
+    onOpenTrajectory: () -> Unit,
     onRegenerate: () -> Unit,
     onVoiceInput: () -> Unit,
     onSend: () -> Unit,
@@ -71,59 +79,68 @@ internal fun CreationComposer(
         if (!inputEnabled) menuOpen = false
     }
 
-    UnifiedChatComposerSurface(
-        appearance = appearance,
+    Column(
         modifier = Modifier
             .navigationBarsPadding()
-            .unifiedChatComposerPlacement()
             .padding(bottom = 10.dp),
-        menuContent = {
-            CreationComposerMenu(
-                expanded = menuOpen,
-                permissionMode = permissionMode,
-                permissionEnabled = inputEnabled && !isRunning,
-                imageEnabled = inputEnabled && !isRunning && !isPreparingImages,
-                canRegenerate = canRegenerate && !isRunning,
-                appearance = appearance,
-                onDismiss = { menuOpen = false },
-                onRoleSelector = onRoleSelector,
-                onAddImage = onAddImage,
-                onOpenTools = onOpenTools,
-                onOpenCommand = onOpenCommand,
-                onPermissionModeChange = onPermissionModeChange,
-                onRegenerate = onRegenerate,
-            )
-        },
     ) {
-        UnifiedChatComposerBody(
-            input = value,
-            inputImages = inputImages,
-            onInputChange = onChange,
-            onRemoveImage = onRemoveImage,
-            inputEnabled = inputEnabled,
-            isSending = isRunning,
-            stopEnabled = isRunning,
-            submitEnabled = sendEnabled,
-            modelLabel = modelLabel,
-            modelSelectorEnabled = !isRunning,
-            moreToolsOpen = menuOpen,
+        UnifiedChatComposerSurface(
             appearance = appearance,
-            contextWindowUsage = contextWindowUsage?.let { usage ->
-                ContextWindowUsage(
-                    latestTokens = usage.latestTokens,
-                    totalTokens = usage.totalTokens,
-                    modelContextWindow = usage.modelContextWindow,
-                    systemTokens = usage.systemTokens,
-                    toolsTokens = usage.toolsTokens,
-                    messageTokens = usage.messageTokens,
+            modifier = Modifier.unifiedChatComposerPlacement(),
+            menuContent = {
+                CreationComposerMenu(
+                    expanded = menuOpen,
+                    permissionMode = permissionMode,
+                    permissionEnabled = inputEnabled && !isRunning,
+                    imageEnabled = inputEnabled && !isRunning && !isPreparingImages,
+                    canRegenerate = canRegenerate && !isRunning,
+                    appearance = appearance,
+                    onDismiss = { menuOpen = false },
+                    onRoleSelector = onRoleSelector,
+                    onAddImage = onAddImage,
+                    onOpenTools = onOpenTools,
+                    onOpenCommand = onOpenCommand,
+                    onOpenTrajectory = onOpenTrajectory,
+                    onPermissionModeChange = onPermissionModeChange,
+                    onRegenerate = onRegenerate,
                 )
             },
-            onSubmit = onSend,
-            onStop = onStop,
-            onVoiceInput = onVoiceInput,
-            onOpenModelPicker = onModelSelector,
-            onToggleMore = { menuOpen = !menuOpen },
-            onDismissMore = { menuOpen = false },
+        ) {
+            UnifiedChatComposerBody(
+                input = value,
+                inputImages = inputImages,
+                onInputChange = onChange,
+                onRemoveImage = onRemoveImage,
+                inputEnabled = inputEnabled,
+                isSending = isRunning,
+                stopEnabled = isRunning,
+                submitEnabled = sendEnabled,
+                modelLabel = modelLabel,
+                modelSelectorEnabled = !isRunning,
+                moreToolsOpen = menuOpen,
+                appearance = appearance,
+                contextWindowUsage = contextWindowUsage?.let { usage ->
+                    ContextWindowUsage(
+                        latestTokens = usage.latestTokens,
+                        totalTokens = usage.totalTokens,
+                        modelContextWindow = usage.modelContextWindow,
+                        systemTokens = usage.systemTokens,
+                        toolsTokens = usage.toolsTokens,
+                        messageTokens = usage.messageTokens,
+                    )
+                },
+                onSubmit = onSend,
+                onStop = onStop,
+                onVoiceInput = onVoiceInput,
+                onOpenModelPicker = onModelSelector,
+                onToggleMore = { menuOpen = !menuOpen },
+                onDismissMore = { menuOpen = false },
+            )
+        }
+        ChatGenerationStatsLine(
+            metrics = generationMetrics,
+            appearance = appearance,
+            enabled = true,
         )
     }
 }
@@ -140,6 +157,7 @@ private fun CreationComposerMenu(
     onAddImage: () -> Unit,
     onOpenTools: () -> Unit,
     onOpenCommand: () -> Unit,
+    onOpenTrajectory: () -> Unit,
     onPermissionModeChange: (AgentPermissionMode) -> Unit,
     onRegenerate: () -> Unit,
 ) {
@@ -191,6 +209,20 @@ private fun CreationComposerMenu(
                     onDismiss = onDismiss,
                     onClick = onOpenCommand,
                 )
+                CreationMenuAction(
+                    label = "轨迹",
+                    appearance = appearance,
+                    onDismiss = onDismiss,
+                    leadingContent = { color ->
+                        Icon(
+                            imageVector = Icons.Outlined.Route,
+                            contentDescription = null,
+                            tint = color,
+                            modifier = Modifier.width(17.dp).height(17.dp),
+                        )
+                    },
+                    onClick = onOpenTrajectory,
+                )
                 HorizontalDivider(color = appearance.mobileLine)
                 Box(
                     modifier = Modifier
@@ -228,9 +260,10 @@ private fun CreationComposerMenu(
 @Composable
 private fun CreationMenuAction(
     label: String,
-    paths: List<String>,
     appearance: AppearanceTheme,
     onDismiss: () -> Unit,
+    paths: List<String> = emptyList(),
+    leadingContent: (@Composable (Color) -> Unit)? = null,
     enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
@@ -245,12 +278,16 @@ private fun CreationMenuAction(
             )
         },
         leadingIcon = {
-            StrokeSvgIcon(
-                paths = paths,
-                color = color,
-                iconSize = 17.dp,
-                strokeWidth = 1.85f,
-            )
+            if (leadingContent != null) {
+                leadingContent(color)
+            } else {
+                StrokeSvgIcon(
+                    paths = paths,
+                    color = color,
+                    iconSize = 17.dp,
+                    strokeWidth = 1.85f,
+                )
+            }
         },
         enabled = enabled,
         contentPadding = PaddingValues(horizontal = 10.dp),

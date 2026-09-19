@@ -74,7 +74,7 @@ internal class CreationModelController(
                 selectedModelId = choice.id,
                 modelLabel = choice.label,
                 modelChoices = choices,
-                contextWindowUsage = null,
+                generationStats = it.generationStats.copy(contextWindowUsage = null),
             )
         }
         scope.launch {

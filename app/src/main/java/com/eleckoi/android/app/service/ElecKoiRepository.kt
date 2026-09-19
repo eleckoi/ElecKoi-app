@@ -17,6 +17,7 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.api.Set
 import com.eleckoi.android.feature.characters.modes.story.variables.api.VariableConfigService
 import com.eleckoi.android.feature.characters.transfer.api.CharacterTransferService
 import com.eleckoi.android.feature.chat.api.ChatService
+import com.eleckoi.android.feature.chat.model.ChatSessionGenerationStats
 import com.eleckoi.android.feature.settings.api.AppearanceService
 import com.eleckoi.android.feature.modelconfig.api.ModelService
 import com.eleckoi.android.feature.settings.api.ProfileService
@@ -128,6 +129,20 @@ class ElecKoiRepository private constructor(
     fun chatList() = graph.chatList()
 
     suspend fun refreshChatDraft(sessionId: String) = graph.refreshChatDraft(sessionId)
+
+    internal fun loadCreatorGenerationStats(
+        conversationId: String,
+        runtimeThreadId: String,
+    ): ChatSessionGenerationStats = graph.loadCreatorGenerationStats(conversationId, runtimeThreadId)
+
+    internal fun persistCreatorGenerationStats(
+        conversationId: String,
+        stats: ChatSessionGenerationStats,
+    ) = graph.persistCreatorGenerationStats(conversationId, stats)
+
+    internal fun deleteCreatorGenerationStats(conversationId: String) {
+        graph.deleteCreatorGenerationStats(conversationId)
+    }
 
     override fun saveModelConfig(config: ModelConfig): ModelConfig {
         return graph.modelService.saveModelConfig(config)

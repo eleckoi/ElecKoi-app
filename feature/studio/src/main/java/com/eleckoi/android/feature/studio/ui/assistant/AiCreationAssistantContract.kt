@@ -19,6 +19,7 @@ import com.eleckoi.android.engine.workspace.runtime.model.LocalRuntimeState
 import com.eleckoi.android.engine.workspace.runtime.model.RuntimeInstallationState
 import com.eleckoi.android.engine.generation.model.ModelConfig
 import com.eleckoi.android.feature.characters.model.CharacterSlot
+import com.eleckoi.android.feature.chat.model.ChatSessionGenerationStats
 import com.eleckoi.android.feature.chat.model.ChatUserImageAttachment
 import com.eleckoi.android.feature.conversation.timeline.model.CreationPendingSteerInput
 import com.eleckoi.android.feature.conversation.timeline.model.CreationTimelineItem
@@ -43,17 +44,6 @@ data class CreationApprovalRequest(
 data class CreationModelChoice(
     val id: String,
     val label: String,
-)
-
-data class CreationContextWindowUsage(
-    val threadId: String,
-    val turnId: String?,
-    val latestTokens: Long,
-    val totalTokens: Long,
-    val modelContextWindow: Long?,
-    val systemTokens: Long? = null,
-    val toolsTokens: Long? = null,
-    val messageTokens: Long? = null,
 )
 
 data class AiCreationAssistantUiState(
@@ -89,7 +79,7 @@ data class AiCreationAssistantUiState(
     val characterDirectoryNextCursor: String = "",
     val isCharacterDirectoryLoading: Boolean = false,
     val isCharacterRootsUpdating: Boolean = false,
-    val contextWindowUsage: CreationContextWindowUsage? = null,
+    val generationStats: ChatSessionGenerationStats = ChatSessionGenerationStats(),
     val pendingSteerInputs: List<CreationPendingSteerInput> = emptyList(),
     val permissionMode: AgentPermissionMode = AgentPermissionMode.AskForApproval,
     val isLoading: Boolean = false,

@@ -102,6 +102,10 @@ fun ElecKoiApp() {
             saveEnabledToolGroupIds = container::setCreatorAssistantEnabledToolGroupIds,
             loadImageModelConfigId = container::creatorAssistantImageModelConfigId,
             saveImageModelConfigId = container::setCreatorAssistantImageModelConfigId,
+            loadGenerationStats = repository::loadCreatorGenerationStats,
+            persistGenerationStats = repository::persistCreatorGenerationStats,
+            deleteGenerationStats = repository::deleteCreatorGenerationStats,
+            readDshTrajectory = dshTrajectoryReader::read,
         ),
     )
     val localRuntimeSettingsViewModel: LocalRuntimeSettingsViewModel = viewModel(

@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.eleckoi.android.engine.agent.api.AgentSessionFactory
+import com.eleckoi.android.engine.agent.deepseek.trajectory.DshTrajectoryPage
+import com.eleckoi.android.engine.agent.deepseek.trajectory.DshTrajectoryReadOptions
 import com.eleckoi.android.engine.agent.background.AgentRunManager
 import com.eleckoi.android.engine.agent.tools.AgentToolGroupSnapshot
 import com.eleckoi.android.engine.agent.tools.AgentToolRequestPolicy
@@ -16,6 +18,7 @@ import com.eleckoi.android.engine.workspace.runtime.model.LocalRuntimeGateway
 import com.eleckoi.android.engine.workspace.runtime.model.RuntimeMaintenanceOperation
 import com.eleckoi.android.feature.chat.data.MaxChatInputImages
 import com.eleckoi.android.feature.chat.data.MaxChatInputMessageImageBytes
+import com.eleckoi.android.feature.chat.model.ChatSessionGenerationStats
 import com.eleckoi.android.feature.conversation.timeline.model.CreationTimelineItem
 import com.eleckoi.android.feature.conversation.timeline.model.CreationTimelineKind
 import com.eleckoi.android.feature.conversation.timeline.ui.prewarmCreationTimelineItems
@@ -24,6 +27,7 @@ import com.eleckoi.android.feature.studio.api.CreatorAssistantService
 import com.eleckoi.android.feature.studio.api.creatorConversationAttachmentAssetId
 import com.eleckoi.android.feature.studio.ui.assistant.runtime.CreationRuntimeController
 import com.eleckoi.android.feature.studio.ui.assistant.session.CreationAgentSessionCoordinator
+import com.eleckoi.android.feature.studio.ui.assistant.session.CreationGenerationStatsController
 import com.eleckoi.android.feature.studio.ui.assistant.session.creationAssistantMessage
 import com.eleckoi.android.feature.studio.ui.assistant.timeline.CreationHistoryController
 import com.eleckoi.android.feature.studio.ui.assistant.timeline.replaceWorkspace
@@ -56,9 +60,22 @@ class AiCreationAssistantViewModel(
     private val saveEnabledToolGroupIds: suspend (Set<String>) -> Unit = {},
     private val loadImageModelConfigId: suspend () -> String = { "" },
     private val saveImageModelConfigId: suspend (String) -> Unit = {},
+    private val loadGenerationStats: (String, String) -> ChatSessionGenerationStats =
+        { _, runtimeThreadId -> ChatSessionGenerationStats(runtimeThreadId = runtimeThreadId) },
+    private val persistGenerationStats: (String, ChatSessionGenerationStats) -> Unit = { _, _ -> },
+    private val deleteGenerationStats: (String) -> Unit = {},
+    private val readDshTrajectory: suspend (String, DshTrajectoryReadOptions) -> DshTrajectoryPage =
+        { runtimeThreadId, _ -> DshTrajectoryPage.empty(runtimeThreadId) },
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(AiCreationAssistantUiState())
     val uiState: StateFlow<AiCreationAssistantUiState> = _uiState.asStateFlow()
+
+    private val generationStatsController = CreationGenerationStatsController(
+        uiState = _uiState,
+        load = loadGenerationStats,
+        persist = persistGenerationStats,
+        delete = deleteGenerationStats,
+    )
 
     private val historyController = CreationHistoryController(
         scope = viewModelScope,
@@ -88,6 +105,7 @@ class AiCreationAssistantViewModel(
         agentSessionFactory = agentSessionFactory,
         agentRuns = agentRuns,
         uiState = _uiState,
+        generationStats = generationStatsController,
         scope = viewModelScope,
         refreshWorkspaceFiles = fileEditingController::refreshWorkspaceFiles,
         rememberCurrentTimeline = historyController::rememberCurrentTimeline,
@@ -107,6 +125,7 @@ class AiCreationAssistantViewModel(
         updateState = { transform -> _uiState.update(transform) },
         prewarmTimeline = ::prewarmCreationTimeline,
         persistCurrentConversationSnapshot = ::persistCurrentConversationSnapshot,
+        generationStats = generationStatsController,
     )
     private val runtimeController = CreationRuntimeController(
         scope = viewModelScope,
@@ -465,6 +484,13 @@ class AiCreationAssistantViewModel(
         onFinished: (Result<ModelConfig>) -> Unit = {},
     ) = modelController.saveModelConfig(config, onFinished)
 
+    suspend fun loadDshTrajectory(
+        runtimeThreadId: String,
+        options: DshTrajectoryReadOptions = DshTrajectoryReadOptions(),
+    ): DshTrajectoryPage = withContext(Dispatchers.IO) {
+        readDshTrajectory(runtimeThreadId, options)
+    }
+
     private suspend fun persistCurrentConversationSnapshot() {
         val snapshot = _uiState.value
         val workspaceId = snapshot.workspace?.id ?: return
@@ -513,6 +539,12 @@ class AiCreationAssistantViewModel(
             saveEnabledToolGroupIds: suspend (Set<String>) -> Unit = {},
             loadImageModelConfigId: suspend () -> String = { "" },
             saveImageModelConfigId: suspend (String) -> Unit = {},
+            loadGenerationStats: (String, String) -> ChatSessionGenerationStats =
+                { _, runtimeThreadId -> ChatSessionGenerationStats(runtimeThreadId = runtimeThreadId) },
+            persistGenerationStats: (String, ChatSessionGenerationStats) -> Unit = { _, _ -> },
+            deleteGenerationStats: (String) -> Unit = {},
+            readDshTrajectory: suspend (String, DshTrajectoryReadOptions) -> DshTrajectoryPage =
+                { runtimeThreadId, _ -> DshTrajectoryPage.empty(runtimeThreadId) },
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -528,6 +560,10 @@ class AiCreationAssistantViewModel(
                     saveEnabledToolGroupIds = saveEnabledToolGroupIds,
                     loadImageModelConfigId = loadImageModelConfigId,
                     saveImageModelConfigId = saveImageModelConfigId,
+                    loadGenerationStats = loadGenerationStats,
+                    persistGenerationStats = persistGenerationStats,
+                    deleteGenerationStats = deleteGenerationStats,
+                    readDshTrajectory = readDshTrajectory,
                 ) as T
             }
         }

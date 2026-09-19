@@ -6,7 +6,7 @@ import com.eleckoi.android.feature.chat.model.ChatGenerationMetrics
 import com.eleckoi.android.feature.chat.model.ChatSessionGenerationStats
 
 /** Folds one live turn onto the persisted DSH-thread projection without reading message history. */
-internal class ChatSessionGenerationStatsProjector(
+class ChatSessionGenerationStatsProjector(
     private val initial: ChatSessionGenerationStats,
 ) {
     private var activeThreadId = initial.runtimeThreadId

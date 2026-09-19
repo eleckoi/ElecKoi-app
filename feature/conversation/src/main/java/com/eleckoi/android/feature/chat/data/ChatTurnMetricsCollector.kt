@@ -12,7 +12,7 @@ import com.eleckoi.android.feature.chat.model.ChatGenerationMetrics
  * It records only boundaries DSH actually emitted. Missing cache or timing fields are deliberately
  * left absent from the resulting UI instead of being estimated from local text length.
  */
-internal class ChatTurnMetricsCollector {
+class ChatTurnMetricsCollector {
     private data class StepBoundary(
         val startedAtMillis: Long,
         var firstTokenAtMillis: Long? = null,

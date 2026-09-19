@@ -21,6 +21,7 @@ internal class CreationSessionEventHandler(
     private val creatorService: CreatorAssistantService,
     private val uiState: MutableStateFlow<AiCreationAssistantUiState>,
     private val eventReducer: CreationSessionEventReducer,
+    private val generationStats: CreationGenerationStatsController,
     private val pendingSteerQueue: CreationPendingSteerQueue,
     private val refreshWorkspaceFiles: suspend (workspaceId: String) -> Unit,
     private val rememberCurrentTimeline: () -> Unit,
@@ -91,6 +92,7 @@ internal class CreationSessionEventHandler(
                 else -> activeTurnId()
             },
         )
+        generationStats.accept(conversationId, event)
         when (event) {
             is AgentSessionEvent.TurnStarted -> {
                 activeRunReporter()?.running("AI 助手正在执行任务")

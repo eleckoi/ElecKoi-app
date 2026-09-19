@@ -31,7 +31,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
-internal fun DshTrajectoryDialog(
+fun DshTrajectoryDialog(
     runtimeThreadId: String,
     isSending: Boolean,
     appearance: AppearanceTheme,

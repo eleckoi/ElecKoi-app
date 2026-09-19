@@ -19,7 +19,7 @@ import kotlin.math.roundToLong
 
 /** A quiet, read-only DSH-style summary below the composer. */
 @Composable
-internal fun ChatGenerationStatsLine(
+fun ChatGenerationStatsLine(
     metrics: ChatGenerationMetrics,
     appearance: AppearanceTheme,
     enabled: Boolean,
