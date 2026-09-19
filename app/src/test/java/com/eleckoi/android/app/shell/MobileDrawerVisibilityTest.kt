@@ -11,9 +11,11 @@ import org.junit.Test
 
 class MobileDrawerVisibilityTest {
     @Test
-    fun `drawer stays requested while profile temporarily hides it`() {
+    fun `drawer stays requested while sidebar destinations temporarily hide it`() {
         assertTrue(shouldShowMorePanel(moreOpen = true, route = MobileRoute.Root))
         assertFalse(shouldShowMorePanel(moreOpen = true, route = MobileRoute.Profile))
+        assertFalse(shouldShowMorePanel(moreOpen = true, route = MobileRoute.Settings))
+        assertFalse(shouldShowMorePanel(moreOpen = true, route = MobileRoute.AppUpdate))
         assertTrue(shouldShowMorePanel(moreOpen = true, route = MobileRoute.Root))
     }
 
@@ -24,9 +26,35 @@ class MobileDrawerVisibilityTest {
     }
 
     @Test
-    fun `requested drawer restores without exposing route pop motion`() {
-        assertTrue(shouldRestoreMorePanelAtomically(moreOpen = true))
-        assertFalse(shouldRestoreMorePanelAtomically(moreOpen = false))
+    fun `sidebar destinations use the drawer fade only at the root boundary`() {
+        assertTrue(
+            shouldUseMorePanelRouteTransition(
+                moreOpen = true,
+                fromContentKey = MobileRoute.Root.toString(),
+                toContentKey = MobileRoute.Settings.toString(),
+            ),
+        )
+        assertTrue(
+            shouldUseMorePanelRouteTransition(
+                moreOpen = true,
+                fromContentKey = MobileRoute.AppUpdate.toString(),
+                toContentKey = MobileRoute.Root.toString(),
+            ),
+        )
+        assertFalse(
+            shouldUseMorePanelRouteTransition(
+                moreOpen = true,
+                fromContentKey = MobileRoute.Settings.toString(),
+                toContentKey = MobileRoute.Profile.toString(),
+            ),
+        )
+        assertFalse(
+            shouldUseMorePanelRouteTransition(
+                moreOpen = false,
+                fromContentKey = MobileRoute.Root.toString(),
+                toContentKey = MobileRoute.Settings.toString(),
+            ),
+        )
     }
 
     @Test

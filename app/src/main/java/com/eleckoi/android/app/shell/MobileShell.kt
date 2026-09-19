@@ -360,11 +360,9 @@ internal fun MobileShell(
                     charactersViewModel.onIntent(CharactersIntent.SaveCharacterCollection(payload))
                 },
                 onOpenSettings = {
-                    shellViewModel.onIntent(ShellIntent.SetMoreOpen(false))
                     navigateTo(MobileRoute.Settings)
                 },
                 onOpenUpdate = {
-                    shellViewModel.onIntent(ShellIntent.SetMoreOpen(false))
                     navigateTo(MobileRoute.AppUpdate)
                 },
             ) {
@@ -378,15 +376,31 @@ internal fun MobileShell(
                     ),
                     backStack = backStack,
                     onBack = ::goBackInsideApp,
-                    transitionSpec = { elecKoiForwardRoute() },
+                    transitionSpec = {
+                        elecKoiForwardRoute(
+                            coordinateWithMorePanel = shouldUseMorePanelRouteTransition(
+                                moreOpen = moreOpen,
+                                fromContentKey = initialState.entries.lastOrNull()?.contentKey,
+                                toContentKey = targetState.entries.lastOrNull()?.contentKey,
+                            ),
+                        )
+                    },
                     popTransitionSpec = {
                         elecKoiBackRoute(
-                            restoreMorePanel = shouldRestoreMorePanelAtomically(moreOpen),
+                            restoreMorePanel = shouldUseMorePanelRouteTransition(
+                                moreOpen = moreOpen,
+                                fromContentKey = initialState.entries.lastOrNull()?.contentKey,
+                                toContentKey = targetState.entries.lastOrNull()?.contentKey,
+                            ),
                         )
                     },
                     predictivePopTransitionSpec = {
                         elecKoiBackRoute(
-                            restoreMorePanel = shouldRestoreMorePanelAtomically(moreOpen),
+                            restoreMorePanel = shouldUseMorePanelRouteTransition(
+                                moreOpen = moreOpen,
+                                fromContentKey = initialState.entries.lastOrNull()?.contentKey,
+                                toContentKey = targetState.entries.lastOrNull()?.contentKey,
+                            ),
                         )
                     },
                     entryProvider = { key ->
@@ -464,4 +478,11 @@ internal fun shouldShowMorePanel(
     route: MobileRoute,
 ): Boolean = moreOpen && route == MobileRoute.Root
 
-internal fun shouldRestoreMorePanelAtomically(moreOpen: Boolean): Boolean = moreOpen
+internal fun shouldUseMorePanelRouteTransition(
+    moreOpen: Boolean,
+    fromContentKey: Any?,
+    toContentKey: Any?,
+): Boolean {
+    val rootContentKey = MobileRoute.Root.toString()
+    return moreOpen && (fromContentKey == rootContentKey || toContentKey == rootContentKey)
+}

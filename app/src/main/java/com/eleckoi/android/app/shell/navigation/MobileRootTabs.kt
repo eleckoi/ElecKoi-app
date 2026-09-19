@@ -251,7 +251,12 @@ internal fun MobileRootTabs(
     }
 }
 
-internal fun elecKoiForwardRoute(): ContentTransform {
+internal fun elecKoiForwardRoute(
+    coordinateWithMorePanel: Boolean = false,
+): ContentTransform {
+    if (coordinateWithMorePanel) {
+        return EnterTransition.None.togetherWith(ExitTransition.None)
+    }
     return (
         slideInHorizontally { width -> width } +
             fadeIn(initialAlpha = 0.90f)
