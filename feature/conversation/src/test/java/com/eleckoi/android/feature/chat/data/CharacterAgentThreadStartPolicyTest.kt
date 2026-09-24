@@ -22,6 +22,25 @@ class CharacterAgentThreadStartPolicyTest {
     }
 
     @Test
+    fun `normal message after regeneration resumes the replacement thread`() {
+        val start = continuationThreadStart(
+            conversationId = "chat",
+            messages = listOf(
+                ChatMessage("earlier-user", MessageRole.User, "first"),
+                runtimeReply("earlier-answer", ""),
+                ChatMessage("replacement-user", MessageRole.User, "second"),
+                runtimeReply("replacement-answer", "regenerated-thread"),
+                ChatMessage("next-user", MessageRole.User, "third"),
+            ),
+        ) { _, messageId ->
+            assertEquals("replacement-answer", messageId)
+            GenerationAttemptState.Succeeded
+        }
+
+        assertEquals(AgentThreadStart.Resume("regenerated-thread"), start)
+    }
+
+    @Test
     fun `cancelled or failed latest runtime thread forces a fresh DSH session`() {
         listOf(GenerationAttemptState.Cancelled, GenerationAttemptState.Failed).forEach { state ->
             val start = continuationThreadStart(

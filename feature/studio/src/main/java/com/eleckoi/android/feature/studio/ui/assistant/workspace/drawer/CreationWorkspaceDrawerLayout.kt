@@ -90,7 +90,7 @@ internal fun CreationWorkspaceDrawerLayout(
             awaitEachGesture {
                 val down = awaitFirstDown(
                     requireUnconsumed = false,
-                    pass = PointerEventPass.Initial,
+                    pass = PointerEventPass.Final,
                 )
                 val startProgress = progress
                 val pointerId = down.id
@@ -101,10 +101,16 @@ internal fun CreationWorkspaceDrawerLayout(
                 var verticalDistance = 0f
                 var lastEventTimeMillis = down.uptimeMillis
                 var horizontalDragStarted = false
+                var childClaimedGesture = false
 
                 while (true) {
-                    val event = awaitPointerEvent(pass = PointerEventPass.Initial)
+                    // Let horizontally scrollable content claim the gesture before the drawer.
+                    val event = awaitPointerEvent(pass = PointerEventPass.Final)
                     val change = event.changes.firstOrNull { it.id == pointerId } ?: break
+                    if (change.pressed && change.isConsumed) {
+                        childClaimedGesture = true
+                        break
+                    }
                     velocityTracker.addPosition(change.uptimeMillis, change.position)
                     lastEventTimeMillis = change.uptimeMillis
                     horizontalDistance = change.position.x - down.position.x
@@ -147,7 +153,7 @@ internal fun CreationWorkspaceDrawerLayout(
                     if (!change.pressed) break
                 }
 
-                if (horizontalDragStarted) {
+                if (horizontalDragStarted && !childClaimedGesture) {
                     val velocity = velocityTracker.calculateVelocity()
                     val releaseIsHorizontal =
                         kotlin.math.abs(horizontalDistance) >=
@@ -181,8 +187,8 @@ internal fun CreationWorkspaceDrawerLayout(
                         horizontalDistance > 0f && progress >= 0.5f
                     }
                     if (settleOpen) onOpenDrawer() else onCloseDrawer()
-                    gestureDragging = false
                 }
+                if (horizontalDragStarted) gestureDragging = false
             }
         }
 

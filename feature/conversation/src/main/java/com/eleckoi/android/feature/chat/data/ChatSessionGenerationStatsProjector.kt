@@ -10,9 +10,12 @@ class ChatSessionGenerationStatsProjector(
     private val initial: ChatSessionGenerationStats,
 ) {
     private var activeThreadId = initial.runtimeThreadId
-    private var baseMetrics = initial.metrics
+    private val baseMetrics = initial.metrics
     private var baseContextWindowUsage = initial.contextWindowUsage
     private var projected = initial
+    // A blank thread with retained turns is the durable regeneration baseline. Its first native
+    // turn replaces the retained prompt's old answer instead of creating another chat turn.
+    private val replacingRetainedTurn = initial.runtimeThreadId.isBlank() && initial.metrics.turns > 0
 
     fun accept(
         event: AgentSessionEvent,
@@ -22,17 +25,14 @@ class ChatSessionGenerationStatsProjector(
         val identity = event.agentRuntimeIdentity() ?: return false
         if (identity.threadId != activeThreadId) {
             activeThreadId = identity.threadId
-            if (identity.threadId == initial.runtimeThreadId) {
-                baseMetrics = initial.metrics
-                baseContextWindowUsage = initial.contextWindowUsage
-            } else {
-                baseMetrics = ChatGenerationMetrics()
-                baseContextWindowUsage = null
-            }
+            // A native thread can rotate while the visible conversation continues. The stored
+            // metrics belong to that conversation; only the current context sample is thread-local.
+            baseContextWindowUsage = initial.contextWindowUsage
+                .takeIf { identity.threadId == initial.runtimeThreadId }
         }
         val next = ChatSessionGenerationStats(
             runtimeThreadId = activeThreadId,
-            metrics = baseMetrics + turnMetrics,
+            metrics = baseMetrics + if (replacingRetainedTurn) turnMetrics.copy(turns = 0) else turnMetrics,
             contextWindowUsage = turnContextWindowUsage ?: baseContextWindowUsage,
         )
         if (next == projected) return false

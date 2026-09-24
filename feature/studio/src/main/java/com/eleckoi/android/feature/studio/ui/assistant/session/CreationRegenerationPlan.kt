@@ -7,6 +7,7 @@ internal data class CreationRegenerationPlan(
     val prompt: String,
     val stableHistory: List<CreationTimelineItem>,
     val retainedUser: CreationTimelineItem,
+    val retainedTurns: Int,
 )
 
 /**
@@ -39,9 +40,11 @@ internal fun planCreationRegeneration(
     if (userIndex < 0) return null
     val source = timeline[userIndex]
     val prompt = replacementText?.trim()?.takeIf(String::isNotEmpty) ?: source.text
+    val stableHistory = timeline.subList(0, userIndex).toList()
     return CreationRegenerationPlan(
         prompt = prompt,
-        stableHistory = timeline.subList(0, userIndex).toList(),
+        stableHistory = stableHistory,
+        retainedTurns = stableHistory.toCreationTurns(isRunning = false).count { it.user != null } + 1,
         retainedUser = source.copy(
             text = prompt,
             running = false,

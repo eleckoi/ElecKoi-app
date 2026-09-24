@@ -12,7 +12,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
-import androidx.compose.material.icons.outlined.Route
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -30,7 +29,6 @@ import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.foundation.design.components.AboveAnchorPopupPositionProvider
 import com.eleckoi.android.foundation.design.components.AppIconPaths
 import com.eleckoi.android.foundation.design.components.DshIconPaths
-import com.eleckoi.android.foundation.design.components.DshPresetGlyph
 import com.eleckoi.android.foundation.design.components.FilledSvgIcon
 import com.eleckoi.android.foundation.design.components.StrokeSvgIcon
 
@@ -46,10 +44,7 @@ internal fun ChatComposerMenu(
     onDismiss: () -> Unit,
     onPickImages: () -> Unit,
     onOpenHistory: () -> Unit,
-    onOpenPresets: () -> Unit,
     onPermissionModeChange: (AgentPermissionMode) -> Unit,
-    onOpenTools: () -> Unit,
-    onOpenTrajectory: () -> Unit,
     onOpenVariableViewer: () -> Unit,
     onOpenDynamicSettings: (() -> Unit)?,
     onDeleteMessages: () -> Unit,
@@ -97,36 +92,6 @@ internal fun ChatComposerMenu(
                     onClick = onOpenHistory,
                 )
                 HorizontalDivider(color = appearance.mobileLine)
-                RoleplayMenuAction(
-                    label = "预设",
-                    appearance = appearance,
-                    onDismiss = onDismiss,
-                    leadingContent = { color ->
-                        DshPresetGlyph(tint = color, iconSize = 17.dp)
-                    },
-                    onClick = onOpenPresets,
-                )
-                RoleplayMenuAction(
-                    label = "工具",
-                    paths = AppIconPaths.Plug,
-                    appearance = appearance,
-                    onDismiss = onDismiss,
-                    onClick = onOpenTools,
-                )
-                RoleplayMenuAction(
-                    label = "轨迹",
-                    appearance = appearance,
-                    onDismiss = onDismiss,
-                    leadingContent = { color ->
-                        Icon(
-                            imageVector = Icons.Outlined.Route,
-                            contentDescription = null,
-                            tint = color,
-                            modifier = Modifier.width(17.dp).height(17.dp),
-                        )
-                    },
-                    onClick = onOpenTrajectory,
-                )
                 RoleplayMenuAction(
                     label = "变量查看器",
                     paths = DshIconPaths.Data,

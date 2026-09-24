@@ -8,6 +8,8 @@ internal val RoleplayTranscriptTurns = """    const missingAvatar = () => '<svg 
       const selected = active && state.deleteFromIndex >= 0 && index >= state.deleteFromIndex;
       turn.classList.toggle('delete-mode', active);
       turn.classList.toggle('delete-selected', selected);
+      const body = turn.querySelector(':scope > .turn-main > .message-body');
+      if (body) syncUserBubbleEditTarget(body, message);
       let selector = turn.querySelector(':scope > .delete-selector');
       if (!active) {
         if (selector) selector.remove();
@@ -52,6 +54,7 @@ internal val RoleplayTranscriptTurns = """    const missingAvatar = () => '<svg 
           body.append(details);
         }
       }
+      syncUserBubbleEditTarget(body, message);
       return body;
     };
     const createAgentFooter = message => {
@@ -189,6 +192,8 @@ internal val RoleplayTranscriptTurns = """    const missingAvatar = () => '<svg 
         const replacement = createBody(message);
         releaseRichWithin(body);
         body.replaceWith(replacement);
+      } else {
+        syncUserBubbleEditTarget(body, message);
       }
       applyCachedRichHeights(existing, message);
       return existing;

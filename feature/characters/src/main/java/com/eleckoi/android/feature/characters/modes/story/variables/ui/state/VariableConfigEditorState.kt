@@ -27,6 +27,7 @@ internal class VariableConfigEditorState(config: VariableConfig?) {
     val versions: List<VariableConfigVersion> get() = document.versions
     val activeVersionId: String get() = document.activeVersionId
     var configManagerOpen by mutableStateOf(false)
+    var createConfigVersionDialogOpen by mutableStateOf(false)
     var confirmDeleteConfig by mutableStateOf(false)
     var selectedTreeNodeId by mutableStateOf(VariableRootNodeId)
     var editorObjectId by mutableStateOf<String?>(null)
@@ -67,10 +68,12 @@ internal class VariableConfigEditorState(config: VariableConfig?) {
         dirty = true
     }
 
-    fun createConfigVersion() {
+    fun createConfigVersion(name: String, sourceVersionId: String?) {
         dispatch(
             VariableConfigDocumentAction.CreateVersion(
                 id = "draft-variable-config-${System.currentTimeMillis()}",
+                name = name,
+                sourceVersionId = sourceVersionId,
             ),
         )
         selectedTreeNodeId = VariableRootNodeId

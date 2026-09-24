@@ -206,12 +206,6 @@ private fun ContextWindowUsagePopup(
                         markerColor = ContextMessagesColor,
                         appearance = appearance,
                     )
-                    ContextBreakdownRow(
-                        label = "其余上下文",
-                        tokens = presentation.unclassifiedTokens,
-                        markerColor = ContextUnclassifiedColor,
-                        appearance = appearance,
-                    )
                 } else if (!presentation.hasNativeSample) {
                     Spacer(Modifier.height(12.dp))
                     Text(
@@ -325,7 +319,6 @@ internal data class ContextWindowUsagePresentation(
     val usedFraction: Float,
     val hasNativeSample: Boolean,
     val hasBreakdown: Boolean,
-    val unclassifiedTokens: Long?,
 )
 
 internal fun ContextWindowUsage?.toContextWindowUsagePresentation(): ContextWindowUsagePresentation {
@@ -336,16 +329,6 @@ internal fun ContextWindowUsage?.toContextWindowUsagePresentation(): ContextWind
         (activeTokens.toDouble() / contextWindow.toDouble()).coerceIn(0.0, 1.0)
     } else {
         0.0
-    }
-    val classifiedTokens = listOf(
-        this?.systemTokens,
-        this?.toolsTokens,
-        this?.messageTokens,
-    )
-    val unclassifiedTokens = if (activeTokens != null && classifiedTokens.all { it != null }) {
-        (activeTokens - classifiedTokens.sumOf { it!! }).coerceAtLeast(0L)
-    } else {
-        null
     }
     return ContextWindowUsagePresentation(
         percentLabel = if (hasNativeSample) formatUsagePercent(usedFraction * 100.0) else "—",
@@ -359,7 +342,6 @@ internal fun ContextWindowUsage?.toContextWindowUsagePresentation(): ContextWind
         hasBreakdown = this?.let {
             it.systemTokens != null || it.toolsTokens != null || it.messageTokens != null
         } == true,
-        unclassifiedTokens = unclassifiedTokens?.takeIf { it > 0L },
     )
 }
 
@@ -388,4 +370,3 @@ private fun formatCompactTokenCount(tokens: Long, unit: Long, suffix: String): S
 private val ContextSystemColor = Color(0xFF9AA4B2)
 private val ContextToolsColor = Color(0xFF8B6DFF)
 private val ContextMessagesColor = Color(0xFF4A7FF3)
-private val ContextUnclassifiedColor = Color(0xFFE09A32)

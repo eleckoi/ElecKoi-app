@@ -17,6 +17,10 @@ import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.material3.Text
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Route
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -35,6 +39,7 @@ import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.foundation.design.PhosphorRegular
 import com.eleckoi.android.foundation.design.components.AppIconPaths
 import com.eleckoi.android.foundation.design.components.DshIconPaths
+import com.eleckoi.android.foundation.design.components.DshPresetGlyph
 import com.eleckoi.android.foundation.design.components.FilledSvgIcon
 import com.eleckoi.android.foundation.design.components.StrokeSvgIcon
 import com.eleckoi.android.foundation.design.components.SvgCircle
@@ -50,6 +55,9 @@ fun ChatTopBar(
     onMore: () -> Unit,
     moreMenuExpanded: Boolean,
     onDismissMoreMenu: () -> Unit,
+    onOpenPresets: () -> Unit,
+    onOpenTools: () -> Unit,
+    onOpenTrajectory: () -> Unit,
     onCustomizeBackground: () -> Unit,
     onCreateChat: () -> Unit,
     effectiveBackgroundPath: String = appearance.textureImagePath,
@@ -142,6 +150,47 @@ fun ChatTopBar(
                     onDismissRequest = onDismissMoreMenu,
                     modifier = Modifier.background(appearance.mobileSurface),
                 ) {
+                    DropdownMenuItem(
+                        text = { Text("预设", color = appearance.mobileText, fontSize = 14.sp) },
+                        leadingIcon = {
+                            DshPresetGlyph(tint = appearance.mobileMuted, iconSize = 19.dp)
+                        },
+                        onClick = {
+                            onDismissMoreMenu()
+                            onOpenPresets()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("工具", color = appearance.mobileText, fontSize = 14.sp) },
+                        leadingIcon = {
+                            StrokeSvgIcon(
+                                paths = AppIconPaths.Plug,
+                                color = appearance.mobileMuted,
+                                iconSize = 19.dp,
+                                strokeWidth = 1.85f,
+                            )
+                        },
+                        onClick = {
+                            onDismissMoreMenu()
+                            onOpenTools()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("轨迹", color = appearance.mobileText, fontSize = 14.sp) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Outlined.Route,
+                                contentDescription = null,
+                                tint = appearance.mobileMuted,
+                                modifier = Modifier.size(19.dp),
+                            )
+                        },
+                        onClick = {
+                            onDismissMoreMenu()
+                            onOpenTrajectory()
+                        },
+                    )
+                    HorizontalDivider(color = appearance.mobileLine)
                     DropdownMenuItem(
                         text = {
                             Text(

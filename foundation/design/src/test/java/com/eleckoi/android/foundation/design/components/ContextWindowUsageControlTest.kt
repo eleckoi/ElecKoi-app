@@ -36,7 +36,6 @@ class ContextWindowUsageControlTest {
         assertEquals(0.0054f, presentation.usedFraction, 0.00001f)
         assertTrue(presentation.hasNativeSample)
         assertTrue(presentation.hasBreakdown)
-        assertEquals(0L, presentation.unclassifiedTokens ?: 0L)
     }
 
     @Test
@@ -48,20 +47,6 @@ class ContextWindowUsageControlTest {
         assertEquals("— / —", presentation.tokenRatioLabel)
         assertFalse(presentation.hasNativeSample)
         assertFalse(presentation.hasBreakdown)
-        assertEquals(null, presentation.unclassifiedTokens)
-    }
-
-    @Test
-    fun `provider calibrated total exposes the unclassified remainder`() {
-        val presentation = ContextWindowUsage(
-            latestTokens = 17_091,
-            modelContextWindow = 1_000_000,
-            systemTokens = 0,
-            toolsTokens = 1_427,
-            messageTokens = 6_386,
-        ).toContextWindowUsagePresentation()
-
-        assertEquals(9_278L, presentation.unclassifiedTokens)
     }
 
     @Test

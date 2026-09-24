@@ -5,6 +5,7 @@ import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.engine.story.variables.model.VariableConfigVersion
 import com.eleckoi.android.feature.characters.modes.story.ui.shared.FeatureVersionManagerSheet
 import com.eleckoi.android.feature.characters.modes.story.ui.shared.ManagedFeatureVersion
+import com.eleckoi.android.feature.characters.modes.story.ui.shared.StoryVersionCreateDialog
 
 @Composable
 internal fun VariableConfigManagerSheet(
@@ -26,7 +27,7 @@ internal fun VariableConfigManagerSheet(
         featureDescription = "允许变量状态参与聊天生成与校验",
         namePlaceholder = "待命名",
         versionSectionTitle = "变量配置版本",
-        createActionTitle = "新建变量配置",
+        createActionTitle = "新建版本",
         deleteActionTitle = "删除当前变量配置",
         name = name,
         showFeatureToggle = false,
@@ -42,5 +43,23 @@ internal fun VariableConfigManagerSheet(
         onImport = onImport,
         onExport = onExport,
         onDeleteVersion = onDeleteConfig,
+    )
+}
+
+@Composable
+internal fun VariableConfigCreateVersionDialog(
+    versions: List<VariableConfigVersion>,
+    activeVersionId: String,
+    appearance: AppearanceTheme,
+    onDismiss: () -> Unit,
+    onConfirm: (name: String, sourceVersionId: String?) -> Unit,
+) {
+    StoryVersionCreateDialog(
+        versions = versions.map { ManagedFeatureVersion(it.id, it.name) },
+        activeVersionId = activeVersionId,
+        blankDescription = "不复制变量组、变量或校验脚本",
+        appearance = appearance,
+        onDismiss = onDismiss,
+        onConfirm = onConfirm,
     )
 }

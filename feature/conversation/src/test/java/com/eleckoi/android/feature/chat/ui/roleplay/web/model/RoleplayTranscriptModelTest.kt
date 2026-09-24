@@ -208,6 +208,35 @@ class RoleplayTranscriptModelTest {
     }
 
     @Test
+    fun completedCodeFenceStaysInThePreviousTurnAfterAnotherReplyIsAppended() {
+        val codeReply = ChatMessage(
+            id = "code-reply",
+            role = MessageRole.Assistant,
+            content = "```text\n" + (1..120).joinToString("\n") { "rule_$it = keep" } + "\n```",
+        )
+        val initial = listOf(
+            ChatMessage(id = "prompt", role = MessageRole.User, content = "请列出规则"),
+            codeReply,
+        )
+        val extended = initial + ChatMessage(
+            id = "follow-up",
+            role = MessageRole.User,
+            content = "继续",
+        )
+        val cache = RoleplayTranscriptProjectionCache()
+
+        val before = buildModel(draft(initial), initial, cache)
+        val after = buildModel(draft(extended), extended, cache)
+        val beforeCode = before.messages[1].contentParts.single() as RoleplayTranscriptContentPart.Text
+        val afterCode = after.messages[1].contentParts.single() as RoleplayTranscriptContentPart.Text
+
+        assertEquals(codeReply.content, beforeCode.markdown)
+        assertEquals(beforeCode.markdown, afterCode.markdown)
+        assertEquals(codeReply.content, after.messages[1].toJson().getJSONArray("parts")
+            .getJSONObject(0).getString("markdown"))
+    }
+
+    @Test
     fun agentProjectionUsesDeepSeekReadingColorsAndDefaultTypography() {
         val messages = listOf(
             ChatMessage(id = "message-1", role = MessageRole.User, content = "你好"),

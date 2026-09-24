@@ -183,13 +183,14 @@ internal class ModelSettingsEditorState(
             testState = testState?.copy(finished = true, toolsSupported = true)
         }.onFailure { error ->
             updateStep(2) {
-                it.copy(status = ModelTestStatus.Failed, detail = error.message?.take(24) ?: "不支持")
+                it.copy(status = ModelTestStatus.Failed, detail = error.message?.take(120) ?: "测试失败")
             }
-            testMessage = "当前接口格式未通过工具测试，请尝试其他接口格式。"
+            testMessage = "工具调用测试未通过，请查看具体错误。"
             testState = testState?.copy(
                 finished = true,
-                toolsSupported = false,
-                formatFallbackSuggested = true,
+                toolsSupported = null,
+                formatFallbackSuggested = false,
+                completionMessage = "本次测试未能确认工具调用能力，请查看上方错误。",
             )
         }
     }

@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.feature.chat.model.markdown.MarkdownBlockType
+import com.eleckoi.android.feature.chat.model.markdown.MarkdownCodeContent
 import com.eleckoi.android.feature.chat.model.markdown.MarkdownNode
 import com.eleckoi.android.feature.chat.ui.blocks.markdown.layout.MarkdownRenderBlock
 import com.eleckoi.android.feature.chat.ui.blocks.markdown.layout.MarkdownLayoutGeometryCache
@@ -252,7 +253,32 @@ internal fun MarkdownDocumentRenderer(
             // plain-text hand-off and exposed a screen-tall blank retained-height spacer.
             if (requestedContentReady) currentOnContentReady()
         }
-        if (plan == null) {
+        val immediateCode = codeContentForRenderPlanFallback(
+            nodes = nodes,
+            exactPlanReady = plan?.key == key,
+        )
+        if (immediateCode != null) {
+            // A completed long answer is later promoted into one LazyColumn item per Markdown
+            // node. Its code node already has an indexed source, so do not replace a visible
+            // code block with an empty retained-height spacer while the render plan is queued.
+            MarkdownCodeBlock(
+                code = immediateCode,
+                style = codeBlockStyle,
+                color = codePalette.foreground,
+                dark = codeDark,
+                background = codePalette.background,
+                headerBackground = codePalette.headerBackground,
+                borderColor = codePalette.border,
+                gutterColor = codePalette.gutter,
+                fontSize = fontSize,
+                lineHeight = lineHeight,
+                letterSpacing = letterSpacing,
+                wrapLines = renderingPreferences.codeBlockWrapEnabled,
+                showAll = renderingPreferences.codeBlockShowAllEnabled,
+                streaming = streaming,
+                copyEnabled = nodes.single().stable,
+            )
+        } else if (plan == null) {
             val placeholderHeightPx = retainedHeightPx?.toFloat()
                 ?: estimateHeightPx(
                     context = context,
@@ -350,6 +376,14 @@ internal fun MarkdownDocumentRenderer(
         }
     }
 }
+
+internal fun codeContentForRenderPlanFallback(
+    nodes: List<MarkdownNode>,
+    exactPlanReady: Boolean,
+): MarkdownCodeContent? = nodes.singleOrNull()
+    ?.takeIf { !exactPlanReady && it.type == MarkdownBlockType.CodeFence }
+    ?.code
+    ?.takeUnless { it.language.equals("mermaid", ignoreCase = true) }
 
 private fun codeSurface(base: Color, overlay: Color, amount: Float): Color {
     val alpha = amount.coerceIn(0f, 1f)

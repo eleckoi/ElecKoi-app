@@ -180,7 +180,13 @@ data class ChatSessionGenerationStats(
     val runtimeThreadId: String = "",
     val metrics: ChatGenerationMetrics = ChatGenerationMetrics(),
     val contextWindowUsage: ChatContextWindowUsage? = null,
-)
+) {
+    fun forRegeneration(retainedTurns: Int): ChatSessionGenerationStats = copy(
+        runtimeThreadId = "",
+        metrics = metrics.copy(turns = retainedTurns),
+        contextWindowUsage = null,
+    )
+}
 
 fun Iterable<ChatMessage>.generationMetrics(): ChatGenerationMetrics =
     filter { it.role == MessageRole.Assistant }

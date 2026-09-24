@@ -348,10 +348,11 @@ internal val RoleplayTranscriptMarkdown = """    const markdownConverter = new w
     };
     const agentFooterContent = message => {
       if (message.pending || message.role !== 'assistant') return '';
-      let leading = agentOpeningPager(message);
+      let leading = state.layoutMode === 'agent' ? agentOpeningPager(message) : '';
       leading += agentActionButton('copy', '复制', 'copy');
       if (message.hasAgentProcess) leading += agentActionButton('history', '查看过程', 'history');
       leading += agentActionButton('speaker', '朗读', 'speaker');
+      leading += agentActionButton('edit', '编辑消息', 'edit');
       return `<div class="agent-footer-leading">${'$'}{leading}</div>` +
         agentActionButton('regenerate', '重新生成', 'refresh', !message.regenerateEnabled);
     };

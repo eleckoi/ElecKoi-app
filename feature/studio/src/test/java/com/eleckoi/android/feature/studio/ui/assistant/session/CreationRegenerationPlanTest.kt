@@ -85,6 +85,7 @@ class CreationRegenerationPlanTest {
 
         assertEquals("second", plan.prompt)
         assertEquals(listOf("u1", "a1"), plan.stableHistory.map { it.id })
+        assertEquals(2, plan.retainedTurns)
         assertEquals("u2", plan.retainedUser.id)
         assertEquals("second", plan.retainedUser.text)
         assertEquals(500L, plan.retainedUser.createdAtMillis)
@@ -119,6 +120,8 @@ class CreationRegenerationPlanTest {
         )
 
         assertEquals(10_000, second.stableHistory.size)
+        assertEquals(5_001, first.retainedTurns)
+        assertEquals(5_001, second.retainedTurns)
         assertEquals("target", second.retainedUser.id)
         assertTrue(second.stableHistory.none { it.id == "stale" })
         assertTrue(second.retainedUser.modelHistoryItems.isEmpty())
@@ -255,17 +258,17 @@ class CreationRegenerationPlanTest {
             inputImages = listOf(
                 ChatUserImageAttachment(
                     id = "image-1",
-                    localPath = "content://test/reference.webp",
+                    localPath = "/private/reference.webp",
                     mediaType = "image/webp",
-                    displayName = "input-avatar.webp",
+                    displayName = "四宫辉夜.webp",
                     creatorMediaReference = "conversation-attachment:input-1",
                 ),
             ),
         )
 
-        assertTrue(prompt.text.contains("input-avatar.webp -> asset_id=conversation-attachment:input-1"))
+        assertTrue(prompt.text.contains("四宫辉夜.webp -> asset_id=conversation-attachment:input-1"))
         assertTrue(prompt.text.contains("不是工作区永久资产"))
         assertTrue(prompt.text.contains("不要登记或复制未选图片"))
-        assertFalse(prompt.text.contains("content://test/reference.webp"))
+        assertFalse(prompt.text.contains("/private/reference.webp"))
     }
 }

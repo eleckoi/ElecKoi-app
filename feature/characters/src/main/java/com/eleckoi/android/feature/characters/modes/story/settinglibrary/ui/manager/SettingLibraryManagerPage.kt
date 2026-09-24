@@ -43,25 +43,15 @@ import com.eleckoi.android.foundation.design.components.StrokeSvgIcon
 import com.eleckoi.android.foundation.design.components.noRippleClickable
 import com.eleckoi.android.foundation.design.components.themedListRowClickable
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryVersion
+import com.eleckoi.android.feature.characters.modes.story.ui.shared.ManagedFeatureVersion
 import com.eleckoi.android.feature.characters.modes.story.ui.shared.StoryEditorCardSpacing
+import com.eleckoi.android.feature.characters.modes.story.ui.shared.VersionSelectBox
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.foundation.design.ElecKoiDanger
 import kotlinx.coroutines.delay
 
 internal val ManagerCardShape = RoundedCornerShape(18.dp)
 
-/**
- * Setting library management.
- *
- * The name and the version picker both stay, but they no longer look alike. Before, the name sat
- * in a plain white row and the picker sat in an identical plain white row directly below it,
- * showing the same string — two controls that looked the same and did different things. The name
- * is now a well, which is how this app draws anything you can type into, and the versions are a
- * list. The label was never what told them apart.
- *
- * The picker was also a dropdown that unfolded over the actions beneath it. A list has nothing to
- * unfold over.
- */
 @Composable
 internal fun SettingLibraryManagerPage(
     activeName: String,
@@ -79,6 +69,7 @@ internal fun SettingLibraryManagerPage(
 ) {
     val scrollState = rememberScrollState()
     var visible by remember { mutableStateOf(false) }
+    var versionMenuOpen by remember(activeVersionId, versions.size) { mutableStateOf(false) }
 
     BackHandler(enabled = visible) { visible = false }
     LaunchedEffect(Unit) { visible = true }
@@ -121,28 +112,29 @@ internal fun SettingLibraryManagerPage(
 
                             ManagerCard(appearance, modifier = Modifier.padding(top = StoryEditorCardSpacing)) {
                                 ManagerCardTitle("版本", appearance)
-                                versions.forEachIndexed { index, version ->
-                                    if (index > 0) ManagerRowDivider(appearance)
-                                    VersionRow(
-                                        version = version,
-                                        active = version.id == activeVersionId,
-                                        appearance = appearance,
-                                        onSelect = { onSelectVersion(version) },
-                                    )
-                                }
-                                if (versions.isNotEmpty()) ManagerRowDivider(appearance)
-                                ManagerRow(
-                                    icon = SettingLibraryIcons.Plus,
-                                    title = "新建版本",
+                                VersionSelectBox(
+                                    versions = versions.map { ManagedFeatureVersion(it.id, it.name) },
+                                    activeVersionId = activeVersionId,
+                                    expanded = versionMenuOpen,
                                     appearance = appearance,
-                                    accent = true,
-                                    showChevron = false,
-                                    onClick = onCreateVersion,
+                                    emptyName = "待命名",
+                                    onExpandedChange = { versionMenuOpen = it },
+                                    onSelectVersion = { selected ->
+                                        versionMenuOpen = false
+                                        versions.firstOrNull { it.id == selected.id }?.let(onSelectVersion)
+                                    },
                                 )
                             }
 
                             ManagerCard(appearance, modifier = Modifier.padding(top = StoryEditorCardSpacing)) {
-                                ManagerCardTitle("导入与导出", appearance)
+                                ManagerRow(
+                                    icon = SettingLibraryIcons.Plus,
+                                    title = "新建版本",
+                                    appearance = appearance,
+                                    showChevron = false,
+                                    onClick = onCreateVersion,
+                                )
+                                ManagerRowDivider(appearance)
                                 ManagerRow(
                                     icon = SettingLibraryIcons.Merge,
                                     title = "并入设定库",
@@ -227,38 +219,6 @@ private fun VersionNameField(
 }
 
 @Composable
-private fun VersionRow(
-    version: SettingLibraryVersion,
-    active: Boolean,
-    appearance: AppearanceTheme,
-    onSelect: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(58.dp)
-            .themedListRowClickable(appearance = appearance, onClick = onSelect)
-            .padding(horizontal = 18.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(modifier = Modifier.size(22.dp), contentAlignment = Alignment.Center) {
-            if (active) {
-                StrokeSvgIcon(SettingLibraryIcons.Check, appearance.mobileBlue, iconSize = 19.dp, strokeWidth = 2f)
-            }
-        }
-        Text(
-            version.name.trim().ifBlank { "待命名" },
-            modifier = Modifier.weight(1f).padding(start = 14.dp, end = 10.dp),
-            color = appearance.mobileText,
-            fontSize = 16.sp,
-            fontWeight = if (active) FontWeight.Medium else FontWeight.Normal,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
-
-@Composable
 internal fun ManagerTopBar(title: String, appearance: AppearanceTheme, onBack: () -> Unit) {
     Box(
         modifier = Modifier.fillMaxWidth().height(68.dp).padding(horizontal = 20.dp),
@@ -325,13 +285,11 @@ internal fun ManagerRow(
     title: String,
     appearance: AppearanceTheme,
     danger: Boolean = false,
-    accent: Boolean = false,
     showChevron: Boolean = true,
     onClick: () -> Unit,
 ) {
     val contentColor = when {
         danger -> ElecKoiDanger
-        accent -> appearance.mobileBlue
         else -> appearance.mobileText
     }
     Row(

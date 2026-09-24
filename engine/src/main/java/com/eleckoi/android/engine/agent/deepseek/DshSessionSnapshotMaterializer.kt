@@ -68,7 +68,6 @@ internal class DshSessionSnapshotMaterializer private constructor(
                 turnContext.injections.forEach { injection -> add(injectionJson(injection)) }
             })
         }.toString().toByteArray(Charsets.UTF_8)
-        require(content.size <= MaxSnapshotBytes) { "DSH 会话快照过大" }
         writeAtomically(target, content)
     }
 
@@ -142,7 +141,6 @@ internal class DshSessionSnapshotMaterializer private constructor(
 
     private companion object {
         const val SnapshotDirectory = "eleckoi/session-snapshots"
-        const val MaxSnapshotBytes = 8 * 1024 * 1024
         val SessionId = Regex("^[A-Za-z0-9._:-]{1,160}$")
         val PresetId = Regex("^[a-z0-9][a-z0-9-]*$")
     }

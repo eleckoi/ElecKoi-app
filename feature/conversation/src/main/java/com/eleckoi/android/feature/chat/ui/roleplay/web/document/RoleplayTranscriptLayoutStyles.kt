@@ -57,7 +57,8 @@ internal val RoleplayTranscriptLayoutStyles = """
       border-radius: var(--bubble-radius);
       background: var(--assistant-bubble);
     }
-    body[data-layout="agent"] .agent-footer:not([hidden]) {
+    body[data-layout="agent"] .agent-footer:not([hidden]),
+    body[data-layout="social"] .agent-footer:not([hidden]) {
       grid-area: footer;
       width: 100%;
       height: 30px;
@@ -68,7 +69,8 @@ internal val RoleplayTranscriptLayoutStyles = """
       color: var(--muted);
       text-shadow: none;
     }
-    body[data-layout="agent"] .agent-footer-leading {
+    body[data-layout="agent"] .agent-footer-leading,
+    body[data-layout="social"] .agent-footer-leading {
       min-width: 0;
       height: 30px;
       display: flex;
@@ -76,7 +78,9 @@ internal val RoleplayTranscriptLayoutStyles = """
       gap: 16px;
     }
     body[data-layout="agent"] .agent-action,
-    body[data-layout="agent"] .agent-pager-action {
+    body[data-layout="agent"] .agent-pager-action,
+    body[data-layout="social"] .agent-action,
+    body[data-layout="social"] .agent-pager-action {
       position: relative;
       flex: 0 0 auto;
       width: 24px;
@@ -88,24 +92,46 @@ internal val RoleplayTranscriptLayoutStyles = """
     }
     body[data-layout="agent"] .agent-action::before,
     body[data-layout="agent"] .agent-pager-action::before,
-    body[data-layout="agent"] .agent-pager-index::before {
+    body[data-layout="agent"] .agent-pager-index::before,
+    body[data-layout="social"] .agent-action::before,
+    body[data-layout="social"] .agent-pager-action::before,
+    body[data-layout="social"] .agent-pager-index::before {
       content: "";
       position: absolute;
       inset: -7px -2px;
     }
     body[data-layout="agent"] .agent-action:disabled,
-    body[data-layout="agent"] .agent-pager-action:disabled {
+    body[data-layout="agent"] .agent-pager-action:disabled,
+    body[data-layout="social"] .agent-action:disabled,
+    body[data-layout="social"] .agent-pager-action:disabled {
       color: var(--soft);
       opacity: .42;
     }
-    body[data-layout="agent"] .agent-opening-pager {
+    body[data-layout="agent"] .agent-action[data-action="edit"] > .icon,
+    body[data-layout="social"] .agent-action[data-action="edit"] > .icon {
+      width: 16px;
+      height: 16px;
+      opacity: .78;
+    }
+    body[data-layout="agent"] .turn.role-user .message-body.user-editable,
+    body[data-layout="social"] .turn.role-user .message-body.user-editable {
+      cursor: pointer;
+    }
+    body[data-layout="agent"] .turn.role-user .message-body.user-editable:focus-visible,
+    body[data-layout="social"] .turn.role-user .message-body.user-editable:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    body[data-layout="agent"] .agent-opening-pager,
+    body[data-layout="social"] .agent-opening-pager {
       flex: 0 0 auto;
       height: 30px;
       display: inline-flex;
       align-items: center;
       gap: 2px;
     }
-    body[data-layout="agent"] .agent-pager-index {
+    body[data-layout="agent"] .agent-pager-index,
+    body[data-layout="social"] .agent-pager-index {
       position: relative;
       min-width: 34px;
       height: 30px;
@@ -129,6 +155,10 @@ internal val RoleplayTranscriptLayoutStyles = """
     }
     body[data-layout="social"] .turn.role-user .portrait-lane { grid-column: 2; grid-row: 1; }
     body[data-layout="social"] .turn.role-user .turn-main { grid-column: 1; grid-row: 1; }
+    body[data-layout="social"] .turn.role-assistant .turn-main {
+      width: fit-content;
+      max-width: 88%;
+    }
     body[data-layout="social"] .turn-header { display: none; }
     body[data-layout="social"] .message-body {
       width: fit-content;
@@ -154,6 +184,9 @@ internal val RoleplayTranscriptLayoutStyles = """
         6px 6px,
         8px 2px
       );
+    }
+    body[data-layout="social"] .turn.role-assistant .message-body {
+      max-width: 100%;
     }
     body[data-layout="social"]:not(.assistant-bubbles) .turn.role-assistant .message-body {
       padding: 0; background: transparent;

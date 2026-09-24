@@ -391,10 +391,27 @@ internal val RoleplayTranscriptRuntimeCore = """
       }
       virtualizer.setOptions(virtualizerOptions(state.messages, followEnd));
     };
+    const syncUserBubbleEditTarget = (body, message) => {
+      const editable = !!message && message.role === 'user' && !message.pending && !state.deleteMode &&
+        (state.layoutMode === 'agent' || state.layoutMode === 'social');
+      body.classList.toggle('user-editable', editable);
+      if (editable) {
+        body.tabIndex = 0;
+        body.title = '修改输入';
+      } else {
+        body.removeAttribute('tabindex');
+        body.removeAttribute('title');
+      }
+    };
     const applyLayoutMode = value => {
       const layoutMode = ['social', 'agent', 'roleplay'].includes(value) ? value : 'roleplay';
+      const changed = state.layoutMode !== layoutMode;
       state.layoutMode = layoutMode;
       document.body.dataset.layout = layoutMode;
+      if (changed) turns.querySelectorAll('.turn.role-user .message-body').forEach(body => {
+        const turn = body.closest('.turn');
+        syncUserBubbleEditTarget(body, turn ? state.byId.get(turn.dataset.id) : null);
+      });
       document.documentElement.style.setProperty(
         '--roleplay-text-shadow',
         layoutMode === 'roleplay' && state.style.dark ? '0 0 1px rgba(0,0,0,.3)' : 'none',

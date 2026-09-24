@@ -368,7 +368,7 @@ private fun ManagerDivider(appearance: AppearanceTheme) {
 }
 
 @Composable
-private fun VersionSelectBox(
+internal fun VersionSelectBox(
     versions: List<ManagedFeatureVersion>,
     activeVersionId: String,
     expanded: Boolean,
@@ -408,7 +408,7 @@ private fun VersionSelectBox(
                 overflow = TextOverflow.Ellipsis,
             )
             StrokeSvgIcon(
-                if (expanded) AppIconPaths.ChevronDown else AppIconPaths.ChevronRight,
+                AppIconPaths.ChevronDown,
                 appearance.mobileSoft,
                 modifier = Modifier.padding(start = 10.dp),
                 iconSize = 18.dp,

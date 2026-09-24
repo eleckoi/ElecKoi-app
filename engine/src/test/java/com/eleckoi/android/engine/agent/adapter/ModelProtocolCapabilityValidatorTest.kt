@@ -1,5 +1,7 @@
 package com.eleckoi.android.engine.agent.adapter
 
+import com.eleckoi.android.engine.agent.api.AgentErrorCode
+import com.eleckoi.android.engine.agent.api.AgentException
 import com.eleckoi.android.engine.generation.model.ModelApiFormat
 import com.eleckoi.android.engine.generation.model.ModelConfig
 import java.io.ByteArrayOutputStream
@@ -104,7 +106,7 @@ class ModelProtocolCapabilityValidatorTest {
     fun `Google Gemini is probed directly with generateContent`() = runBlocking {
         val server = ProbeServer(
             firstResponse = """{
-                "candidates":[{"content":{"role":"model","parts":[{"functionCall":{"name":"eleckoi_capability_probe","args":{"value":"ok"}}}]}}]
+                "candidates":[{"content":{"role":"model","parts":[{"functionCall":{"name":"eleckoi_capability_probe","args":{"value":"ok"},"id":"call-1"},"thoughtSignature":"signed-reasoning-state"}]}}]
             }""".trimIndent(),
             secondResponse = """{
                 "candidates":[{"content":{"role":"model","parts":[{"text":"ok"}]}}]
@@ -123,13 +125,39 @@ class ModelProtocolCapabilityValidatorTest {
         )
         assertEquals("secret", requests[0].headers["x-goog-api-key"])
         assertFalse(requests[0].headers.containsKey("authorization"))
+        assertFalse(JSONObject(requests[0].body).has("generationConfig"))
+        assertFalse(JSONObject(requests[1].body).has("generationConfig"))
         val secondContents = JSONObject(requests[1].body).getJSONArray("contents")
+        assertEquals(
+            "signed-reasoning-state",
+            secondContents.getJSONObject(1).getJSONArray("parts")
+                .getJSONObject(0).getString("thoughtSignature"),
+        )
         assertTrue(
             secondContents.getJSONObject(2)
                 .getJSONArray("parts")
                 .getJSONObject(0)
                 .has("functionResponse"),
         )
+        server.close()
+    }
+
+    @Test
+    fun `a truncated Google response is reported as an incomplete probe`() = runBlocking {
+        val server = ProbeServer(
+            firstResponse = """{"candidates":[{"finishReason":"MAX_TOKENS","content":{"role":"model","parts":[]}}]}""",
+            secondResponse = "",
+        )
+        val job = async(Dispatchers.IO) { server.serveOne() }
+
+        val result = runCatching {
+            ModelProtocolCapabilityValidator().verify(
+                config(server, ModelApiFormat.GoogleGemini, model = "models/probe-model"),
+            )
+        }
+        assertEquals(AgentErrorCode.ProtocolError, (result.exceptionOrNull() as AgentException).code)
+        assertTrue(result.exceptionOrNull()?.message.orEmpty().contains("输出上限"))
+        assertEquals(1, job.await().size)
         server.close()
     }
 
@@ -155,7 +183,11 @@ class ModelProtocolCapabilityValidatorTest {
         }
         val port: Int get() = server.localPort
 
-        fun serveTwo(): List<CapturedRequest> = listOf(firstResponse, secondResponse).map { response ->
+        fun serveOne(): List<CapturedRequest> = serve(listOf(firstResponse))
+
+        fun serveTwo(): List<CapturedRequest> = serve(listOf(firstResponse, secondResponse))
+
+        private fun serve(responses: List<String>): List<CapturedRequest> = responses.map { response ->
             server.accept().use { socket ->
                 val request = readRequest(socket.getInputStream())
                 val bytes = response.toByteArray(Charsets.UTF_8)

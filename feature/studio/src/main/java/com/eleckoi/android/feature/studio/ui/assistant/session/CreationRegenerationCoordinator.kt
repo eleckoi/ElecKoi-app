@@ -28,6 +28,7 @@ internal data class CreationTurnLaunchRequest(
 /** Owns regeneration truncation, rollback, and the single in-flight regeneration job. */
 internal class CreationRegenerationCoordinator(
     private val creatorService: CreatorAssistantService,
+    private val generationStats: CreationGenerationStatsController,
     private val uiState: MutableStateFlow<AiCreationAssistantUiState>,
     private val scope: CoroutineScope,
     private val setTimelineMutationActive: (Boolean) -> Unit,
@@ -96,6 +97,7 @@ internal class CreationRegenerationCoordinator(
                     retainedUser = listOf(plan.retainedUser).toStoredTimeline().single(),
                 )
                 truncated = true
+                generationStats.prepareRegeneration(conversation.id, plan.retainedTurns)
                 detachAndScheduleShutdown()?.join()
                 val updatedConversation = updated.conversations
                     .firstOrNull { it.id == conversation.id }

@@ -41,6 +41,10 @@ internal fun regenerationSessionVariableState(
     }
     return currentStateJson
 }
+/** A retained user prompt keeps its turn even while its answer is being replaced. */
+internal fun retainedChatTurnCount(messages: List<ChatMessage>): Int =
+    messages.count { it.role == MessageRole.User }
+
 /** 保留目标回复对应的用户提问；目标本身是用户消息时，也可直接从该消息重新请求。 */
 internal fun truncateForRegeneration(
     messages: List<ChatMessage>,

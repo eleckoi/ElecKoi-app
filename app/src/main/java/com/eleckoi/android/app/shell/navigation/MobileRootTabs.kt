@@ -62,6 +62,10 @@ internal fun MobileRootTabs(
     onChangeBottomTab: (BottomTab) -> Unit,
 ) {
     val useCoverArtwork = shell.listCharacterArtwork == ListCharacterArtwork.Cover
+    fun modelTarget(providerId: String, configId: String): ModelTarget =
+        if (configId.isBlank()) modelsViewModel.createDraftTarget(providerId)
+        else ModelTarget(providerId = providerId, configId = configId)
+
     var characterAddMenuOpen by rememberSaveable { mutableStateOf(false) }
     var characterGroupManagerOpen by rememberSaveable { mutableStateOf(false) }
     var modelProviderPickerOpen by rememberSaveable { mutableStateOf(false) }
@@ -179,7 +183,7 @@ internal fun MobileRootTabs(
                     onOpenModel = { providerId, configId ->
                         onNavigate(
                             MobileRoute.ModelSettings(
-                                ModelTarget(providerId = providerId, configId = configId),
+                                modelTarget(providerId, configId),
                             ),
                         )
                     },
@@ -243,7 +247,7 @@ internal fun MobileRootTabs(
                 onRootSearchOpenChange(false)
                 onNavigate(
                     MobileRoute.ModelSettings(
-                        ModelTarget(providerId = providerId, configId = configId),
+                        modelTarget(providerId, configId),
                     ),
                 )
             },

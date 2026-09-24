@@ -252,10 +252,13 @@ internal class ModelProtocolCapabilityValidator {
                             .put("parts", JSONArray().put(JSONObject().put("text", ProbePrompt))),
                     ),
                 )
-                .put("tools", tools)
-                .put("generationConfig", JSONObject().put("maxOutputTokens", ProbeMaxTokens)),
+                .put("tools", tools),
         )
-        val content = first.optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")
+        val candidate = first.optJSONArray("candidates")?.optJSONObject(0)
+        if (candidate?.optString("finishReason") == "MAX_TOKENS") {
+            protocolFailure("模型在返回测试工具调用前达到输出上限。")
+        }
+        val content = candidate?.optJSONObject("content")
             ?: toolsUnsupported("接口没有返回候选消息。")
         val call = content.optJSONArray("parts")
             ?.firstObject { it.optJSONObject("functionCall") != null }
@@ -289,9 +292,11 @@ internal class ModelProtocolCapabilityValidator {
                                 ),
                         ),
                 )
-                .put("tools", tools)
-                .put("generationConfig", JSONObject().put("maxOutputTokens", ProbeMaxTokens)),
+                .put("tools", tools),
         )
+        if (second.optJSONArray("candidates")?.optJSONObject(0)?.optString("finishReason") == "MAX_TOKENS") {
+            protocolFailure("模型在返回测试工具结果前达到输出上限。")
+        }
         val finalParts = second.optJSONArray("candidates")
             ?.optJSONObject(0)
             ?.optJSONObject("content")
@@ -424,7 +429,7 @@ internal class ModelProtocolCapabilityValidator {
 
     private fun toolsUnsupported(message: String): Nothing = throw AgentException(
         AgentErrorCode.ToolsUnsupported,
-        "当前接口不能完整支持 Agent 工具调用：$message",
+        "本次 Agent 工具调用测试未通过：$message",
     )
 
     private fun protocolFailure(message: String): Nothing = throw AgentException(

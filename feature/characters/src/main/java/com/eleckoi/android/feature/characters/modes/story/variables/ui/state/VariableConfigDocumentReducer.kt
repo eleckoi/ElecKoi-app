@@ -11,7 +11,7 @@ internal sealed interface VariableConfigDocumentAction {
     data class Rename(val value: String) : VariableConfigDocumentAction
     data class UpdateSchema(val value: String) : VariableConfigDocumentAction
     data class SwitchVersion(val version: VariableConfigVersion) : VariableConfigDocumentAction
-    data class CreateVersion(val id: String) : VariableConfigDocumentAction
+    data class CreateVersion(val id: String, val name: String, val sourceVersionId: String?) : VariableConfigDocumentAction
     data class DeleteActiveVersion(val fallbackId: String) : VariableConfigDocumentAction
     data class ReplaceTree(
         val objects: List<VariableObjectConfig>,
@@ -36,28 +36,35 @@ internal object VariableConfigDocumentReducer {
         is VariableConfigDocumentAction.UpdateSchema -> document.copy(schemaCode = action.value)
         is VariableConfigDocumentAction.SwitchVersion -> {
             val versions = document.withCurrentVersion()
+            val selected = versions.firstOrNull { it.id == action.version.id } ?: action.version
             document.copy(
-                name = action.version.name,
-                schemaCode = action.version.schemaCode,
-                objects = action.version.objects,
-                variables = action.version.variables,
-                expandedObjectIds = action.version.expandedObjectIds.toSet(),
+                name = selected.name,
+                initialStateJson = selected.initialStateJson,
+                schemaCode = selected.schemaCode,
+                objects = selected.objects,
+                variables = selected.variables,
+                expandedObjectIds = selected.expandedObjectIds.toSet(),
                 versions = versions,
                 activeVersionId = action.version.id,
             )
         }
         is VariableConfigDocumentAction.CreateVersion -> {
-            val versions = document.withCurrentVersion() + VariableConfigVersion(
+            val currentVersions = document.withCurrentVersion()
+            val source = currentVersions.firstOrNull { it.id == action.sourceVersionId }
+            val version = source?.copy(
                 id = action.id,
-                name = "",
-            )
+                name = action.name.trim().take(60),
+                createdAt = "",
+                updatedAt = "",
+            ) ?: VariableConfigVersion(id = action.id, name = action.name.trim().take(60))
             document.copy(
-                name = "",
-                schemaCode = "",
-                objects = emptyList(),
-                variables = emptyList(),
-                expandedObjectIds = emptySet(),
-                versions = versions,
+                name = version.name,
+                initialStateJson = version.initialStateJson,
+                schemaCode = version.schemaCode,
+                objects = version.objects,
+                variables = version.variables,
+                expandedObjectIds = version.expandedObjectIds.toSet(),
+                versions = currentVersions + version,
                 activeVersionId = action.id,
             )
         }

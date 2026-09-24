@@ -89,6 +89,7 @@ internal class CreationAgentSessionCoordinator(
     )
     private val regenerationCoordinator = CreationRegenerationCoordinator(
         creatorService = creatorService,
+        generationStats = generationStats,
         uiState = uiState,
         scope = scope,
         setTimelineMutationActive = setTimelineMutationActive,

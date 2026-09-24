@@ -6,6 +6,8 @@ import com.eleckoi.android.engine.agent.api.AgentWorkItemType
 import com.eleckoi.android.engine.agent.api.AgentWorkStatus
 import com.eleckoi.android.engine.workspace.model.CreatorConversation
 import com.eleckoi.android.feature.chat.data.ChatGenerationStatsStore
+import com.eleckoi.android.feature.chat.model.ChatGenerationMetrics
+import com.eleckoi.android.feature.chat.model.ChatSessionGenerationStats
 import com.eleckoi.android.feature.studio.ui.assistant.AiCreationAssistantUiState
 import java.nio.file.Files
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -84,6 +86,66 @@ class CreationGenerationStatsControllerTest {
             restored.restore("conversation-1", "thread-1")
 
             assertEquals(expected, restoredState.value.generationStats)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `creator regeneration keeps cumulative turns across a fresh DSH thread and restart`() = runBlocking {
+        val root = Files.createTempDirectory("creator-regeneration-stats").toFile()
+        try {
+            val store = ChatGenerationStatsStore(root)
+            store.persist(
+                "conversation-1",
+                ChatSessionGenerationStats(
+                    runtimeThreadId = "old-thread",
+                    metrics = ChatGenerationMetrics(turns = 58, steps = 367, inputTokens = 3_000_000),
+                ),
+            )
+            val state = MutableStateFlow(stateFor("conversation-1"))
+            val controller = controller(state, store)
+            controller.prepareConversation("conversation-1")
+            controller.restore("conversation-1", "old-thread")
+            controller.prepareRegeneration("conversation-1", retainedTurns = 58)
+            assertEquals(58, state.value.generationStats.metrics.turns)
+
+            val reopenedState = MutableStateFlow(stateFor("conversation-1"))
+            val reopened = controller(reopenedState, ChatGenerationStatsStore(root))
+            reopened.prepareConversation("conversation-1")
+            reopened.restore("conversation-1", "")
+            assertEquals(58, reopenedState.value.generationStats.metrics.turns)
+
+            reopened.accept(
+                "conversation-1",
+                AgentSessionEvent.TurnStarted("new-thread", "new-turn", startedAtMillis = 100L),
+            )
+            assertEquals(58, reopenedState.value.generationStats.metrics.turns)
+            reopened.accept(
+                "conversation-1",
+                AgentSessionEvent.StepStarted("new-thread", "new-turn", step = 1, startedAtMillis = 110L),
+            )
+            assertEquals(58, reopenedState.value.generationStats.metrics.turns)
+            reopened.accept(
+                "conversation-1",
+                AgentSessionEvent.StepCompleted("new-thread", "new-turn", step = 1, completedAtMillis = 200L),
+            )
+            assertEquals(58, reopenedState.value.generationStats.metrics.turns)
+            assertEquals(3_000_000L, reopenedState.value.generationStats.metrics.billedInputTokens)
+            assertEquals(
+                58,
+                ChatGenerationStatsStore(root).load("conversation-1", "new-thread").metrics.turns,
+            )
+
+            reopened.accept(
+                "conversation-1",
+                AgentSessionEvent.TurnStarted("new-thread", "next-turn", startedAtMillis = 300L),
+            )
+            reopened.accept(
+                "conversation-1",
+                AgentSessionEvent.StepCompleted("new-thread", "next-turn", step = 1, completedAtMillis = 400L),
+            )
+            assertEquals(59, reopenedState.value.generationStats.metrics.turns)
         } finally {
             root.deleteRecursively()
         }

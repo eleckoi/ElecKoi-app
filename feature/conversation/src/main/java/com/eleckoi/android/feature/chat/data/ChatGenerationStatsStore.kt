@@ -1,6 +1,7 @@
 package com.eleckoi.android.feature.chat.data
 
 import com.eleckoi.android.feature.chat.model.ChatSessionGenerationStats
+import com.eleckoi.android.feature.chat.model.ChatGenerationMetrics
 import com.eleckoi.android.foundation.serialization.ElecKoiJson
 import java.io.File
 import java.nio.file.AtomicMoveNotSupportedException
@@ -31,9 +32,8 @@ class ChatGenerationStatsStore(
     }
 
     fun load(conversationId: String, runtimeThreadId: String): ChatSessionGenerationStats {
-        if (runtimeThreadId.isBlank()) return ChatSessionGenerationStats()
         return synchronized(mutationLock) {
-            val file = statsFile(conversationId, runtimeThreadId)
+            val file = statsFile(conversationId, runtimeThreadId.ifBlank { RegenerationBaselineKey })
             if (!file.isFile || file.length() > MaximumStatsBytes) {
                 return@synchronized ChatSessionGenerationStats(runtimeThreadId = runtimeThreadId)
             }
@@ -48,9 +48,14 @@ class ChatGenerationStatsStore(
     }
 
     fun persist(conversationId: String, stats: ChatSessionGenerationStats) {
-        if (stats.runtimeThreadId.isBlank()) return
+        if (stats.runtimeThreadId.isBlank() &&
+            stats.metrics == ChatGenerationMetrics() && stats.contextWindowUsage == null
+        ) return
         synchronized(mutationLock) {
-            val target = statsFile(conversationId, stats.runtimeThreadId)
+            val target = statsFile(
+                conversationId,
+                stats.runtimeThreadId.ifBlank { RegenerationBaselineKey },
+            )
             val directory = requireNotNull(target.parentFile)
             require(directory.mkdirs() || directory.isDirectory) { "无法创建生成统计会话目录" }
             val temporary = File(
@@ -76,9 +81,23 @@ class ChatGenerationStatsStore(
                         StandardCopyOption.REPLACE_EXISTING,
                     )
                 }
+                if (stats.runtimeThreadId.isNotBlank()) {
+                    Files.deleteIfExists(statsFile(conversationId, RegenerationBaselineKey).toPath())
+                }
             } finally {
                 Files.deleteIfExists(temporary.toPath())
             }
+        }
+    }
+
+    fun replaceWithRegenerationBaseline(
+        conversationId: String,
+        baseline: ChatSessionGenerationStats,
+    ) {
+        require(baseline.runtimeThreadId.isBlank())
+        synchronized(mutationLock) {
+            deleteConversation(conversationId)
+            persist(conversationId, baseline)
         }
     }
 
@@ -161,6 +180,7 @@ class ChatGenerationStatsStore(
         const val CurrentVersion = 1
         const val MaximumStatsBytes = 64L * 1024L
         const val GenerationStatsDirectory = "eleckoi-generation-stats"
+        const val RegenerationBaselineKey = "_regeneration-baseline"
         val UnsafeSegmentCharacters = Regex("[^A-Za-z0-9._-]")
     }
 }

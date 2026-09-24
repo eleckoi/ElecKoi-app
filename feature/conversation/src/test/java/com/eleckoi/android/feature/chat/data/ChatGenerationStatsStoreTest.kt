@@ -1,5 +1,6 @@
 package com.eleckoi.android.feature.chat.data
 
+import com.eleckoi.android.engine.agent.api.AgentSessionEvent
 import com.eleckoi.android.feature.chat.model.ChatContextWindowUsage
 import com.eleckoi.android.feature.chat.model.ChatGenerationMetrics
 import com.eleckoi.android.feature.chat.model.ChatSessionGenerationStats
@@ -47,6 +48,55 @@ class ChatGenerationStatsStoreTest {
 
             assertEquals("selected", store.load("conversation", "selected").runtimeThreadId)
             assertFalse(root.walkTopDown().any { it.isFile && it.name == "old.json" })
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `regeneration baseline survives reload and transfers to the new DSH thread`() {
+        val root = Files.createTempDirectory("chat-generation-regeneration").toFile()
+        try {
+            val store = ChatGenerationStatsStore(root)
+            val old = ChatSessionGenerationStats(
+                runtimeThreadId = "old-thread",
+                metrics = ChatGenerationMetrics(turns = 58, steps = 367, inputTokens = 3_000_000),
+            )
+            store.persist("conversation", old)
+            val baseline = old.forRegeneration(retainedTurns = 58)
+            store.replaceWithRegenerationBaseline("conversation", baseline)
+
+            val reopened = ChatGenerationStatsStore(root)
+            assertEquals(baseline, reopened.load("conversation", ""))
+            assertEquals(
+                ChatGenerationMetrics(),
+                reopened.load("conversation", "old-thread").metrics,
+            )
+
+            val replacement = ChatSessionGenerationStatsProjector(reopened.load("conversation", ""))
+            replacement.accept(
+                AgentSessionEvent.StepCompleted("new-thread", "replacement-turn", 1, 100),
+                ChatGenerationMetrics(turns = 1, steps = 1),
+                null,
+            )
+            val next = replacement.snapshot()
+            assertEquals(58, next.metrics.turns)
+            reopened.persist("conversation", next)
+            assertEquals(next, ChatGenerationStatsStore(root).load("conversation", "new-thread"))
+            assertEquals(ChatSessionGenerationStats(), reopened.load("conversation", ""))
+
+            val continued = ChatSessionGenerationStatsProjector(
+                ChatGenerationStatsStore(root).load("conversation", "new-thread"),
+            )
+            continued.accept(
+                AgentSessionEvent.StepCompleted("rotated-thread", "ordinary-turn", 1, 200),
+                ChatGenerationMetrics(turns = 1, steps = 1),
+                null,
+            )
+            reopened.persist("conversation", continued.snapshot())
+            val afterOrdinaryTurn = ChatGenerationStatsStore(root).load("conversation", "rotated-thread")
+            assertEquals(59, afterOrdinaryTurn.metrics.turns)
+            assertEquals(369, afterOrdinaryTurn.metrics.steps)
         } finally {
             root.deleteRecursively()
         }

@@ -277,25 +277,45 @@ class RoleplayTranscriptDocumentTest {
     }
 
     @Test
-    fun agentFooterUsesDeepSeekGeometryAndKeepsOpeningPagerBeforeActions() {
+    fun agentFooterOnlyShowsAssistantActionsAndKeepsOpeningPagerFirst() {
         val document = buildRoleplayTranscriptDocument("")
         val footer = document.indexOf("const agentFooterContent = message =>")
-        val pager = document.indexOf("let leading = agentOpeningPager(message);", footer)
-        val copy = document.indexOf("agentActionButton('copy'", footer)
+        val pager = document.indexOf("let leading = state.layoutMode === 'agent' ? agentOpeningPager(message) : '';", footer)
+        val copy = document.indexOf("agentActionButton('copy'", pager)
         val history = document.indexOf("agentActionButton('history'", footer)
         val speaker = document.indexOf("agentActionButton('speaker'", footer)
+        val edit = document.indexOf("agentActionButton('edit'", speaker)
         val regenerate = document.indexOf("agentActionButton('regenerate'", footer)
 
         assertTrue(footer >= 0)
+        assertTrue(document.contains("if (message.pending || message.role !== 'assistant') return '';"))
         assertTrue(pager in footer until copy)
         assertTrue(copy < history)
         assertTrue(history < speaker)
-        assertTrue(speaker < regenerate)
+        assertTrue(speaker < edit)
+        assertTrue(edit < regenerate)
+        assertTrue(document.contains("agentActionButton('edit', '编辑消息', 'edit')"))
+        assertTrue(document.contains("body[data-layout=\"social\"] .agent-footer:not([hidden])"))
         assertTrue(document.contains("svgIcon(icon, 20, 1.85)"))
         assertTrue(document.contains("height: 30px;"))
         assertTrue(document.contains("gap: 16px;"))
         assertTrue(document.contains("font: 400 15px/18px sans-serif;"))
         assertTrue(document.contains("justify-content: space-between;"))
+    }
+
+    @Test
+    fun agentAndSocialUserBubbleOpensEditSheetWithoutFooterActions() {
+        val document = buildRoleplayTranscriptDocument("")
+
+        assertTrue(document.contains("state.layoutMode === 'agent' || state.layoutMode === 'social'"))
+        assertTrue(document.contains("body.classList.toggle('user-editable', editable);"))
+        assertTrue(document.contains("const body = event.target.closest('.message-body.user-editable');"))
+        assertTrue(document.contains("event.target.closest('a, button, input, textarea, select, label, summary, iframe"))
+        assertTrue(document.contains("window.getSelection()?.toString().trim()"))
+        assertTrue(document.contains("if (message?.role === 'user' && !message.pending)"))
+        assertTrue(document.contains("post({ type: 'messageAction', action: 'edit', messageId: message.id });"))
+        assertTrue(document.contains("turns.addEventListener('keydown', event =>"))
+        assertTrue(document.contains("body[data-layout=\"social\"] .turn.role-user .message-body.user-editable"))
     }
 
     @Test

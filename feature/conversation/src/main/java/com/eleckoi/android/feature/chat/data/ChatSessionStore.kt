@@ -208,7 +208,7 @@ class ChatSessionStore(
             settingSnapshots.write(session.id, retainedMessage.id, settingSnapshot)
             room.upsertMetadataWithHistoryInTransaction(session, retainedMessage.content)
         }
-        generationStats?.deleteConversation(session.id)
+        generationStats?.replaceWithRegenerationBaseline(session.id, session.generationStats)
     }
 
     /** Causal suffix deletion; reads only IDs and attachment metadata, never an entire transcript. */

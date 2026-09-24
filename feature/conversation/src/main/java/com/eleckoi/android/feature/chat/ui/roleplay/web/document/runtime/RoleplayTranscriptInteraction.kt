@@ -88,7 +88,18 @@ internal val RoleplayTranscriptInteraction = """    const onViewportResize = () 
       }
     };
     turns.addEventListener('click', event => {
-      const target = event.target.closest('[data-action]'); if (!target) return;
+      const target = event.target.closest('[data-action]');
+      if (!target) {
+        const body = event.target.closest('.message-body.user-editable');
+        if (!body || state.deleteMode || event.defaultPrevented ||
+          event.target.closest('a, button, input, textarea, select, label, summary, iframe, [contenteditable], [role="button"], [role="link"], .story-image-frame') ||
+          window.getSelection()?.toString().trim()) return;
+        const turn = body.closest('.turn'), message = turn ? state.byId.get(turn.dataset.id) : null;
+        if (message?.role === 'user' && !message.pending) {
+          post({ type: 'messageAction', action: 'edit', messageId: message.id });
+        }
+        return;
+      }
       const turn = target.closest('.turn'), message = turn ? state.byId.get(turn.dataset.id) : null; if (!message) return;
       const action = target.dataset.action;
       if (action === 'delete-select') {
@@ -112,6 +123,15 @@ internal val RoleplayTranscriptInteraction = """    const onViewportResize = () 
       }
       if (action === 'avatar') post({ type: message.role === 'user' ? 'userAvatar' : 'assistantAvatar' });
       else if (action !== 'translate' && action !== 'speaker') post({ type: 'messageAction', action, messageId: message.id });
+    });
+    turns.addEventListener('keydown', event => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      const body = event.target;
+      if (!body.matches?.('.message-body.user-editable') || state.deleteMode) return;
+      const turn = body.closest('.turn'), message = turn ? state.byId.get(turn.dataset.id) : null;
+      if (message?.role !== 'user' || message.pending) return;
+      event.preventDefault();
+      post({ type: 'messageAction', action: 'edit', messageId: message.id });
     });
     let imageLongPressTimer = 0;
     let imageLongPressFrame = null;

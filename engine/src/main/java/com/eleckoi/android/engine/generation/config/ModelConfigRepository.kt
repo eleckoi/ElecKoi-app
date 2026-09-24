@@ -190,8 +190,7 @@ class ModelConfigRepository internal constructor(
 
     suspend fun fetchModelOptions(config: ModelConfig): ModelConfig {
         val models = mergeFetchedModelOptions(config, provider.fetchModels(config))
-        val selectedModel = config.model.ifBlank { models.firstOrNull()?.id.orEmpty() }
-        val draft = config.copy(modelOptions = models, model = selectedModel)
+        val draft = config.withFetchedModelsForCapabilityLookup(models)
         val capabilities = dshCapabilityResolver?.invoke(draft, models.map(ModelOption::id)).orEmpty()
         val resolvedModels = models.map { option ->
             val resolved = capabilities[option.id]
@@ -205,9 +204,8 @@ class ModelConfigRepository internal constructor(
         // Fetching is an editor operation, not a persistence boundary. The returned copy stays in
         // the caller's draft until the user explicitly chooses Save.
         return normalizeConfig(
-            config.copy(
+            draft.copy(
                 modelOptions = resolvedModels,
-                model = selectedModel,
             ),
         )
     }
@@ -233,8 +231,7 @@ class ModelConfigRepository internal constructor(
     }
 
     private fun normalizeConfig(config: ModelConfig): ModelConfig {
-        val normalized = config.copy(
-            id = config.id.trim().ifBlank { "config-${newId(12)}" },
+        val normalized = config.withStableModelConfigId().copy(
             name = config.name.trim(),
             provider = normalizeProvider(config.provider),
             apiKeyNeedsReentry = config.apiKeyNeedsReentry && config.apiKey.isBlank(),
@@ -263,6 +260,16 @@ class ModelConfigRepository internal constructor(
     }
 
 }
+
+internal fun ModelConfig.withStableModelConfigId(): ModelConfig = copy(
+    id = id.trim().ifBlank { "config-${newId(12)}" },
+)
+
+internal fun ModelConfig.withFetchedModelsForCapabilityLookup(models: List<ModelOption>): ModelConfig =
+    withStableModelConfigId().copy(
+        modelOptions = models,
+        model = model.ifBlank { models.firstOrNull()?.id.orEmpty() },
+    )
 
 internal fun activeConfigIdAfterDelete(
     collection: ModelConfigCollection,

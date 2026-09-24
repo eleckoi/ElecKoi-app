@@ -261,6 +261,22 @@ class ModelSettingsVersionSelectionTest {
     }
 
     @Test
+    fun `tool probe failure does not declare the model unsupported or suggest another format`() {
+        val state = ModelSettingsEditorState(
+            ModelConfig(apiFormat = ModelApiFormat.GoogleGemini),
+            initialDirty = false,
+        )
+
+        assertTrue(state.startTestConnection())
+        state.finishToolStage(Result.failure(IllegalStateException("模型输出达到上限")))
+
+        assertEquals(null, state.testState?.toolsSupported)
+        assertFalse(state.testState?.formatFallbackSuggested == true)
+        assertTrue(state.testState?.failed == true)
+        assertTrue(state.testState?.steps?.get(2)?.detail.orEmpty().contains("输出达到上限"))
+    }
+
+    @Test
     fun `connection test does not turn a saved config into an unsaved edit`() {
         val original = ModelConfig(
             id = "config",

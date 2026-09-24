@@ -265,9 +265,6 @@ fun ChatScreen(
                 )
             },
             onStop = timeline.stop,
-            onOpenTools = onOpenTools,
-            onOpenPresets = onOpenPresets,
-            onOpenTrajectory = { showTrajectory = true },
             onOpenVariableViewer = { variableViewerOpen = true },
             onOpenDynamicSettings = {
                 draft?.let { current ->
@@ -327,6 +324,9 @@ fun ChatScreen(
                 onBack = onBack,
                 onOpenMenu = { topMenuOpen = true },
                 onDismissMenu = { topMenuOpen = false },
+                onOpenPresets = onOpenPresets,
+                onOpenTools = onOpenTools,
+                onOpenTrajectory = { showTrajectory = true },
                 onCustomizeBackground = { characterBackgroundSettingsOpen = true },
                 onCreateChat = { viewModel.onIntent(ChatIntent.CreateChat) },
             )

@@ -164,7 +164,7 @@ internal fun ModelConnectionTestDialog(
                         state.toolsSupported == false -> "这个配置不支持工具调用，Agent 功能会失败，建议更换 API 地址或接口格式。"
                         else -> "检测未完成，工具调用能力未知。"
                     },
-                    color = if (state.toolsSupported == false) ElecKoiDanger else appearance.mobileMuted,
+                    color = if (state.failed) ElecKoiDanger else appearance.mobileMuted,
                     fontSize = 12.sp,
                     lineHeight = 18.sp,
                 )

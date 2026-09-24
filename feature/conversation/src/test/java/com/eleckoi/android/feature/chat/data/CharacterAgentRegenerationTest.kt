@@ -94,6 +94,38 @@ class CharacterAgentRegenerationTest {
             result.removedImagePaths,
         )
         assertEquals(setOf("runtime-old-branch"), result.obsoleteRuntimeThreadIds)
+        assertEquals(2, retainedChatTurnCount(result.messages))
+    }
+
+    @Test
+    fun `repeated regeneration replaces the last of 58 turns without adding a turn`() {
+        val history = buildList {
+            repeat(58) { index ->
+                add(message("user-$index", MessageRole.User, "问题 $index"))
+                add(message("assistant-$index", MessageRole.Assistant, "回复 $index"))
+            }
+        }
+        val first = truncateForRegeneration(
+            messages = history,
+            targetMessageId = "assistant-57",
+            retainedUserMessageId = "user-57",
+            replacementMessage = null,
+            provider = "provider",
+            model = "model",
+        )
+        assertEquals(58, retainedChatTurnCount(first.messages))
+
+        val replacement = message("assistant-57", MessageRole.Assistant, "新回复")
+        assertEquals(58, retainedChatTurnCount(first.messages + replacement))
+        val second = truncateForRegeneration(
+            messages = first.messages + replacement,
+            targetMessageId = "assistant-57",
+            retainedUserMessageId = "user-57",
+            replacementMessage = null,
+            provider = "provider",
+            model = "model",
+        )
+        assertEquals(58, retainedChatTurnCount(second.messages))
     }
 
     @Test

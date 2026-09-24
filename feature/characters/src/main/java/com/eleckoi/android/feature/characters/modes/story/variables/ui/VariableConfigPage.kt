@@ -337,11 +337,24 @@ fun VariableConfigPage(
                 appearance = appearance,
                 onNameChange = ::updateConfigName,
                 onDismiss = { configManagerOpen = false },
-                onCreateConfig = ::createConfigVersion,
+                onCreateConfig = { createConfigVersionDialogOpen = true },
                 onSelectVersion = ::switchVersion,
                 onImport = onImport,
                 onExport = onExport,
                 onDeleteConfig = { confirmDeleteConfig = true },
+            )
+        }
+
+        if (createConfigVersionDialogOpen) {
+            VariableConfigCreateVersionDialog(
+                versions = versions,
+                activeVersionId = activeVersionId,
+                appearance = appearance,
+                onDismiss = { createConfigVersionDialogOpen = false },
+                onConfirm = { name, sourceVersionId ->
+                    createConfigVersionDialogOpen = false
+                    createConfigVersion(name, sourceVersionId)
+                },
             )
         }
 

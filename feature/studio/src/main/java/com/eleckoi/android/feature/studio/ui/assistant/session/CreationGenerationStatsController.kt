@@ -39,6 +39,16 @@ internal class CreationGenerationStatsController(
         publishIfSelected(conversationId, restored)
     }
 
+    suspend fun prepareRegeneration(conversationId: String, retainedTurns: Int) {
+        if (selectedConversationId != conversationId) return
+        val baseline = currentStats.forRegeneration(retainedTurns)
+        withContext(Dispatchers.IO) { persist(conversationId, baseline) }
+        currentStats = baseline
+        turnMetrics = ChatTurnMetricsCollector()
+        projector = ChatSessionGenerationStatsProjector(baseline)
+        publishIfSelected(conversationId, baseline)
+    }
+
     suspend fun accept(conversationId: String, event: AgentSessionEvent) {
         if (selectedConversationId != conversationId) prepareConversation(conversationId)
         if (event is AgentSessionEvent.TurnStarted) {

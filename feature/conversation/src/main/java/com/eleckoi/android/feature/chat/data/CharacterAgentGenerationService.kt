@@ -213,7 +213,9 @@ class CharacterAgentGenerationService(
                 variablesConfigured = variablesConfigured,
             ),
             updatedAt = nowIso(),
-            generationStats = com.eleckoi.android.feature.chat.model.ChatSessionGenerationStats(),
+            generationStats = session.generationStats.forRegeneration(
+                retainedChatTurnCount(regeneration.messages),
+            ),
         )
         sessions.truncateForRegeneration(
             session = session,
