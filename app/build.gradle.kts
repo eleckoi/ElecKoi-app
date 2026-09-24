@@ -158,8 +158,8 @@ android {
     defaultConfig {
         applicationId = "com.eleckoi.android"
         targetSdk = 37
-        versionCode = 12
-        versionName = "0.1.11"
+        versionCode = 13
+        versionName = "0.1.12"
         ndk {
             // The embedded workspace runtime is arm64-only; keep the Rust Markdown bridge and
             // packaged runtime on the same explicit ABI instead of producing unusable APK slices.
