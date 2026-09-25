@@ -13,7 +13,8 @@ internal fun characterSettingLibraryGlobTool(
 internal fun characterSettingLibraryGlobTool(
     contextProvider: suspend () -> SettingLibraryAgentTurnContext,
     virtualFileSearch: AgentVirtualFileSearch,
-): AgentDynamicTool = buildCharacterSettingLibraryGlobTool(contextProvider, virtualFileSearch)
+    requiredCache: RequiredSettingLibraryCache = RequiredSettingLibraryCache(emptyList()),
+): AgentDynamicTool = buildCharacterSettingLibraryGlobTool(contextProvider, virtualFileSearch, requiredCache)
 
 internal fun characterSettingLibraryGrepTool(
     entries: List<SettingLibraryAgentEntry>,
@@ -23,7 +24,8 @@ internal fun characterSettingLibraryGrepTool(
 internal fun characterSettingLibraryGrepTool(
     contextProvider: suspend () -> SettingLibraryAgentTurnContext,
     virtualFileSearch: AgentVirtualFileSearch,
-): AgentDynamicTool = buildCharacterSettingLibraryGrepTool(contextProvider, virtualFileSearch)
+    requiredCache: RequiredSettingLibraryCache = RequiredSettingLibraryCache(emptyList()),
+): AgentDynamicTool = buildCharacterSettingLibraryGrepTool(contextProvider, virtualFileSearch, requiredCache)
 
 internal fun characterSettingLibraryReadTool(
     entries: List<SettingLibraryAgentEntry>,
@@ -31,4 +33,5 @@ internal fun characterSettingLibraryReadTool(
 
 internal fun characterSettingLibraryReadTool(
     contextProvider: suspend () -> SettingLibraryAgentTurnContext,
-): AgentDynamicTool = buildCharacterSettingLibraryReadTool(contextProvider)
+    requiredCache: RequiredSettingLibraryCache = RequiredSettingLibraryCache(emptyList()),
+): AgentDynamicTool = buildCharacterSettingLibraryReadTool(contextProvider, requiredCache)

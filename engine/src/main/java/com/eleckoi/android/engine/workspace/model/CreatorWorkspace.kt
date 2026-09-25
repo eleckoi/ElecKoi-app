@@ -209,4 +209,11 @@ data class CreatorWorkspaceCheckpoint(
     val createdAt: String,
     val files: List<String>,
     val totalBytes: Long,
+    val symbolicLinks: Map<String, CreatorWorkspaceCheckpointLink> = emptyMap(),
+)
+
+@Serializable
+data class CreatorWorkspaceCheckpointLink(
+    val target: String,
+    val relativeToAppFiles: Boolean = false,
 )

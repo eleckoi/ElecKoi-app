@@ -6,6 +6,10 @@ import java.io.ByteArrayOutputStream
 import java.io.Closeable
 import java.io.InputStream
 import java.io.OutputStream
+import java.nio.channels.Channels
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.StandardOpenOption
 import java.security.MessageDigest
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
@@ -19,12 +23,13 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
-internal const val StreamingBackupVersion = 3
+internal const val StreamingBackupVersion = 4
 internal const val BackupManifestEntry = "manifest.json"
 internal const val BackupEntryKindSection = "section"
 internal const val BackupEntryKindChat = "chat"
 internal const val BackupEntryKindCreatorChat = "creator_chat"
 internal const val BackupEntryKindFile = "file"
+internal const val BackupEntryKindSymbolicLink = "symlink"
 
 @Serializable
 internal data class StreamingBackupManifest(
@@ -91,8 +96,21 @@ internal class StreamingBackupArchiveWriter(output: OutputStream) : Closeable {
 
     suspend fun writeFile(name: String, source: java.io.File) {
         writeEntry(name, BackupEntryKindFile, "") { sink ->
-            source.inputStream().buffered().use { input -> copyBackupStream(input, sink) }
+            Files.newByteChannel(
+                source.toPath(),
+                setOf(StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS),
+            ).use { channel ->
+                Channels.newInputStream(channel).buffered().use { input -> copyBackupStream(input, sink) }
+            }
         }
+    }
+
+    suspend fun writeSymbolicLink(name: String, payload: String) {
+        require(isCreatorWorkspaceProjectEntry(name) &&
+            payload.isNotBlank() && payload.toByteArray(Charsets.UTF_8).size <= MaxBackupLinkPayloadBytes) {
+            "备份符号链接无效"
+        }
+        writeText(name, payload, BackupEntryKindSymbolicLink)
     }
 
     suspend fun finish(
@@ -188,7 +206,7 @@ internal suspend fun inspectBackupArchive(
                 }
                 when (val version = root["version"]?.jsonPrimitive?.content?.toIntOrNull()) {
                     2 -> return LegacyBackupArchive
-                    StreamingBackupVersion -> manifest = ElecKoiJson.decodeFromString(json)
+                    3, StreamingBackupVersion -> manifest = ElecKoiJson.decodeFromString(json)
                     else -> error("不支持的数据备份版本：${version ?: "未知"}")
                 }
             } else {
@@ -297,7 +315,7 @@ private fun validateManifest(
     actualEntries: List<ActualBackupEntry>,
     maximumEntryCount: Int,
 ) {
-    require(manifest.format == "eleckoi-backup" && manifest.version == StreamingBackupVersion) {
+    require(manifest.format == "eleckoi-backup" && manifest.version in 3..StreamingBackupVersion) {
         "备份清单格式不正确"
     }
     require(manifest.entries.size <= maximumEntryCount) { "备份文件数量过多" }
@@ -307,6 +325,9 @@ private fun validateManifest(
     require(manifest.directories.distinct().size == manifest.directories.size) {
         "备份清单包含重复目录"
     }
+    require(manifest.directories.none { directory -> manifest.entries.any { it.name == directory } }) {
+        "备份清单目录与文件重名"
+    }
     manifest.directories.forEach {
         requireValidEntryName(it)
         require(it.startsWith("files/")) { "备份目录路径不安全" }
@@ -314,14 +335,29 @@ private fun validateManifest(
     require(manifest.entries.size == actualEntries.size) { "备份清单与内容不一致" }
     manifest.entries.zip(actualEntries).forEach { (expected, actual) ->
         requireValidEntryName(expected.name)
-        require(expected.kind in SupportedKinds) { "未知备份条目类型：${expected.kind}" }
+        require(expected.kind in SupportedKinds &&
+            (manifest.version >= 4 || expected.kind != BackupEntryKindSymbolicLink)) {
+            "未知备份条目类型：${expected.kind}"
+        }
         require(expected.name == actual.name && expected.bytes == actual.bytes &&
             expected.sha256.equals(actual.sha256, ignoreCase = true)) {
             "备份条目校验失败：${expected.name}"
         }
-        require((expected.kind == BackupEntryKindFile) == expected.name.startsWith("files/")) {
+        require((expected.kind == BackupEntryKindFile ||
+            expected.kind == BackupEntryKindSymbolicLink) == expected.name.startsWith("files/")) {
             "备份条目类型不正确：${expected.name}"
         }
+        if (expected.kind == BackupEntryKindSymbolicLink) {
+            require(isCreatorWorkspaceProjectEntry(expected.name) &&
+                expected.bytes in 1..MaxBackupLinkPayloadBytes.toLong()) {
+                "备份链接无效：${expected.name}"
+            }
+        }
+    }
+    val linkNames = manifest.entries.filter { it.kind == BackupEntryKindSymbolicLink }.map { it.name }
+    val allNames = manifest.directories + manifest.entries.map { it.name }
+    require(linkNames.none { link -> allNames.any { it != link && it.startsWith("$link/") } }) {
+        "备份链接不能作为目录"
     }
 }
 
@@ -389,6 +425,7 @@ private val SupportedKinds = setOf(
     BackupEntryKindChat,
     BackupEntryKindCreatorChat,
     BackupEntryKindFile,
+    BackupEntryKindSymbolicLink,
 )
 
 private const val CopyBufferBytes = 64 * 1024

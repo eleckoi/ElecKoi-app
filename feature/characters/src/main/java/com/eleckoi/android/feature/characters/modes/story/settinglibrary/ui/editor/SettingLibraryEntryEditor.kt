@@ -118,12 +118,7 @@ internal fun EntryEditorPage(
     val fixedOpening = entry.isOpeningEntry()
     val fixedHistoryCompaction = entry.isHistoryCompactionEntry()
     val fixedEntry = entry.isFixedEntry()
-    val cacheEntry = entry.triggerMode == SettingLibraryTriggerMode.Cache
-    val editorSections = if (cacheEntry) {
-        listOf(EntryEditorSection.Base, EntryEditorSection.Content, EntryEditorSection.Insert)
-    } else {
-        EntryEditorSection.entries
-    }
+    val editorSections = EntryEditorSection.entries
 
     if (entry.dynamicMode == SettingLibraryDynamicMode.EjsReference) {
         EjsReferenceEditorPage(
@@ -176,7 +171,6 @@ internal fun EntryEditorPage(
             title = when {
                 fixedOpening -> "AI角色开场白"
                 fixedHistoryCompaction -> "自动压缩摘要模板"
-                cacheEntry -> "缓存设定"
                 else -> genericPageTitle
             },
             appearance = appearance,
@@ -273,9 +267,9 @@ internal fun EntryEditorPage(
                                     current.copy(
                                         agentReadStrategy = strategy,
                                         dynamicMode = if (strategy == SettingLibraryAgentReadStrategy.VariableCondition) {
-                                            current.dynamicMode
+                                            SettingLibraryDynamicMode.EjsController
                                         } else {
-                                            SettingLibraryDynamicMode.SingleCondition
+                                            SettingLibraryDynamicMode.Standard
                                         },
                                     )
                                 }
@@ -313,29 +307,7 @@ internal fun EntryEditorPage(
                                 imeBottomPx = imeBottomPx,
                                 onEntryChange = onEntryChange,
                             )
-                            SettingLibraryAgentReadStrategy.VariableCondition -> {
-                                DynamicModeSettings(
-                                    entry = entry,
-                                    appearance = appearance,
-                                    onEntryChange = onEntryChange,
-                                )
-                                if (entry.dynamicMode == SettingLibraryDynamicMode.SingleCondition) {
-                                    PlainInput(
-                                        label = "变量条件",
-                                        value = entry.agentReadCondition,
-                                        appearance = appearance,
-                                        scrollState = scrollState,
-                                        imeBottomPx = imeBottomPx,
-                                        minHeight = 110,
-                                        placeholder = "getvar('剧情.已完成事件', { defaults: 0 }) >= 3",
-                                        immersiveTitle = "变量条件",
-                                        groupedStyle = true,
-                                        onChange = { value ->
-                                            onEntryChange { it.copy(agentReadCondition = value) }
-                                        },
-                                    )
-                                }
-                            }
+                            SettingLibraryAgentReadStrategy.VariableCondition -> Unit
                             SettingLibraryAgentReadStrategy.Required -> Unit
                         }
                         if (entry.agentReadStrategy != SettingLibraryAgentReadStrategy.Normal) {
@@ -353,10 +325,10 @@ internal fun EntryEditorPage(
                     }
                 }
                     EntryEditorSection.Content -> Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp)) {
-                val contentLabel = when (entry.dynamicMode) {
-                    SettingLibraryDynamicMode.EjsController -> "EJS 代码"
-                    SettingLibraryDynamicMode.EjsReference -> "引用正文"
-                    SettingLibraryDynamicMode.SingleCondition -> "设定正文"
+                val contentLabel = if (entry.dynamicMode == SettingLibraryDynamicMode.EjsController) {
+                    "EJS 代码"
+                } else {
+                    "设定正文"
                 }
                 PlainInput(
                     label = contentLabel,
@@ -365,10 +337,10 @@ internal fun EntryEditorPage(
                     scrollState = scrollState,
                     imeBottomPx = imeBottomPx,
                     minHeight = contentEditorHeight,
-                    placeholder = when (entry.dynamicMode) {
-                        SettingLibraryDynamicMode.EjsController -> "使用 <% … %> 编写判断；可通过 getvar 读取变量、getwi 读取已开启的EJS引用设定"
-                        SettingLibraryDynamicMode.EjsReference -> "填写供 EJS 控制器读取的引用内容"
-                        SettingLibraryDynamicMode.SingleCondition -> "写入世界观、人物背景、地点规则、隐藏信息等"
+                    placeholder = if (entry.dynamicMode == SettingLibraryDynamicMode.EjsController) {
+                        "使用 <% … %> 编写判断；可通过 getvar 读取变量、getwi 读取已开启的EJS引用设定"
+                    } else {
+                        "写入世界观、人物背景、地点规则、隐藏信息等"
                     },
                     immersiveTitle = contentLabel,
                     groupedStyle = true,
@@ -387,22 +359,13 @@ internal fun EntryEditorPage(
                 }
                 }
                     EntryEditorSection.Insert -> Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp)) {
-                    if (cacheEntry) {
-                        CachedEntryInsertSettingsGroup(appearance = appearance)
-                        EntryPositionOrderGroup(
-                            entry = entry,
-                            entries = entries,
-                            appearance = appearance,
-                            scrollState = scrollState,
-                            imeBottomPx = imeBottomPx,
-                            previewExpanded = orderPreviewExpanded,
-                            onTogglePreview = ::toggleOrderPreview,
-                            onOrderConflict = { conflictingOrder = it },
-                            onEntryChange = onEntryChange,
-                        )
-                    } else if (entry.triggerMode == SettingLibraryTriggerMode.AgentTool) {
+                    if (entry.triggerMode == SettingLibraryTriggerMode.AgentTool) {
                         Text(
-                            "AI 读取这条设定时，正文会直接作为工具结果返回，并在当前 Agent 回合的后续推理中继续保留；无需配置插入位置。",
+                            if (entry.agentReadStrategy == SettingLibraryAgentReadStrategy.Required) {
+                                "必读正文自动进入缓存设定区；读取工具只返回编号和标题，无需配置插入位置。"
+                            } else {
+                                "AI 读取这条设定时，正文作为工具结果返回；无需配置插入位置。"
+                            },
                             color = appearance.mobileMuted,
                             fontSize = 13.sp,
                             lineHeight = 20.sp,

@@ -113,27 +113,15 @@ class CharacterSettingContextResolverTest {
     }
 
     @Test
-    fun `cache settings form a sorted region after insertion point one`() {
+    fun `required settings occupy the cache region in tree order`() {
         val library = SettingLibrary(
             characterId = "character",
             entries = listOf(
-                SettingLibraryEntry(
-                    id = "cache-2",
-                    content = "缓存二",
-                    triggerMode = SettingLibraryTriggerMode.Cache,
-                    order = 2,
-                ),
                 SettingLibraryEntry(
                     id = "ordinary",
                     content = "普通常驻",
                     triggerMode = SettingLibraryTriggerMode.Always,
                     position = SettingLibraryPosition.InsertPoint1,
-                    order = 1,
-                ),
-                SettingLibraryEntry(
-                    id = "cache-1",
-                    content = "缓存一",
-                    triggerMode = SettingLibraryTriggerMode.Cache,
                     order = 1,
                 ),
                 SettingLibraryEntry(
@@ -145,23 +133,38 @@ class CharacterSettingContextResolverTest {
                 ),
             ),
         )
+        val cache = RequiredSettingLibraryCache(listOf(
+            SettingLibraryAgentEntry(
+                id = "required-2", title = "第二条", groupPath = "", path = "第二条",
+                content = "缓存二", readStrategy = SettingLibraryAgentReadStrategy.Required,
+                treeOrderPath = listOf(2),
+            ),
+            SettingLibraryAgentEntry(
+                id = "required-1", title = "第一条", groupPath = "", path = "第一条",
+                content = "缓存一", readStrategy = SettingLibraryAgentReadStrategy.Required,
+                treeOrderPath = listOf(1),
+            ),
+        ))
 
-        val resolved = CharacterSettingContextResolver.resolve(library, emptyList())
+        val resolved = CharacterSettingContextResolver.resolve(library, emptyList(), requiredCache = cache)
 
-        assertEquals(listOf("ordinary", "cache-1", "cache-2", "after-cache"), resolved.map { it.id })
+        assertEquals(listOf("#S01", "#S02"), cache.entries.map { it.reference })
+        assertEquals("ordinary", resolved.first().id)
+        assertEquals("after-cache", resolved.last().id)
+        assertEquals(cache.entries.map { it.prompt }, resolved.drop(1).dropLast(1).map { it.content })
         assertTrue(resolved.all { it.anchor == AgentContextAnchor.BeforeHistory })
         assertTrue(resolved.all { it.role == AgentContextRole.User })
         assertEquals(
             listOf(
                 "设定 · 未命名设定",
-                "缓存设定 · 未命名设定",
-                "缓存设定 · 未命名设定",
+                "Agent 必读 · 第一条",
+                "Agent 必读 · 第二条",
                 "设定 · 未命名设定",
             ),
             resolved.map { it.traceTitle },
         )
         assertEquals(
-            listOf("设定插入点 1", "设定插入点 1", "设定插入点 1", "设定插入点 2"),
+            listOf("设定插入点 1", "缓存设定区", "缓存设定区", "设定插入点 2"),
             resolved.map { it.traceSource },
         )
     }
@@ -186,6 +189,35 @@ class CharacterSettingContextResolverTest {
 
         assertEquals(130, resolved.size)
         assertEquals(longContent, resolved.first().content)
+    }
+
+    @Test
+    fun `large required snapshot keeps stable titled references across repeated projections`() {
+        val longBody = "设".repeat(40_001)
+        val sources = List(130) { index ->
+            SettingLibraryAgentEntry(
+                id = "required-$index",
+                title = "条目$index",
+                groupPath = "",
+                path = "条目$index",
+                content = if (index == 0) longBody else "正文$index",
+                readStrategy = SettingLibraryAgentReadStrategy.Required,
+                treeOrderPath = listOf(index),
+            )
+        }
+        val cache = RequiredSettingLibraryCache(sources)
+        val first = CharacterSettingContextResolver.resolve(null, emptyList(), requiredCache = cache)
+        val second = CharacterSettingContextResolver.resolve(null, emptyList(), requiredCache = cache)
+
+        assertEquals(130, first.size)
+        assertEquals("#S01", cache.entries.first().reference)
+        assertEquals("#S130", cache.entries.last().reference)
+        assertEquals(130, cache.entries.map { it.reference }.toSet().size)
+        assertEquals(first, second)
+        assertEquals(1, first.count { it.content.contains(longBody) })
+        assertEquals(cache.entries.first().prompt, first.first().content)
+        assertTrue(first.all { it.content.startsWith("[Setting #S") })
+        assertTrue(first.all { it.activation == AgentContextActivation.FirstModelRequest })
     }
 
     @Test

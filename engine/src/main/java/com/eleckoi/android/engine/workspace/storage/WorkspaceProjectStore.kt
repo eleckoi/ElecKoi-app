@@ -6,6 +6,7 @@ import com.eleckoi.android.engine.workspace.model.CreatorWorkspaceLimits
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.LinkOption
+import java.nio.file.Paths
 import java.nio.file.attribute.BasicFileAttributes
 
 /**
@@ -87,9 +88,8 @@ internal class WorkspaceProjectStore(
         path: String,
     ): WorkspaceProjectState? {
         val projectDirectory = paths.projectDirectory(workspace)
-        val target = paths.resolveProjectPath(projectDirectory, path)
+        val target = paths.resolveProjectEntryNoFollow(projectDirectory, path)
         if (!Files.exists(target.toPath(), LinkOption.NOFOLLOW_LINKS)) return null
-        paths.ensureNoSymbolicLinks(projectDirectory, target)
         paths.deleteTreeNoFollow(target)
         return inspect(projectDirectory)
     }
@@ -102,6 +102,7 @@ internal class WorkspaceProjectStore(
         require(paths.isDirectoryNoFollow(projectDirectory)) { "工作区项目目录不存在或不安全" }
         val rootCanonical = projectDirectory.canonicalFile
         val files = mutableListOf<CreatorWorkspaceFile>()
+        val symbolicLinks = sortedMapOf<String, String>()
         var totalBytes = 0L
         var entryCount = 0
 
@@ -116,16 +117,26 @@ internal class WorkspaceProjectStore(
                 require(entryCount <= MaxFilesystemEntries) {
                     "一个工作区最多包含 $MaxFilesystemEntries 个文件系统条目"
                 }
-                require(child.canonicalPath.startsWith(rootCanonical.path + File.separator)) {
-                    "工作区包含不安全路径"
-                }
-                require(!Files.isSymbolicLink(child.toPath())) { "工作区不能包含符号链接" }
                 val attributes = Files.readAttributes(
                     child.toPath(),
                     BasicFileAttributes::class.java,
                     LinkOption.NOFOLLOW_LINKS,
                 )
+                require(attributes.isSymbolicLink ||
+                    child.canonicalPath.startsWith(rootCanonical.path + File.separator)) {
+                    "工作区包含不安全路径"
+                }
                 when {
+                    attributes.isSymbolicLink -> {
+                        val target = Files.readSymbolicLink(child.toPath()).toString()
+                        require(attributes.size() <= MaxSingleFileBytes) { "工作区符号链接过大" }
+                        symbolicLinks[child.relativeTo(rootCanonical).invariantSeparatorsPath] = target
+                        require(Long.MAX_VALUE - totalBytes >= attributes.size()) { "工作区容量计算溢出" }
+                        totalBytes += attributes.size()
+                        require(totalBytes <= MaxTotalBytes) {
+                            "一个工作区最多占用 ${MaxTotalBytes / Megabyte} MB"
+                        }
+                    }
                     attributes.isDirectory -> visit(child, depth + 1)
                     attributes.isRegularFile -> {
                         require(files.size < MaxFileCount) { "一个工作区最多包含 $MaxFileCount 个文件" }
@@ -153,6 +164,7 @@ internal class WorkspaceProjectStore(
             files = files.sortedBy(CreatorWorkspaceFile::path),
             totalBytes = totalBytes,
             entryCount = entryCount,
+            symbolicLinks = symbolicLinks,
         )
     }
 
@@ -211,7 +223,13 @@ internal class WorkspaceProjectStore(
         }
     }
 
-    fun copyProject(sourceProject: File, destinationProject: File, pathsToCopy: List<String>) {
+    fun copyProject(
+        sourceProject: File,
+        destinationProject: File,
+        pathsToCopy: List<String>,
+        symbolicLinks: Map<String, String> = emptyMap(),
+        relocateInternalLinks: Boolean = false,
+    ) {
         require(!Files.exists(destinationProject.toPath(), LinkOption.NOFOLLOW_LINKS)) {
             "恢复临时目录已存在"
         }
@@ -226,8 +244,46 @@ internal class WorkspaceProjectStore(
             }
             val destination = paths.resolveProjectPath(destinationProject, path)
             destination.parentFile?.mkdirs()
-            source.copyTo(destination, overwrite = false)
+            Files.copy(source.toPath(), destination.toPath(), LinkOption.NOFOLLOW_LINKS)
         }
+        symbolicLinks.toSortedMap().forEach { (path, linkTarget) ->
+            val source = paths.resolveProjectEntryNoFollow(sourceProject, path)
+            require(Files.isSymbolicLink(source.toPath()) &&
+                Files.readSymbolicLink(source.toPath()).toString() == linkTarget) {
+                "工作区快照链接不存在或已变化：$path"
+            }
+            val destination = paths.resolveProjectEntryNoFollow(destinationProject, path)
+            require(!Files.exists(destination.toPath(), LinkOption.NOFOLLOW_LINKS)) {
+                "工作区快照路径重复：$path"
+            }
+            require(destination.parentFile?.mkdirs() == true ||
+                paths.isDirectoryNoFollow(requireNotNull(destination.parentFile))) {
+                "无法创建工作区快照目录：$path"
+            }
+            val target = if (relocateInternalLinks) {
+                relocatedLinkTarget(sourceProject, destinationProject, destination, linkTarget)
+            } else {
+                Files.readSymbolicLink(source.toPath())
+            }
+            Files.createSymbolicLink(destination.toPath(), target)
+        }
+    }
+
+    private fun relocatedLinkTarget(
+        sourceProject: File,
+        destinationProject: File,
+        destinationLink: File,
+        rawTarget: String,
+    ): java.nio.file.Path {
+        val original = Paths.get(rawTarget)
+        if (!original.isAbsolute) return original
+        val sourceRoot = sourceProject.toPath().toAbsolutePath().normalize()
+        val normalized = original.normalize()
+        if (!normalized.startsWith(sourceRoot)) return original
+        val targetInSnapshot = destinationProject.toPath().toAbsolutePath().normalize()
+            .resolve(sourceRoot.relativize(normalized))
+        val relative = requireNotNull(destinationLink.toPath().parent).relativize(targetInSnapshot)
+        return if (relative.toString().isEmpty()) Paths.get(".") else relative
     }
 
     companion object {
@@ -244,4 +300,5 @@ internal data class WorkspaceProjectState(
     val files: List<CreatorWorkspaceFile>,
     val totalBytes: Long,
     val entryCount: Int,
+    val symbolicLinks: Map<String, String> = emptyMap(),
 )

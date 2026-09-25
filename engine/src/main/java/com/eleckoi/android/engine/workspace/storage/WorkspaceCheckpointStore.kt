@@ -2,6 +2,7 @@ package com.eleckoi.android.engine.workspace.storage
 
 import com.eleckoi.android.engine.workspace.model.CreatorWorkspace
 import com.eleckoi.android.engine.workspace.model.CreatorWorkspaceCheckpoint
+import com.eleckoi.android.engine.workspace.model.CreatorWorkspaceCheckpointLink
 import com.eleckoi.android.engine.workspace.model.CreatorWorkspaceFile
 import com.eleckoi.android.foundation.serialization.ElecKoiJson
 import com.eleckoi.android.foundation.serialization.ElecKoiPrettyJson
@@ -37,14 +38,6 @@ internal class WorkspaceCheckpointStore(
         val workspaceRoot = paths.workspaceDirectory(workspace)
         val staging = File(workspaceRoot, ".checkpoint-$checkpointId")
         val destination = File(checkpointsRoot, checkpointId)
-        val checkpoint = CreatorWorkspaceCheckpoint(
-            id = checkpointId,
-            workspaceId = workspace.id,
-            label = normalizedLabel,
-            createdAt = now().toString(),
-            files = projectState.files.map(CreatorWorkspaceFile::path),
-            totalBytes = projectState.totalBytes,
-        )
 
         require(!Files.exists(staging.toPath(), LinkOption.NOFOLLOW_LINKS)) {
             "工作区快照临时目录已存在"
@@ -58,7 +51,19 @@ internal class WorkspaceCheckpointStore(
             projects.copyProject(
                 sourceProject = sourceProject,
                 destinationProject = stagingProject,
-                pathsToCopy = checkpoint.files,
+                pathsToCopy = projectState.files.map(CreatorWorkspaceFile::path),
+                symbolicLinks = projectState.symbolicLinks,
+                relocateInternalLinks = true,
+            )
+            val snapshotState = projects.inspect(stagingProject)
+            val checkpoint = CreatorWorkspaceCheckpoint(
+                id = checkpointId,
+                workspaceId = workspace.id,
+                label = normalizedLabel,
+                createdAt = now().toString(),
+                files = snapshotState.files.map(CreatorWorkspaceFile::path),
+                totalBytes = checkpointByteSize(snapshotState),
+                symbolicLinks = checkpointLinks(snapshotState.symbolicLinks),
             )
             atomicFiles.writeJson(
                 File(staging, WorkspacePathGuard.CheckpointManifestFileName),
@@ -141,7 +146,13 @@ internal class WorkspaceCheckpointStore(
             }
         }
         try {
-            projects.copyProject(sourceProject, stagingProject, checkpoint.files)
+            val sourceLinks = projects.inspect(sourceProject).symbolicLinks
+            projects.copyProject(
+                sourceProject,
+                stagingProject,
+                checkpoint.files,
+                sourceLinks,
+            )
             val restoredState = projects.inspect(stagingProject)
             requireCheckpointMatchesProject(checkpoint, restoredState)
             // Validate the current tree before it becomes the rollback copy as well.
@@ -225,10 +236,35 @@ internal class WorkspaceCheckpointStore(
         require(checkpoint.files.distinct().sorted() == projectState.files.map(CreatorWorkspaceFile::path)) {
             "工作区快照文件清单已损坏"
         }
-        require(checkpoint.totalBytes == projectState.totalBytes) {
+        require(checkpoint.totalBytes == checkpointByteSize(projectState)) {
             "工作区快照容量清单已损坏"
         }
+        require(checkpoint.symbolicLinks == checkpointLinks(projectState.symbolicLinks)) {
+            "工作区快照链接清单已损坏"
+        }
     }
+
+    private fun checkpointLinks(links: Map<String, String>): Map<String, CreatorWorkspaceCheckpointLink> {
+        val appFilesRoot = requireNotNull(paths.root.parentFile).canonicalFile.path
+            .replace('\\', '/').trimEnd('/')
+        return links.mapValues { (_, rawTarget) ->
+            val normalized = rawTarget.replace('\\', '/')
+            if (normalized.startsWith("$appFilesRoot/")) {
+                CreatorWorkspaceCheckpointLink(
+                    target = normalized.removePrefix("$appFilesRoot/"),
+                    relativeToAppFiles = true,
+                )
+            } else {
+                CreatorWorkspaceCheckpointLink(target = rawTarget)
+            }
+        }
+    }
+
+    private fun checkpointByteSize(state: WorkspaceProjectState): Long =
+        state.files.sumOf(CreatorWorkspaceFile::sizeBytes) +
+            checkpointLinks(state.symbolicLinks).values.sumOf { link ->
+                link.target.toByteArray(Charsets.UTF_8).size.toLong()
+            }
 
     private fun rollbackRestore(
         workspace: CreatorWorkspace,

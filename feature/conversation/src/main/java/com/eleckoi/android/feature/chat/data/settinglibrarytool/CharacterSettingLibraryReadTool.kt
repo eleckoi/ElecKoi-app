@@ -16,23 +16,27 @@ internal fun buildCharacterSettingLibraryReadTool(
 ): AgentDynamicTool? {
     val available = availableSettingLibraryEntries(entries)
     if (available.isEmpty()) return null
-    return createCharacterSettingLibraryReadTool { available }
+    return createCharacterSettingLibraryReadTool({ available }, RequiredSettingLibraryCache(emptyList()))
 }
 
 internal fun buildCharacterSettingLibraryReadTool(
     contextProvider: suspend () -> SettingLibraryAgentTurnContext,
-): AgentDynamicTool = createCharacterSettingLibraryReadTool {
-    contextProvider().readableEntries
-}
+    requiredCache: RequiredSettingLibraryCache,
+): AgentDynamicTool = createCharacterSettingLibraryReadTool(
+    entriesProvider = { contextProvider().readableEntries },
+    requiredCache = requiredCache,
+)
 
 private fun createCharacterSettingLibraryReadTool(
     entriesProvider: suspend () -> List<SettingLibraryAgentEntry>,
+    requiredCache: RequiredSettingLibraryCache,
 ): AgentDynamicTool = AgentDynamicTool(
     definition = AgentToolDefinition(
         name = AgentReadSettingFilesTool,
-        description = "读取 Glob 或 Grep 已返回的虚拟设定文件完整正文。" +
+        description = "读取 Glob 或 Grep 已返回的虚拟设定文件。" +
             "路径没有 .md 后缀；不得猜测路径；不会修改设定。" +
-            "只返回显式请求的文件；必读和已触发动态设定由目录结果标注。",
+            "只返回显式请求的文件；固定必读设定正文已在前置缓存设定区，" +
+            "读取时返回可在前文定位的编号和标题；动态及按需设定返回正文。",
         parameters = buildJsonObject {
             put("type", "object")
             put("properties", buildJsonObject {
@@ -82,6 +86,7 @@ private fun createCharacterSettingLibraryReadTool(
                 put("files", buildJsonArray {
                     requestedPaths.forEach { path ->
                         val entry = requireNotNull(byPath[path])
+                        val cached = requiredCache.referenceFor(entry)
                         add(buildJsonObject {
                             put("path", path)
                             put("title", entry.title)
@@ -97,7 +102,9 @@ private fun createCharacterSettingLibraryReadTool(
                                     })
                                 }
                             })
-                            put("content", entry.content)
+                            put("content_delivery", if (cached != null) "cached_reference" else "tool_result")
+                            cached?.let { put("cached_reference", it.reference) }
+                            put("content", cached?.readReceipt ?: entry.content)
                             put("truncated", false)
                         })
                     }

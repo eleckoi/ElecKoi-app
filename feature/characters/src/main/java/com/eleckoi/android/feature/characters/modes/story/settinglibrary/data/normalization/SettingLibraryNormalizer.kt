@@ -113,10 +113,7 @@ internal object SettingLibraryNormalizer {
             }
         requireUniqueLogicalNames(normalizedUserEntries, groups)
         val duplicateOrderKeys = normalizedUserEntries
-            .filter {
-                (it.triggerMode == SettingLibraryTriggerMode.Always && it.position != null) ||
-                    it.triggerMode == SettingLibraryTriggerMode.Cache
-            }
+            .filter { it.triggerMode == SettingLibraryTriggerMode.Always && it.position != null }
             .groupingBy { entry ->
                 Triple(
                     entry.triggerMode,
@@ -134,7 +131,7 @@ internal object SettingLibraryNormalizer {
                 entry.order,
             )
             if (
-                entry.triggerMode in setOf(SettingLibraryTriggerMode.Always, SettingLibraryTriggerMode.Cache) &&
+                entry.triggerMode == SettingLibraryTriggerMode.Always &&
                 key in duplicateOrderKeys
             ) {
                 entry.copy(enabled = false)
@@ -161,16 +158,13 @@ internal object SettingLibraryNormalizer {
         now: String,
         touchUpdatedAt: Boolean,
     ): SettingLibraryEntry {
-        val cacheEntry = entry.triggerMode == SettingLibraryTriggerMode.Cache
         return entry.copy(
             id = entry.id.ifBlank { "setting-${newId(12)}" },
             title = entry.title.trim().take(120),
             groupId = entry.groupId.trim(),
-            position = if (cacheEntry) SettingLibraryPosition.InsertPoint1 else entry.position,
-            promptPositionId = if (cacheEntry) "" else entry.promptPositionId.trim(),
-            insertRole = if (cacheEntry) {
-                SettingLibraryInsertRole.User
-            } else if (entry.position == SettingLibraryPosition.Instructions) {
+            position = entry.position,
+            promptPositionId = entry.promptPositionId.trim(),
+            insertRole = if (entry.position == SettingLibraryPosition.Instructions) {
                 SettingLibraryInsertRole.System
             } else {
                 entry.insertRole.takeUnless { it == SettingLibraryInsertRole.System }
@@ -184,7 +178,6 @@ internal object SettingLibraryNormalizer {
             enabled = entry.enabled && when (entry.triggerMode) {
                 SettingLibraryTriggerMode.AgentTool -> true
                 SettingLibraryTriggerMode.Always -> entry.position != null
-                SettingLibraryTriggerMode.Cache -> true
                 null -> false
             },
             keywords = entry.keywords.map(String::trim).filter(String::isNotBlank).distinct(),

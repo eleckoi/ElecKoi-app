@@ -22,8 +22,7 @@ enum class SettingLibraryInsertRole(val storageValue: String, val label: String,
 
 enum class SettingLibraryTriggerMode(val storageValue: String, val label: String) {
     Always("always", "提示词常驻"),
-    AgentTool("agent_tool", "Agent 读取"),
-    Cache("cache", "缓存设定");
+    AgentTool("agent_tool", "Agent 读取");
 }
 
 enum class SettingLibraryAgentReadStrategy(val storageValue: String, val label: String) {
@@ -34,7 +33,7 @@ enum class SettingLibraryAgentReadStrategy(val storageValue: String, val label: 
 }
 
 enum class SettingLibraryDynamicMode(val storageValue: String, val label: String) {
-    SingleCondition("single_condition", "单条条件"),
+    Standard("standard", "设定"),
     EjsController("ejs_controller", "EJS 控制器"),
     EjsReference("ejs_reference", "EJS引用设定");
 }
@@ -117,9 +116,7 @@ data class SettingLibraryEntry(
     val defaultOpeningMessageId: String = "",
     val agentSelectionHint: String = "",
     val agentReadStrategy: SettingLibraryAgentReadStrategy = SettingLibraryAgentReadStrategy.Normal,
-    /** JavaScript expression evaluated against the current variable state for VariableCondition. */
-    val agentReadCondition: String = "",
-    val dynamicMode: SettingLibraryDynamicMode = SettingLibraryDynamicMode.SingleCondition,
+    val dynamicMode: SettingLibraryDynamicMode = SettingLibraryDynamicMode.Standard,
     val keywords: List<String> = emptyList(),
     val keywordScanDepth: Int = 1,
     val conditionKeywords: List<String> = emptyList(),
@@ -198,8 +195,7 @@ fun settingLibraryOpeningEntry(existing: SettingLibraryEntry? = null): SettingLi
         openingMessages = messages,
         defaultOpeningMessageId = defaultId,
         agentReadStrategy = SettingLibraryAgentReadStrategy.Normal,
-        agentReadCondition = "",
-        dynamicMode = SettingLibraryDynamicMode.SingleCondition,
+        dynamicMode = SettingLibraryDynamicMode.Standard,
         keywords = emptyList(),
         conditionKeywords = emptyList(),
         keywordCondition = SettingLibraryKeywordCondition.None,

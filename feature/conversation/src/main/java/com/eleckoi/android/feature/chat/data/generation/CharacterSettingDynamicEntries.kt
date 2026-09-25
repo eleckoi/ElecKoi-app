@@ -2,7 +2,6 @@ package com.eleckoi.android.feature.chat.data
 
 import com.eleckoi.android.engine.story.variables.runtime.EjsTemplateMessage
 import com.eleckoi.android.engine.story.variables.runtime.EjsTemplateSource
-import com.eleckoi.android.engine.story.variables.runtime.VariableConditionExpression
 import com.eleckoi.android.engine.story.variables.runtime.VariableRuntimeService
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.data.SettingLibraryAgentEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.data.SettingLibraryAgentTurnContext
@@ -18,31 +17,14 @@ internal suspend fun SettingLibraryAgentTurnContext.resolveDynamicEntries(
 ): SettingLibraryAgentTurnContext {
     val keywordResolved = withKeywordPromotions(messages)
     val candidateEntries = keywordResolved.readableEntries
-    val conditionEntries = candidateEntries.filter { entry ->
-        entry.readStrategy == SettingLibraryAgentReadStrategy.VariableCondition &&
-            entry.dynamicMode == SettingLibraryDynamicMode.SingleCondition
-    }
-    val conditionMatches = runtime.evaluateVariableConditions(
-        stateJson = stateJson,
-        expressions = conditionEntries.map { entry ->
-            VariableConditionExpression(entry.id, entry.readCondition)
-        },
-    )
     val visibleEntries = candidateEntries
         .filter { entry ->
-            when {
-                entry.readStrategy != SettingLibraryAgentReadStrategy.VariableCondition -> true
-                entry.dynamicMode == SettingLibraryDynamicMode.SingleCondition -> conditionMatches[entry.id] == true
-                entry.dynamicMode == SettingLibraryDynamicMode.EjsController -> true
-                else -> false
-            }
+            entry.readStrategy != SettingLibraryAgentReadStrategy.VariableCondition ||
+                entry.dynamicMode == SettingLibraryDynamicMode.EjsController
         }
         .map { entry: SettingLibraryAgentEntry ->
-            if (
-                conditionMatches[entry.id] == true ||
-                (entry.readStrategy == SettingLibraryAgentReadStrategy.VariableCondition &&
-                    entry.dynamicMode == SettingLibraryDynamicMode.EjsController)
-            ) {
+            if (entry.readStrategy == SettingLibraryAgentReadStrategy.VariableCondition &&
+                entry.dynamicMode == SettingLibraryDynamicMode.EjsController) {
                 entry.copy(promotedToRequiredThisTurn = true)
             } else {
                 entry
@@ -107,7 +89,7 @@ internal fun ejsTemplateSources(
                 when (source.dynamicMode) {
                     SettingLibraryDynamicMode.EjsReference -> true
                     SettingLibraryDynamicMode.EjsController -> source.id != entry.id
-                    SettingLibraryDynamicMode.SingleCondition -> false
+                    SettingLibraryDynamicMode.Standard -> false
                 }
         }
         .map { source ->

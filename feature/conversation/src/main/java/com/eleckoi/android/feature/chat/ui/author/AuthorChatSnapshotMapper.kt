@@ -97,7 +97,6 @@ private fun SettingLibrary.toAuthorSnapshot(): AuthorSettingLibrarySnapshot {
                     put("defaultOpeningMessageId", entry.defaultOpeningMessageId)
                     put("agentSelectionHint", entry.agentSelectionHint)
                     put("agentReadStrategy", entry.agentReadStrategy.storageValue)
-                    put("agentReadCondition", entry.agentReadCondition)
                     put("dynamicMode", entry.dynamicMode.storageValue)
                     put("keywords", buildJsonArray { entry.keywords.forEach { add(it) } })
                     put("keywordScanDepth", entry.keywordScanDepth)

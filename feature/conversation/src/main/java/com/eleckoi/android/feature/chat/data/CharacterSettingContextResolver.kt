@@ -23,6 +23,7 @@ internal object CharacterSettingContextResolver {
         library: SettingLibrary?,
         messages: List<ChatMessage>,
         imageActionEnabled: Boolean = false,
+        requiredCache: RequiredSettingLibraryCache? = null,
     ): List<AgentContextInjection> {
         val promptPositions = library?.promptPositions.orEmpty().associateBy { it.id }
         val candidates = library?.entries.orEmpty().filter { entry ->
@@ -30,14 +31,13 @@ internal object CharacterSettingContextResolver {
                 entry.enabled &&
                 entry.content.isNotBlank() &&
                 when (entry.triggerMode) {
-                    SettingLibraryTriggerMode.Cache -> true
                     SettingLibraryTriggerMode.Always -> entry.position != null
                     SettingLibraryTriggerMode.AgentTool, null -> false
                 }
         }
-        if (candidates.isEmpty()) return emptyList()
+        if (candidates.isEmpty() && requiredCache?.entries.isNullOrEmpty()) return emptyList()
 
-        return candidates.asSequence()
+        val orderedEntries = candidates.asSequence()
             .sortedWith(
                 compareBy<SettingLibraryEntry> { entry ->
                     entry.runtimePosition(promptPositions).ordinal
@@ -47,7 +47,8 @@ internal object CharacterSettingContextResolver {
                     .thenBy(SettingLibraryEntry::order)
                     .thenBy(SettingLibraryEntry::id),
             )
-            .mapIndexed { runtimeOrder, entry ->
+            .toList()
+        val automatic = orderedEntries.mapIndexed { runtimeOrder, entry ->
                 val runtimePosition = entry.runtimePosition(promptPositions)
                 val presetEntry = entry.id.startsWith(AgentPresetEntryIdPrefix)
                 val entryTitle = entry.title.trim().ifBlank { "未命名设定" }
@@ -71,7 +72,6 @@ internal object CharacterSettingContextResolver {
                     // into the runtime instead of sorting those local order values against each other.
                     order = runtimeOrder + 1,
                     traceTitle = when {
-                        entry.triggerMode == SettingLibraryTriggerMode.Cache -> "缓存设定 · $entryTitle"
                         entry.isHiddenToolTimelineEntry() -> "预设固定条目 · $entryTitle"
                         presetEntry -> "预设条目 · $entryTitle"
                         else -> "设定 · $entryTitle"
@@ -79,20 +79,35 @@ internal object CharacterSettingContextResolver {
                     traceSource = tracePosition,
                 )
             }
-            .toList()
+        val cachePosition = orderedEntries.indexOfFirst { entry ->
+            entry.runtimePosition(promptPositions).ordinal > SettingLibraryPosition.InsertPoint1.ordinal
+        }.takeIf { it >= 0 } ?: orderedEntries.size
+        return buildList {
+            addAll(automatic.take(cachePosition))
+            requiredCache?.entries.orEmpty().forEach { entry ->
+                add(AgentContextInjection(
+                    id = entry.injectionId,
+                    anchor = AgentContextAnchor.BeforeHistory,
+                    role = AgentContextRole.User,
+                    activation = AgentContextActivation.FirstModelRequest,
+                    content = entry.prompt,
+                    traceTitle = "Agent 必读 · ${entry.title}",
+                    traceSource = "缓存设定区",
+                ))
+            }
+            addAll(automatic.drop(cachePosition))
+        }.mapIndexed { index, injection -> injection.copy(order = index + 1) }
     }
 
     private fun SettingLibraryEntry.runtimePosition(
         promptPositions: Map<String, SettingLibraryPromptPosition>,
     ): SettingLibraryPosition {
-        if (triggerMode == SettingLibraryTriggerMode.Cache) return SettingLibraryPosition.InsertPoint1
         return promptPositions[promptPositionId]?.anchor ?: requireNotNull(position)
     }
 
     private fun SettingLibraryEntry.placementRank(
         promptPositions: Map<String, SettingLibraryPromptPosition>,
     ): Int {
-        if (triggerMode == SettingLibraryTriggerMode.Cache) return 3
         return when (promptPositions[promptPositionId]?.side) {
             SettingLibraryPromptPositionSide.BeforeSettingPosition -> 0
             null -> 1

@@ -16,19 +16,14 @@ internal fun SettingLibraryEntry.triggerPreviewLabel(): String {
     return when (triggerMode) {
         SettingLibraryTriggerMode.Always -> "常驻"
         SettingLibraryTriggerMode.AgentTool -> "Agent 读取"
-        SettingLibraryTriggerMode.Cache -> "缓存设定"
         null -> "需选触发"
     }
 }
 
 internal fun SettingLibraryEntry.hasRequiredActivationFields(): Boolean {
     return isFixedEntry() ||
-        (triggerMode == SettingLibraryTriggerMode.AgentTool &&
-            (agentReadStrategy != SettingLibraryAgentReadStrategy.VariableCondition ||
-                dynamicMode != SettingLibraryDynamicMode.SingleCondition ||
-                agentReadCondition.isNotBlank())) ||
-        (triggerMode == SettingLibraryTriggerMode.Always && position != null) ||
-        triggerMode == SettingLibraryTriggerMode.Cache
+        triggerMode == SettingLibraryTriggerMode.AgentTool ||
+        (triggerMode == SettingLibraryTriggerMode.Always && position != null)
 }
 
 internal fun List<SettingLibraryEntry>.sortedForSettingLibraryDisplay(): List<SettingLibraryEntry> {
@@ -50,27 +45,15 @@ internal fun List<SettingLibraryEntry>.sortedForPositionPreview(position: Settin
 }
 
 internal fun SettingLibraryEntry.hasOrderConflictIn(entries: List<SettingLibraryEntry>): Boolean {
-    if (triggerMode !in setOf(SettingLibraryTriggerMode.Always, SettingLibraryTriggerMode.Cache)) return false
-    val targetPosition = if (triggerMode == SettingLibraryTriggerMode.Cache) {
-        SettingLibraryPosition.InsertPoint1
-    } else {
-        position ?: return false
-    }
-    val targetScope = if (triggerMode == SettingLibraryTriggerMode.Cache) {
-        SettingLibraryTriggerMode.Cache.storageValue
-    } else {
-        promptPositionId.ifBlank { targetPosition.storageValue }
-    }
+    if (triggerMode != SettingLibraryTriggerMode.Always) return false
+    val targetPosition = position ?: return false
+    val targetScope = promptPositionId.ifBlank { targetPosition.storageValue }
     return entries.any { entry ->
         entry.id != id &&
             entry.enabled &&
             entry.triggerMode == triggerMode &&
             !entry.isFixedEntry() &&
-            (if (entry.triggerMode == SettingLibraryTriggerMode.Cache) {
-                SettingLibraryTriggerMode.Cache.storageValue
-            } else {
-                entry.promptPositionId.ifBlank { entry.position?.storageValue.orEmpty() }
-            }) == targetScope &&
+            entry.promptPositionId.ifBlank { entry.position?.storageValue.orEmpty() } == targetScope &&
             entry.order == order
     }
 }
@@ -118,7 +101,6 @@ internal fun triggerDescription(mode: SettingLibraryTriggerMode): String {
     return when (mode) {
         SettingLibraryTriggerMode.Always -> "每回合写入提示词"
         SettingLibraryTriggerMode.AgentTool -> "由 Agent 搜索并读取"
-        SettingLibraryTriggerMode.Cache -> "固定写入缓存设定区"
     }
 }
 

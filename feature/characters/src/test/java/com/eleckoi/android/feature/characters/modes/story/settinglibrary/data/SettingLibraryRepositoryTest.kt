@@ -282,12 +282,6 @@ class SettingLibraryRepositoryTest {
                         position = SettingLibraryPosition.InsertPoint1,
                     ),
                     SettingLibraryEntry(
-                        id = "cache",
-                        title = "缓存规则",
-                        content = "稳定前缀",
-                        triggerMode = SettingLibraryTriggerMode.Cache,
-                    ),
-                    SettingLibraryEntry(
                         id = "agent-entry",
                         title = "潮汐之门",
                         groupId = "world",
@@ -324,12 +318,8 @@ class SettingLibraryRepositoryTest {
         )
 
         assertEquals(
-            listOf("always", "cache", "preset-always"),
+            listOf("always", "preset-always"),
             context.automaticLibrary.entries.map { it.id },
-        )
-        assertEquals(
-            SettingLibraryPosition.InsertPoint1,
-            context.automaticLibrary.entries.single { it.id == "cache" }.position,
         )
         assertEquals("preset-position", context.automaticLibrary.promptPositions.single().id)
         assertEquals("agent-entry", context.readableEntries.single().id)

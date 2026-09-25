@@ -65,13 +65,14 @@ internal class StreamingDataBackupService(
         val creatorTargets = creatorAssistantBackup.targets()
         val creatorWorkspaceCount = creatorWorkspaces.list().size
         val archiveTree = collectBackupArchiveTree(context.filesDir, includedRoots)
-        val totalEntries = archiveTree.files.size + BaseSections.size +
+        val totalEntries = archiveTree.files.size + archiveTree.symbolicLinks.size + BaseSections.size +
             characterItems.size * CharacterSectionCount + historyTargets.size +
             creatorTargets.size + 1
         require(totalEntries + archiveTree.directories.size <= maximumEntryCount) { "备份文件数量过多" }
 
         val expectedNames = buildList {
             addAll(archiveTree.files.map(BackupArchiveFile::entryName))
+            addAll(archiveTree.symbolicLinks.map(BackupArchiveSymbolicLink::entryName))
             addAll(BaseSections)
             characterItems.forEach { character ->
                 val id = safeSegment(character.id)
@@ -105,6 +106,13 @@ internal class StreamingDataBackupService(
                 // reached a private staging root.
                 archiveTree.files.forEach { entry ->
                     writer.writeFile(entry.entryName, entry.file)
+                    report(entry.entryName)
+                }
+                archiveTree.symbolicLinks.forEach { entry ->
+                    writer.writeSymbolicLink(
+                        entry.entryName,
+                        encodeBackupSymbolicLinkTarget(entry.target, root),
+                    )
                     report(entry.entryName)
                 }
                 suspend fun section(name: String, value: String, ownerId: String = "") {
@@ -168,7 +176,7 @@ internal class StreamingDataBackupService(
             mode = BackupMode.Export,
             characters = characterItems.size,
             sessions = historyTargets.size,
-            files = archiveTree.files.size,
+            files = archiveTree.files.size + archiveTree.symbolicLinks.size,
             creatorWorkspaces = creatorWorkspaceCount,
             creatorConversations = creatorTargets.size,
         )
@@ -204,13 +212,15 @@ internal class StreamingDataBackupService(
         val manifest = archive.manifest
         val names = manifest.entries.map(StreamingBackupEntry::name)
         require(BaseSections.all { it in names }) { "备份缺少必要数据" }
-        val firstStructuredEntry = manifest.entries.indexOfFirst { it.kind != BackupEntryKindFile }
+        fun isFileEntry(kind: String) =
+            kind == BackupEntryKindFile || kind == BackupEntryKindSymbolicLink
+        val firstStructuredEntry = manifest.entries.indexOfFirst { !isFileEntry(it.kind) }
             .let { if (it < 0) manifest.entries.size else it }
-        require(manifest.entries.drop(firstStructuredEntry).none { it.kind == BackupEntryKindFile }) {
+        require(manifest.entries.drop(firstStructuredEntry).none { isFileEntry(it.kind) }) {
             "备份文件分块顺序不正确"
         }
         val ownedFileNames = manifest.directories + manifest.entries
-            .filter { it.kind == BackupEntryKindFile }
+            .filter { isFileEntry(it.kind) }
             .map(StreamingBackupEntry::name)
         require(ownedFileNames.all(::isIncludedFileEntry)) { "备份包含未知文件目录" }
         require(manifest.entries.count { it.kind == BackupEntryKindChat } == manifest.sessionCount) {
@@ -222,7 +232,7 @@ internal class StreamingDataBackupService(
         val fileSwap = BackupFileRootSwap(context.filesDir, includedRoots)
         restoreBackupDirectories(fileSwap.stagingRoot, manifest.directories)
         val presentFiles = manifest.directories + manifest.entries
-            .filter { it.kind == BackupEntryKindFile }
+            .filter { isFileEntry(it.kind) }
             .map(StreamingBackupEntry::name)
         var filesCommitted = false
         var restoredCharacters = characters.loadCharacters()
@@ -230,10 +240,20 @@ internal class StreamingDataBackupService(
         var restoredSessions = 0
         var restoredCreatorConversations = 0
         var restoredFiles = 0
+        val root = context.filesDir.absolutePath
+        val pendingSymbolicLinks = mutableListOf<Pair<String, String>>()
+        fun restoreSymbolicLinks() {
+            pendingSymbolicLinks.forEach { (name, target) ->
+                restoreBackupSymbolicLink(
+                    fileSwap.stagingRoot,
+                    name,
+                    decodeBackupSymbolicLinkTarget(target, root),
+                )
+            }
+        }
         val restoredCharacterSections = mutableSetOf<String>()
         fun restoredCharacterIds(): Set<String> =
             restoredCharacters.items.mapTo(mutableSetOf()) { it.id }
-        val root = context.filesDir.absolutePath
         try {
             context.contentResolver.openInputStream(uri)?.use { input ->
                 readStreamingBackupEntries(
@@ -259,7 +279,14 @@ internal class StreamingDataBackupService(
                             restoredFiles++
                             return@consume
                         }
+                        if (entry.kind == BackupEntryKindSymbolicLink) {
+                            pendingSymbolicLinks += entry.name to
+                                readBackupText(source, MaxBackupLinkPayloadBytes.toLong())
+                            restoredFiles++
+                            return@consume
+                        }
                         if (!filesCommitted) {
+                            restoreSymbolicLinks()
                             onProgress(BackupProgress(
                                 mode = BackupMode.Import,
                                 phase = BackupPhase.Restoring,
@@ -313,6 +340,7 @@ internal class StreamingDataBackupService(
                 )
             } ?: throw IOException("无法读取所选备份")
             if (!filesCommitted) {
+                restoreSymbolicLinks()
                 fileSwap.commit(presentFiles)
             }
             val expectedCharacterSections = restoredCharacterIds().flatMap { id ->
@@ -322,7 +350,7 @@ internal class StreamingDataBackupService(
             require(restoredCharacterSections == expectedCharacterSections) { "角色数据分块不完整" }
             require(restoredCharacters.items.size == manifest.characterCount) { "角色数量与备份清单不一致" }
             require(restoredSessions == manifest.sessionCount) { "聊天数量与备份清单不一致" }
-            require(restoredFiles == manifest.entries.count { it.kind == BackupEntryKindFile }) {
+            require(restoredFiles == manifest.entries.count { isFileEntry(it.kind) }) {
                 "文件数量与备份清单不一致"
             }
             require(restoredWorkspaces.size == manifest.creatorWorkspaceCount) { "工作区数量与备份清单不一致" }

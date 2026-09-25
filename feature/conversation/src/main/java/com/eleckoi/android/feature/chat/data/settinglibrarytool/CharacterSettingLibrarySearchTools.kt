@@ -4,6 +4,7 @@ import com.eleckoi.android.engine.agent.api.AgentDynamicTool
 import com.eleckoi.android.engine.agent.api.AgentDynamicToolResult
 import com.eleckoi.android.engine.agent.api.AgentGlobSettingFilesTool
 import com.eleckoi.android.engine.agent.api.AgentGrepSettingFilesTool
+import com.eleckoi.android.engine.agent.api.AgentReadSettingFilesTool
 import com.eleckoi.android.engine.agent.api.AgentToolDefinition
 import com.eleckoi.android.engine.agent.api.AgentVirtualFile
 import com.eleckoi.android.engine.agent.api.AgentVirtualFileSearch
@@ -26,28 +27,30 @@ internal fun buildCharacterSettingLibraryGlobTool(
 ): AgentDynamicTool? {
     val available = availableSettingLibraryEntries(entries)
     if (available.isEmpty()) return null
-    return createCharacterSettingLibraryGlobTool({ available }, virtualFileSearch)
+    return createCharacterSettingLibraryGlobTool({ available }, virtualFileSearch, RequiredSettingLibraryCache(emptyList()))
 }
 
 internal fun buildCharacterSettingLibraryGlobTool(
     contextProvider: suspend () -> SettingLibraryAgentTurnContext,
     virtualFileSearch: AgentVirtualFileSearch,
+    requiredCache: RequiredSettingLibraryCache,
 ): AgentDynamicTool = createCharacterSettingLibraryGlobTool(
     entriesProvider = { contextProvider().readableEntries },
     virtualFileSearch = virtualFileSearch,
+    requiredCache = requiredCache,
 )
 
 private fun createCharacterSettingLibraryGlobTool(
     entriesProvider: suspend () -> List<SettingLibraryAgentEntry>,
     virtualFileSearch: AgentVirtualFileSearch,
+    requiredCache: RequiredSettingLibraryCache,
 ): AgentDynamicTool = AgentDynamicTool(
     definition = AgentToolDefinition(
         name = AgentGlobSettingFilesTool,
         description = "使用 Glob 路径模式浏览当前对话的虚拟设定文件。" +
             "路径没有 .md 后缀，例如 **、人物/**、**/*关系*。" +
             "返回真实完整路径、标题和作者注释；不会读取正文。" +
-            "required_entries 包含固定必读、关键词命中和 EJS/变量条件触发项，" +
-            "本回合必须使用读取工具逐项读取一次。",
+            RequiredEntriesReadInstruction,
         parameters = searchParameters(includeOutputMode = false),
     ),
     handler = { arguments ->
@@ -76,14 +79,14 @@ private fun createCharacterSettingLibraryGlobTool(
                 put("status", if (result.paths.isEmpty()) "no_matches" else "ok")
                 put("pattern", pattern)
                 put("path", scope)
-                putRequiredEntries(available)
+                putRequiredEntries(available, requiredCache)
                 put("entries", buildJsonArray {
                     result.paths
                         .mapNotNull(byVirtualPath::get)
                         .sortedBy { scoped ->
                             orderByVirtualPath[scoped.virtualPath] ?: Int.MAX_VALUE
                         }
-                        .forEach { scoped -> add(scoped.entry.candidateJson()) }
+                        .forEach { scoped -> add(scoped.entry.candidateJson(requiredCache)) }
                 })
                 put("truncated", result.omitted > 0)
                 put("omitted", result.omitted)
@@ -98,27 +101,29 @@ internal fun buildCharacterSettingLibraryGrepTool(
 ): AgentDynamicTool? {
     val available = availableSettingLibraryEntries(entries)
     if (available.isEmpty()) return null
-    return createCharacterSettingLibraryGrepTool({ available }, virtualFileSearch)
+    return createCharacterSettingLibraryGrepTool({ available }, virtualFileSearch, RequiredSettingLibraryCache(emptyList()))
 }
 
 internal fun buildCharacterSettingLibraryGrepTool(
     contextProvider: suspend () -> SettingLibraryAgentTurnContext,
     virtualFileSearch: AgentVirtualFileSearch,
+    requiredCache: RequiredSettingLibraryCache,
 ): AgentDynamicTool = createCharacterSettingLibraryGrepTool(
     entriesProvider = { contextProvider().readableEntries },
     virtualFileSearch = virtualFileSearch,
+    requiredCache = requiredCache,
 )
 
 private fun createCharacterSettingLibraryGrepTool(
     entriesProvider: suspend () -> List<SettingLibraryAgentEntry>,
     virtualFileSearch: AgentVirtualFileSearch,
+    requiredCache: RequiredSettingLibraryCache,
 ): AgentDynamicTool = AgentDynamicTool(
     definition = AgentToolDefinition(
         name = AgentGrepSettingFilesTool,
         description = "使用 ripgrep 正则搜索当前对话的虚拟设定文件标题、作者注释和正文。" +
             "默认返回匹配文件的完整路径；需要定位文本时再选择 content 或 count。" +
-            "required_entries 包含固定必读、关键词命中和 EJS/变量条件触发项，" +
-            "本回合必须使用读取工具逐项读取一次。",
+            RequiredEntriesReadInstruction,
         parameters = searchParameters(includeOutputMode = true),
     ),
     handler = { arguments ->
@@ -161,13 +166,13 @@ private fun createCharacterSettingLibraryGrepTool(
                 put("pattern", pattern)
                 put("path", scope)
                 put("output_mode", outputMode)
-                putRequiredEntries(available)
+                putRequiredEntries(available, requiredCache)
                 put("matches", buildJsonArray {
                     when (outputMode) {
                         FilesWithMatchesMode -> result.paths
                             .sortedBy { path -> orderByVirtualPath[path] ?: Int.MAX_VALUE }
                             .forEach { path ->
-                                byVirtualPath[path]?.entry?.let { entry -> add(entry.candidateJson()) }
+                                byVirtualPath[path]?.entry?.let { entry -> add(entry.candidateJson(requiredCache)) }
                             }
                         CountMode -> result.counts.entries
                             .sortedBy { (path, _) -> orderByVirtualPath[path] ?: Int.MAX_VALUE }
@@ -288,25 +293,37 @@ private fun SettingLibraryAgentEntry.searchableText(): String = buildString {
     append(content)
 }
 
-private fun SettingLibraryAgentEntry.candidateJson(): JsonObject = buildJsonObject {
+private fun SettingLibraryAgentEntry.candidateJson(requiredCache: RequiredSettingLibraryCache): JsonObject = buildJsonObject {
+    val cached = requiredCache.referenceFor(this@candidateJson)
     put("path", path.normalizedSettingPath())
     put("title", title)
     put("group_path", groupPath.normalizedGroupPath())
     put("selection_hint", selectionHint.normalizedSelectionHint())
     put("read_strategy", readStrategy.storageValue)
+    put("content_delivery", if (cached != null) "cached_reference" else "tool_result")
+    cached?.let { put("cached_reference", it.reference) }
 }
 
 private fun kotlinx.serialization.json.JsonObjectBuilder.putRequiredEntries(
     entries: List<SettingLibraryAgentEntry>,
+    requiredCache: RequiredSettingLibraryCache,
 ) {
     val required = entries.filter(SettingLibraryAgentEntry::isRequiredThisTurn)
     put("required_entries", buildJsonArray {
-        required.forEach { entry -> add(entry.candidateJson()) }
+        required.forEach { entry -> add(entry.candidateJson(requiredCache)) }
     })
 }
 
 private fun SettingLibraryAgentEntry.isRequiredThisTurn(): Boolean =
     readStrategy == SettingLibraryAgentReadStrategy.Required || promotedToRequiredThisTurn
+
+private val RequiredEntriesReadInstruction =
+    "搜索结果的 required_entries 是本回合必读清单（固定必读及关键词、EJS/变量触发项），" +
+        "与 entries/matches 是否命中无关。" +
+        "若非空，回复用户前必须调用 $AgentReadSettingFilesTool，" +
+        "把其中所有 path 一次传入 paths；仅搜索不算读取。" +
+        "即使固定必读项标记为 cached_reference、正文已在前置设定区，也必须读取，" +
+        "用工具回执的编号和标题核对前置正文。"
 
 private fun AgentVirtualGrepLine.matchJson(entry: SettingLibraryAgentEntry): JsonObject =
     buildJsonObject {

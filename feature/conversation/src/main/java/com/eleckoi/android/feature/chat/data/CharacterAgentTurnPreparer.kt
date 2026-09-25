@@ -18,7 +18,6 @@ import com.eleckoi.android.engine.story.variables.config.VariableConfigRepositor
 import com.eleckoi.android.engine.story.variables.model.VariableConfig
 import com.eleckoi.android.engine.story.variables.runtime.EjsTemplateMessage
 import com.eleckoi.android.engine.story.variables.runtime.EjsTemplateSource
-import com.eleckoi.android.engine.story.variables.runtime.VariableConditionExpression
 import com.eleckoi.android.engine.story.variables.runtime.VariableRuntimeService
 import com.eleckoi.android.engine.workspace.storage.CreatorWorkspaceRepository
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.data.SettingLibraryAgentTurnContext
@@ -130,6 +129,22 @@ internal class CharacterAgentTurnPreparer(
                 )
             }
         }
+        val settingPromptRules = regexRules.rulesFor(
+            regexConfig,
+            RegexRuleTarget.SettingContent,
+            RegexRuleSurface.Prompt,
+        )
+        val requiredSettingCache = if (settingLibraryEnabled) {
+            RequiredSettingLibraryCache(promotedStoryTurnContext.readableEntries) { content ->
+                RegexRuleProcessor.transform(
+                    text = content,
+                    rules = settingPromptRules,
+                    target = RegexRuleTarget.SettingContent,
+                )
+            }
+        } else {
+            null
+        }
         val currentUserMessageId = session.messages.asReversed()
             .firstOrNull { it.role == MessageRole.User }
             ?.id
@@ -167,15 +182,13 @@ internal class CharacterAgentTurnPreparer(
                 library = storyLibrary,
                 messages = roomHistory,
                 imageActionEnabled = imageConfig != null,
+                requiredCache = requiredSettingCache,
             ).map { injection ->
+                if (requiredSettingCache?.ownsInjection(injection.id) == true) return@map injection
                 injection.copy(
                     content = RegexRuleProcessor.transform(
                         text = injection.content,
-                        rules = regexRules.rulesFor(
-                            regexConfig,
-                            RegexRuleTarget.SettingContent,
-                            RegexRuleSurface.Prompt,
-                        ),
+                        rules = settingPromptRules,
                         target = RegexRuleTarget.SettingContent,
                     ),
                 )
@@ -229,6 +242,7 @@ internal class CharacterAgentTurnPreparer(
                     characterSettingLibraryTools(
                         contextProvider = liveSettingContext,
                         virtualFileSearch = virtualFileSearch,
+                        requiredCache = requireNotNull(requiredSettingCache),
                     ) { mutations ->
                         settingLibrary.applySessionMutations(
                             characterId = session.characterId,

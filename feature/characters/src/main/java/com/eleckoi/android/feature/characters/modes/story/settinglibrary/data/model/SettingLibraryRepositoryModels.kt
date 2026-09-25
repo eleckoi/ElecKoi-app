@@ -18,9 +18,8 @@ data class SettingLibraryAgentEntry(
     val content: String,
     val selectionHint: String = "",
     val readStrategy: SettingLibraryAgentReadStrategy = SettingLibraryAgentReadStrategy.Normal,
-    val readCondition: String = "",
-    val dynamicMode: SettingLibraryDynamicMode = SettingLibraryDynamicMode.SingleCondition,
-    /** True when a keyword or variable condition promoted this entry for the current turn. */
+    val dynamicMode: SettingLibraryDynamicMode = SettingLibraryDynamicMode.Standard,
+    /** True when a keyword or EJS controller promoted this entry for the current turn. */
     val promotedToRequiredThisTurn: Boolean = false,
     /** Concrete getwi() references resolved while rendering this entry for the current turn. */
     val resolvedReferences: List<SettingLibraryResolvedReference> = emptyList(),

@@ -246,21 +246,4 @@ internal object VariableRuntimeScripts {
         """.trimIndent()
     }
 
-    fun variableConditions(input: JSONObject): String = """
-        (() => {
-          const input = $input;
-          const matches = {};
-          try {
-            const getvar = __eleckoiCreateGetvar(input.state);
-            for (const item of input.expressions) {
-              const evaluate = new Function('getvar', 'variables', 'stat_data',
-                `return Boolean((${ '$' }{item.expression}));`);
-              matches[item.id] = evaluate(getvar, input.state, input.state);
-            }
-            return JSON.stringify({ matches });
-          } catch (error) {
-            return JSON.stringify({ error: error && error.message ? error.message : String(error) });
-          }
-        })()
-    """.trimIndent()
 }

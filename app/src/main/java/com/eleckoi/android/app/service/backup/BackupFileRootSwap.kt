@@ -2,6 +2,7 @@ package com.eleckoi.android.app.service.backup
 
 import java.io.File
 import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.StandardCopyOption
 
 /**
@@ -41,22 +42,24 @@ internal class BackupFileRootSwap(
 
     fun finish() {
         finished = true
-        rollbackRoot.deleteRecursively()
-        stagingRoot.deleteRecursively()
+        deleteBackupTreeNoFollow(rollbackRoot)
+        deleteBackupTreeNoFollow(stagingRoot)
     }
 
     fun rollback() {
         committed.asReversed().forEach { root ->
-            if (root.installed.exists()) root.installed.deleteRecursively()
-            if (root.previous != null && root.previous.exists()) {
+            if (Files.exists(root.installed.toPath(), LinkOption.NOFOLLOW_LINKS)) {
+                deleteBackupTreeNoFollow(root.installed)
+            }
+            if (root.previous != null && Files.exists(root.previous.toPath(), LinkOption.NOFOLLOW_LINKS)) {
                 root.installed.parentFile?.mkdirs()
                 move(root.previous, root.installed)
             }
         }
         committed.clear()
         finished = true
-        rollbackRoot.deleteRecursively()
-        stagingRoot.deleteRecursively()
+        deleteBackupTreeNoFollow(rollbackRoot)
+        deleteBackupTreeNoFollow(stagingRoot)
     }
 
     private fun commitRoot(relative: String) {
@@ -83,9 +86,13 @@ internal class BackupFileRootSwap(
 
     private fun ownedChild(root: File, relative: String): File {
         val canonicalRoot = root.canonicalFile
-        val child = File(canonicalRoot, relative.replace('/', File.separatorChar)).canonicalFile
-        require(child != canonicalRoot && child.toPath().startsWith(canonicalRoot.toPath())) {
-            "备份文件路径越界"
+        require(relative.split('/').none { it.isBlank() || it == "." || it == ".." }) {
+            "备份文件路径不安全"
+        }
+        var child = canonicalRoot
+        relative.split('/').forEach { segment ->
+            child = File(child, segment)
+            require(!Files.isSymbolicLink(child.toPath())) { "备份文件路径不能经过符号链接" }
         }
         return child
     }
@@ -101,4 +108,13 @@ internal class BackupFileRootSwap(
     }
 
     private data class CommittedRoot(val installed: File, val previous: File?)
+}
+
+private fun deleteBackupTreeNoFollow(target: File) {
+    val path = target.toPath()
+    if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) return
+    if (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
+        requireNotNull(target.listFiles()) { "无法清理备份目录" }.forEach(::deleteBackupTreeNoFollow)
+    }
+    Files.delete(path)
 }

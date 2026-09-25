@@ -30,21 +30,6 @@ class SettingLibraryEditorStateTest {
     }
 
     @Test
-    fun `new cache setting uses a fixed pre-history position and the next internal order`() {
-        val state = SettingLibraryEditorState(SettingLibrary(characterId = "character"))
-        state.addEntry(triggerMode = SettingLibraryTriggerMode.Cache)
-        state.editorEntryId = null
-        state.focusTreeNode(RootNodeId)
-        state.addEntry(triggerMode = SettingLibraryTriggerMode.Cache)
-
-        val created = state.entries.filter { it.triggerMode == SettingLibraryTriggerMode.Cache }
-
-        assertEquals(listOf(1, 2), created.map { it.order })
-        assertTrue(created.all { it.position == com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPosition.InsertPoint1 })
-        assertTrue(created.all { it.promptPositionId.isBlank() })
-    }
-
-    @Test
     fun `new settings receive unique editable titles inside the same folder`() {
         val state = SettingLibraryEditorState(SettingLibrary(characterId = "character"))
 

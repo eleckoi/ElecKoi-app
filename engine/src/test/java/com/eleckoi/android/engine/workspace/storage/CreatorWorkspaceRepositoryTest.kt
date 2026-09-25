@@ -9,6 +9,8 @@ import com.eleckoi.android.foundation.serialization.ElecKoiPrettyJson
 import com.eleckoi.android.foundation.storage.ElecKoiDataException
 import java.io.File
 import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.Paths
 import java.time.Instant
 import kotlinx.coroutines.runBlocking
 import org.junit.Assume.assumeNoException
@@ -493,6 +495,94 @@ class CreatorWorkspaceRepositoryTest {
     }
 
     @Test
+    fun `project links do not block chat workspace and survive checkpoint restore`() = runBlocking {
+        val root = temporaryFolder.newFolder("project-file-links")
+        val repository = repository(root)
+        val workspace = repository.create("带链接的项目")
+        repository.writeText(workspace.id, "story.txt", "original")
+        val outside = File(root, "outside").apply { mkdirs() }
+        val outsideFile = File(outside, "secret.txt").apply { writeText("outside-data") }
+        val project = File(root, "workspaces/${workspace.id}/project")
+        val link = File(project, "linked-outside")
+        createSymbolicLinkOrSkip(link, outside)
+
+        assertEquals(listOf("story.txt"), repository.listFiles(workspace.id).map { it.path })
+        assertThrows(IllegalArgumentException::class.java) {
+            runBlocking { repository.readText(workspace.id, "linked-outside/secret.txt") }
+        }
+        val checkpoint = repository.checkpoint(workspace.id, "链接存在时")
+        assertEquals(
+            "${root.name}/outside",
+            checkpoint.symbolicLinks.getValue("linked-outside").target,
+        )
+        assertTrue(checkpoint.symbolicLinks.getValue("linked-outside").relativeToAppFiles)
+        val checkpointLink = File(
+            root,
+            "workspaces/${workspace.id}/checkpoints/${checkpoint.id}/project/linked-outside",
+        )
+        assertTrue(Files.isSymbolicLink(checkpointLink.toPath()))
+        assertEquals(Files.readSymbolicLink(link.toPath()), Files.readSymbolicLink(checkpointLink.toPath()))
+
+        repository.deletePath(workspace.id, "linked-outside")
+        assertTrue(outsideFile.isFile)
+        repository.writeText(workspace.id, "story.txt", "changed")
+        repository.restoreCheckpoint(workspace.id, checkpoint.id)
+
+        assertEquals("original", repository.readText(workspace.id, "story.txt"))
+        assertTrue(Files.isSymbolicLink(link.toPath()))
+        assertEquals("outside-data", outsideFile.readText())
+    }
+
+    @Test
+    fun `checkpoint converts links to project files into self contained relative links`() = runBlocking {
+        val root = temporaryFolder.newFolder("project-internal-links")
+        val repository = repository(root)
+        val workspace = repository.create("内部链接")
+        repository.writeText(workspace.id, "base.txt", "snapshot-content")
+        val project = File(root, "workspaces/${workspace.id}/project")
+        val alias = File(project, "alias.txt")
+        createSymbolicLinkOrSkip(alias, File(project, "base.txt"))
+
+        val checkpoint = repository.checkpoint(workspace.id, "保存内部链接")
+        val snapshotAlias = File(
+            root,
+            "workspaces/${workspace.id}/checkpoints/${checkpoint.id}/project/alias.txt",
+        )
+        assertFalse(Files.readSymbolicLink(snapshotAlias.toPath()).isAbsolute)
+        assertEquals("snapshot-content", snapshotAlias.readText())
+
+        repository.writeText(workspace.id, "base.txt", "later-content")
+        assertEquals("snapshot-content", snapshotAlias.readText())
+        repository.restoreCheckpoint(workspace.id, checkpoint.id)
+        assertTrue(Files.isSymbolicLink(alias.toPath()))
+        assertEquals("snapshot-content", alias.readText())
+    }
+
+    @Test
+    fun `checkpoint links remain valid after app files move to another root`() = runBlocking {
+        val oldApp = temporaryFolder.newFolder("old-app-files")
+        val oldRoot = File(oldApp, "creator_workspaces")
+        val repository = repository(oldRoot)
+        val workspace = repository.create("可迁移链接")
+        val shared = File(oldApp, "shared.txt").apply { writeText("shared-data") }
+        val alias = File(oldRoot, "workspaces/${workspace.id}/project/shared-link")
+        createSymbolicLinkOrSkip(alias, shared)
+        val checkpoint = repository.checkpoint(workspace.id, "迁移前")
+
+        val newApp = temporaryFolder.newFolder("new-app-files-with-a-different-length")
+        File(newApp, "shared.txt").writeText("shared-data")
+        val newRoot = File(newApp, "creator_workspaces")
+        copyTreeWithRebasedLinks(oldRoot, newRoot, oldApp, newApp)
+        val movedRepository = repository(newRoot)
+
+        assertEquals(checkpoint.id, movedRepository.listCheckpoints(workspace.id).single().id)
+        movedRepository.restoreCheckpoint(workspace.id, checkpoint.id)
+        val restored = File(newRoot, "workspaces/${workspace.id}/project/shared-link")
+        assertTrue(Files.isSymbolicLink(restored.toPath()))
+        assertEquals("shared-data", restored.readText())
+    }
+
+    @Test
     fun `symbolic checkpoints root cannot redirect snapshot writes`() = runBlocking {
         val root = temporaryFolder.newFolder("checkpoint-root-link")
         val repository = repository(root)
@@ -627,5 +717,22 @@ class CreatorWorkspaceRepositoryTest {
             Files.createSymbolicLink(link.toPath(), target.toPath().toAbsolutePath())
         }.exceptionOrNull()
         if (error != null) assumeNoException(error)
+    }
+
+    private fun copyTreeWithRebasedLinks(source: File, destination: File, oldApp: File, newApp: File) {
+        when {
+            Files.isSymbolicLink(source.toPath()) -> {
+                val oldTarget = Files.readSymbolicLink(source.toPath()).toString()
+                val target = oldTarget.replace(oldApp.absolutePath, newApp.absolutePath)
+                Files.createSymbolicLink(destination.toPath(), Paths.get(target))
+            }
+            Files.isDirectory(source.toPath(), LinkOption.NOFOLLOW_LINKS) -> {
+                assertTrue(destination.mkdir())
+                source.listFiles().orEmpty().forEach { child ->
+                    copyTreeWithRebasedLinks(child, File(destination, child.name), oldApp, newApp)
+                }
+            }
+            else -> source.copyTo(destination)
+        }
     }
 }

@@ -226,7 +226,6 @@ internal fun EntryTriggerModePicker(
                             when (mode) {
                                 SettingLibraryTriggerMode.AgentTool -> "Agent 读取"
                                 SettingLibraryTriggerMode.Always -> "提示词常驻"
-                                SettingLibraryTriggerMode.Cache -> "缓存设定"
                             },
                             color = if (active) appearance.mobileText else appearance.mobileMuted,
                             fontSize = 13.5.sp,

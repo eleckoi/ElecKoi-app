@@ -15,11 +15,6 @@ data class VariableRuntimeCheckResult(
     val normalizedStateJson: String = "",
 )
 
-data class VariableConditionExpression(
-    val id: String,
-    val expression: String,
-)
-
 data class EjsTemplateSource(
     val id: String,
     val controllerId: String,
@@ -49,36 +44,6 @@ class VariableRuntimeService(
     private val context: Context,
 ) {
     private val runtimeManager = ProcessQuickJsRuntimeManager.instance
-
-    suspend fun evaluateVariableConditions(
-        stateJson: String,
-        expressions: List<VariableConditionExpression>,
-    ): Map<String, Boolean> {
-        if (expressions.isEmpty()) return emptyMap()
-        val input = JSONObject()
-            .put("state", jsonObjectOrEmpty(stateJson))
-            .put(
-                "expressions",
-                JSONArray(expressions.map { expression ->
-                    JSONObject()
-                        .put("id", expression.id)
-                        .put("expression", expression.expression)
-                }),
-            )
-        val result = parseJsonResult(
-            evaluateRaw(
-                VariableRuntimeScripts.helpers + "\n" +
-                    VariableRuntimeScripts.variableConditions(input),
-            ),
-        )
-        result.optString("error").takeIf(String::isNotBlank)?.let { message ->
-            throw ElecKoiDataException("变量条件执行失败：$message")
-        }
-        val matches = result.optJSONObject("matches") ?: JSONObject()
-        return expressions.associate { expression ->
-            expression.id to matches.optBoolean(expression.id, false)
-        }
-    }
 
     suspend fun renderEjsTemplates(
         stateJson: String,

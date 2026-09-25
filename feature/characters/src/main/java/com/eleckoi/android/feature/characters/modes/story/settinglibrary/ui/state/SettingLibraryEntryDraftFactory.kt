@@ -4,7 +4,6 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.S
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryDynamicMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryInsertRole
-import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPosition
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryTriggerMode
 
 internal enum class SettingLibraryEntryDraftKind {
@@ -27,21 +26,8 @@ internal fun createSettingLibraryEntryDraft(
         viewOrder = (existingEntries.maxOfOrNull { it.viewOrder } ?: 0) + 1,
         groupId = groupId,
         triggerMode = triggerMode,
-        position = if (triggerMode == SettingLibraryTriggerMode.Cache) {
-            SettingLibraryPosition.InsertPoint1
-        } else {
-            null
-        },
         insertRole = SettingLibraryInsertRole.User,
-        order = if (triggerMode == SettingLibraryTriggerMode.Cache) {
-            existingEntries
-                .filter { it.triggerMode == SettingLibraryTriggerMode.Cache }
-                .maxOfOrNull(SettingLibraryEntry::order)
-                ?.plus(1)
-                ?: 1
-        } else {
-            1
-        },
+        order = 1,
         groupViewOrder = if (groupId.isBlank()) {
             0
         } else {

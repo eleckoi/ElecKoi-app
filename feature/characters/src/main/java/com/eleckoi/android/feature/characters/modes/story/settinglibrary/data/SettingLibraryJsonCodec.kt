@@ -218,7 +218,6 @@ internal object SettingLibraryJsonCodec {
         .put("default_opening_message_id", entry.defaultOpeningMessageId)
         .put("agent_selection_hint", entry.agentSelectionHint)
         .put("agent_read_strategy", entry.agentReadStrategy.storageValue)
-        .put("agent_read_condition", entry.agentReadCondition)
         .put("dynamic_mode", entry.dynamicMode.storageValue)
         .put("keywords", JSONArray(entry.keywords))
         .put("keyword_scan_depth", entry.keywordScanDepth)
@@ -258,10 +257,9 @@ internal object SettingLibraryJsonCodec {
         agentReadStrategy = SettingLibraryAgentReadStrategy.entries.firstOrNull {
             it.storageValue == value.optString("agent_read_strategy")
         } ?: SettingLibraryAgentReadStrategy.Normal,
-        agentReadCondition = value.optString("agent_read_condition"),
         dynamicMode = SettingLibraryDynamicMode.entries.firstOrNull {
             it.storageValue == value.optString("dynamic_mode")
-        } ?: SettingLibraryDynamicMode.SingleCondition,
+        } ?: SettingLibraryDynamicMode.Standard,
         keywords = value.optJSONArray("keywords")?.strings().orEmpty(),
         keywordScanDepth = value.optInt("keyword_scan_depth", 1),
         conditionKeywords = value.optJSONArray("condition_keywords")?.strings().orEmpty(),

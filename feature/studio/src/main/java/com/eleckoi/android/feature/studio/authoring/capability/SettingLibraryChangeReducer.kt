@@ -258,7 +258,6 @@ private fun JsonObject.patchEntry(current: SettingLibraryEntry, index: Int): Set
         triggerMode = triggerMode,
         agentReadStrategy = strategy,
         agentSelectionHint = if (containsKey("agent_selection_hint")) creatorString("agent_selection_hint").take(1_000) else current.agentSelectionHint,
-        agentReadCondition = if (containsKey("agent_read_condition")) creatorString("agent_read_condition").take(10_000) else current.agentReadCondition,
         dynamicMode = dynamicMode,
         keywords = keywords,
         keywordScanDepth = if (containsKey("keyword_scan_depth")) {
@@ -309,11 +308,6 @@ private fun JsonObject.patchEntry(current: SettingLibraryEntry, index: Int): Set
                 ),
             )
         }
-        updated.triggerMode == SettingLibraryTriggerMode.Cache -> updated.copy(
-            position = SettingLibraryPosition.InsertPoint1,
-            promptPositionId = "",
-            insertRole = SettingLibraryInsertRole.User,
-        )
         else -> updated
     }
 }

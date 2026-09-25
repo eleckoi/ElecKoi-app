@@ -187,6 +187,23 @@ internal class WorkspacePathGuard(
         return target
     }
 
+    /** Resolves a project entry without following its final component. */
+    fun resolveProjectEntryNoFollow(projectDirectory: File, rawPath: String): File {
+        val normalized = rawPath.replace('\\', '/')
+        require(normalized.isNotBlank() && normalized.length <= MaxRelativePathLength) {
+            "文件路径无效"
+        }
+        val segments = normalized.split('/')
+        require(segments.all(::isSafePathSegment)) { "文件路径包含不安全片段" }
+        require(isDirectoryNoFollow(projectDirectory)) { "工作区项目目录不存在或不安全" }
+        val parent = if (segments.size == 1) {
+            projectDirectory.canonicalFile
+        } else {
+            resolveProjectPath(projectDirectory, segments.dropLast(1).joinToString("/"))
+        }
+        return File(parent, segments.last())
+    }
+
     fun internalStateFile(directory: File, name: String): File {
         require(InternalStateFileName.matches(name)) { "工作区内部状态文件名无效" }
         val root = directory.canonicalFile

@@ -43,7 +43,6 @@ class SettingLibraryJsonCodecTest {
         content = "海边城邦",
         agentSelectionHint = "谈到故乡时读取",
         agentReadStrategy = SettingLibraryAgentReadStrategy.Keyword,
-        agentReadCondition = "getvar('世界.时间段') === '夜晚'",
         keywords = listOf("故乡", "海港"),
         keywordScanDepth = 4,
         conditionKeywords = listOf("旅行"),

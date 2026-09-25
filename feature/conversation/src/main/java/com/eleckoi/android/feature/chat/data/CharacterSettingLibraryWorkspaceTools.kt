@@ -16,12 +16,13 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.data.Se
 internal fun characterSettingLibraryTools(
     contextProvider: suspend () -> SettingLibraryAgentTurnContext,
     virtualFileSearch: AgentVirtualFileSearch,
+    requiredCache: RequiredSettingLibraryCache = RequiredSettingLibraryCache(emptyList()),
     applyChanges: suspend (List<SettingLibrarySessionMutation>) -> SettingLibrarySessionMutationResult,
 ): List<AgentDynamicTool> {
     return buildList {
-        add(characterSettingLibraryGlobTool(contextProvider, virtualFileSearch))
-        add(characterSettingLibraryGrepTool(contextProvider, virtualFileSearch))
-        add(characterSettingLibraryReadTool(contextProvider))
+        add(characterSettingLibraryGlobTool(contextProvider, virtualFileSearch, requiredCache))
+        add(characterSettingLibraryGrepTool(contextProvider, virtualFileSearch, requiredCache))
+        add(characterSettingLibraryReadTool(contextProvider, requiredCache))
         add(characterSettingLibraryPatchTool(contextProvider, applyChanges))
     }
 }

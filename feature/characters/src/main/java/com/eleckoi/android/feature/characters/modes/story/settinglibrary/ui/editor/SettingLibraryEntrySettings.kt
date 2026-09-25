@@ -49,43 +49,6 @@ import com.eleckoi.android.foundation.design.components.noRippleClickable
 import com.eleckoi.android.foundation.design.ElecKoiDanger
 
 @Composable
-internal fun DynamicModeSettings(
-    entry: SettingLibraryEntry,
-    appearance: AppearanceTheme,
-    onEntryChange: ((SettingLibraryEntry) -> SettingLibraryEntry) -> Unit,
-) {
-    val modes = listOf(
-        SettingLibraryDynamicMode.SingleCondition,
-        SettingLibraryDynamicMode.EjsController,
-    )
-    val modeOptions = modes.map { mode ->
-        DropdownOption(
-            title = mode.label,
-            description = when (mode) {
-                SettingLibraryDynamicMode.SingleCondition -> "表达式为 true 时把普通正文提升为本回合必读"
-                SettingLibraryDynamicMode.EjsController -> "正文作为 EJS 执行，非空渲染结果提升为本回合必读"
-                SettingLibraryDynamicMode.EjsReference -> "独立存在，仅供控制器通过 getwi 读取"
-            },
-        )
-    }
-    DropdownField(
-        label = "动态方式",
-        value = modeOptions[modes.indexOf(entry.dynamicMode).coerceAtLeast(0)],
-        placeholder = "请选择",
-        options = modeOptions,
-        appearance = appearance,
-        groupedStyle = true,
-        onSelect = { index ->
-            onEntryChange { current ->
-                current.copy(
-                    dynamicMode = modes[index],
-                )
-            }
-        },
-    )
-}
-
-@Composable
 internal fun AgentReadStrategySettings(
     selected: SettingLibraryAgentReadStrategy,
     appearance: AppearanceTheme,
@@ -158,6 +121,15 @@ internal fun AgentReadStrategySettings(
                     }
                 }
             }
+        }
+        if (selected == SettingLibraryAgentReadStrategy.Required) {
+            Text(
+                "固定必读：正文自动进入缓存区，读取时返回带标题的编号。关键词、变量等命中后也会成为本轮必读，读取时仍返回正文。",
+                color = appearance.mobileMuted,
+                fontSize = 12.5.sp,
+                lineHeight = 19.sp,
+                modifier = Modifier.padding(top = 10.dp),
+            )
         }
     }
 }
@@ -260,36 +232,6 @@ internal fun EntryInsertSettingsGroup(
                 }
             }
         }
-    }
-}
-
-@Composable
-internal fun CachedEntryInsertSettingsGroup(
-    appearance: AppearanceTheme,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = StoryEditorCardSpacing)
-            .clip(RoundedCornerShape(18.dp))
-            .background(appearance.mobileSurface)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-    ) {
-        EditorFieldLabel("固定插入位置", appearance)
-        Text(
-            "缓存设定区",
-            color = appearance.mobileText,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(top = 8.dp),
-        )
-        Text(
-            "启用后每轮固定写入这里；修改正文或排序后，新的稳定前缀会从下一轮开始生效。",
-            color = appearance.mobileMuted,
-            fontSize = 12.5.sp,
-            lineHeight = 19.sp,
-            modifier = Modifier.padding(top = 6.dp),
-        )
     }
 }
 
