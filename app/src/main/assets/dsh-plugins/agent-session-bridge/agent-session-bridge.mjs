@@ -132,7 +132,9 @@ function installRequestPipeline(agentCtx, agent, snapshotRoot, requestContextRoo
   const disposeInstructions = child ? () => {} : agentCtx.systemPrompt.section({
     name: 'eleckoi:session-instructions',
     order: 1,
-    text: () => requestInstructions(read()),
+    // DSH interpolates section text, but does not rescan substituted values.
+    // Keep user-authored {{...}} syntax literal instead of parsing it as a DSH variable.
+    text: '{{eleckoi_session_instructions}}',
   })
   const disposeAssembly = agentCtx.on('system-prompt/assemble', async (_assembly, _context, next) => {
     const snapshot = read()
@@ -140,7 +142,12 @@ function installRequestPipeline(agentCtx, agent, snapshotRoot, requestContextRoo
     const result = await next()
     return {
       ...result,
-      variables: { ...result.variables, provider: assembled.provider, model: assembled.model },
+      variables: {
+        ...result.variables,
+        ...(!child ? { eleckoi_session_instructions: requestInstructions(snapshot) } : {}),
+        provider: assembled.provider,
+        model: assembled.model,
+      },
     }
   })
   const disposeRequest = agentCtx.on('agent/request', async (_payload, next) => {

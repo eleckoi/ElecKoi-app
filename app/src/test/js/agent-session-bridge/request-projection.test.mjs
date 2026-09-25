@@ -5,6 +5,7 @@ import {
   ensureProjectionEnvelope,
   projectProductHistory,
   projectRequestMessages,
+  requestInstructions,
 } from '../../../main/assets/dsh-plugins/agent-session-bridge/request-projection.mjs'
 
 const textMessage = (id, role, text, source) => ({
@@ -26,6 +27,13 @@ const projectionPlan = [
     activation: { kind: 'afterTool', toolName: 'read' },
   },
 ]
+
+test('keeps user-authored double braces unchanged in session instructions', () => {
+  const content = '{{sample::示例值}}: 示例正文\n{{model}}'
+  const snapshot = { injections: [prompt('instructions', 'instructions', 1, 'system', content)] }
+
+  assert.equal(requestInstructions(snapshot), content)
+})
 
 test('projects the PC insertion contract into every model request exactly once', () => {
   const messages = requestMessages()
