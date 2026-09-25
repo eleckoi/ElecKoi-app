@@ -70,6 +70,34 @@ class RoleplayTranscriptPatchPlannerTest {
     }
 
     @Test
+    fun prependingHistoryUpdatesTheFloorStartWithoutReplacingMessagePayloads() {
+        val baseline = model(listOf(message("recent", "same"))).copy(floorStart = 42)
+        val next = baseline.copy(floorStart = 41)
+
+        val patch = requireNotNull(RoleplayTranscriptPatchPlanner.plan(baseline, next))
+
+        assertEquals(41, patch.getInt("floorStart"))
+        assertFalse(patch.has("messages"))
+        assertFalse(patch.has("order"))
+    }
+
+    @Test
+    fun roleplayMessageTogglesPatchWithoutRebuildingHistory() {
+        val baseline = model(listOf(message("one", "same")))
+        val next = baseline.copy(
+            showRoleplayTimestamps = false,
+            showRoleplayMessageFloors = false,
+        )
+
+        val patch = requireNotNull(RoleplayTranscriptPatchPlanner.plan(baseline, next))
+
+        assertFalse(patch.getBoolean("showRoleplayTimestamps"))
+        assertFalse(patch.getBoolean("showRoleplayMessageFloors"))
+        assertFalse(patch.has("messages"))
+        assertFalse(patch.has("order"))
+    }
+
+    @Test
     fun deleteSelectionProducesAStateOnlyPatch() {
         val baseline = model(listOf(message("one", "first"), message("two", "second")))
         val next = baseline.copy(

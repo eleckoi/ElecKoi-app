@@ -156,6 +156,13 @@ internal val RoleplayTranscriptStyles = """
     }
     .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .avatar-placeholder { width: 58%; height: 58%; fill: currentColor; }
+    .message-floor { display: none; }
+    body[data-layout="roleplay"].show-roleplay-floors .message-floor {
+      display: block; width: var(--avatar-width); margin-top: -4px;
+      color: var(--muted); font-size: calc(var(--font-size) * .9);
+      font-weight: 600; line-height: 1.15; text-align: center;
+      font-variant-numeric: tabular-nums; text-shadow: none;
+    }
     .pager {
       display: grid;
       grid-template-columns: 12px minmax(0, 1fr) 12px;
@@ -194,6 +201,25 @@ internal val RoleplayTranscriptStyles = """
       transition: padding-right 0ms linear 125ms;
     }
     .turn-header.toolbar-expanded .name { padding-right: 172px; transition-delay: 0ms; }
+    .message-timestamp { display: none; }
+    body[data-layout="roleplay"] .author-line {
+      display: flex; flex-wrap: wrap; align-items: baseline;
+      width: 100%; min-width: 0; padding-right: 60px;
+      column-gap: 6px; row-gap: 2px;
+    }
+    body[data-layout="roleplay"] .author-line .name {
+      width: auto; max-width: 100%; min-width: 0; padding-right: 0;
+    }
+    body[data-layout="roleplay"].show-roleplay-timestamps .message-timestamp:not(:empty) {
+      display: inline; color: var(--muted);
+      font-size: calc(var(--font-size) * .7); font-weight: 400;
+      line-height: 1.2; white-space: nowrap;
+      font-variant-numeric: tabular-nums; text-shadow: none;
+    }
+    body[data-layout="roleplay"] .turn-header.toolbar-expanded .author-line { padding-right: 0; }
+    body[data-layout="roleplay"] .turn-header.toolbar-expanded .name {
+      width: 100%; padding-right: 172px;
+    }
     .tools {
       position: absolute; right: 0; top: 0; width: 166px; height: 26px;
       display: flex; justify-content: flex-end; align-items: flex-start; color: var(--muted); text-shadow: none;

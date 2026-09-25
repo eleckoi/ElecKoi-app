@@ -217,11 +217,23 @@ internal fun authoringGuideJson() = buildJsonObject {
         put("always", "提示词常驻：启用条目每轮自动注入；必须配置 position，或用 prompt_position_id 选择 inspect 返回的自定义位置，并由 insert_role 和 order 控制角色与顺序。")
     })
     put("agentReadStrategies", buildJsonObject {
-        put("required", "必读：正文自动写入前置缓存设定区并附稳定编号和标题；条目仍作为本轮 required entry 暴露，Agent 调用读取工具后只收到编号和标题。")
-        put("keyword", "关键词：扫描最近 keyword_scan_depth 条用户/AI 消息；命中 keywords 且满足 condition_keywords/keyword_condition 后提升为本轮必读。")
+        put("required", "固定必读：正文每轮进入前置缓存设定区，按本轮目录顺序分配 #S01 等短编号并附标题；搜索仍列入 required_entries，读取工具只返回编号和标题。本轮编号不是跨轮持久 ID。")
+        put("keyword", "关键词：先展开角色卡宏并应用提示词正则，再按 keyword_scan_depth 扫描最近的非空用户/AI 消息；命中 keywords 且满足 condition_keywords/keyword_condition 后提升为本轮必读，读取工具返回正文。默认深度 1 只扫描本次用户消息。")
         put("normal", "按需：AI 根据目录路径、标题和 agent_selection_hint 判断是否读取。")
-        put("variable_condition", "EJS 控制器执行 EJS 并可通过 getwi 引用 EJS 引用设定；非空渲染结果提升为本轮必读。")
+        put("variable_condition", "变量条件：条目以 ejs_controller 模式执行 EJS；非空渲染结果提升为本轮必读，读取工具返回渲染后的正文。ejs_reference 仅供控制器引用，不独立作为 Agent 可读条目。")
     })
+    put("dynamicModes", buildJsonObject {
+        put("standard", "普通设定正文；用于必读、关键词、按需等读取策略。")
+        put("ejs_controller", "变量条件的 EJS 控制器：content 填 EJS 模板代码，也可直接写输出正文；可用 getvar 判断变量、getwi 引用独立的 EJS 引用设定。只有渲染结果非空时才进入本轮 Agent 目录。")
+        put("ejs_reference", "独立创建的 EJS 引用设定：content 填设定正文，可由控制器通过 getwi 按标题或路径读取；自身不直接进入 Agent 目录，也不替代控制器。")
+    })
+    put("ejsUsage", buildJsonObject {
+        put("controllerFields", "创建控制器时设置 trigger_mode=agent_tool、agent_read_strategy=variable_condition、dynamic_mode=ejs_controller；EJS 代码写在 content。")
+        put("referenceFields", "创建引用设定时设置 trigger_mode=agent_tool、agent_read_strategy=variable_condition、dynamic_mode=ejs_reference；设定正文写在独立条目的 content。")
+        put("getvar", "在 EJS 中用 getvar('对象.变量', { defaults: 0 }) 读取当前变量状态；变量路径对应对象名和变量标题。")
+        put("getwi", "在 EJS 中用 await getwi('引用设定标题') 按标题或路径读取已启用的引用设定；例如 <% if (getvar('剧情.阶段', { defaults: 0 }) >= 2) { %><%- await getwi('第二阶段设定') %><% } %>。")
+    })
+    put("requiredReadFlow", "设定搜索结果的 required_entries 是本轮必读清单，搜索命中与否不影响该清单；Agent 仍需调用读取工具。固定必读以编号和标题回执，关键词及 EJS 动态必读以正文回执；仅搜索不算读取。")
     put("keywordRules", buildJsonObject {
         put("keyword_use_regex", "true 时按 SillyTavern 兼容正则解析关键词。")
         put("keyword_ignore_case", "控制大小写敏感。")

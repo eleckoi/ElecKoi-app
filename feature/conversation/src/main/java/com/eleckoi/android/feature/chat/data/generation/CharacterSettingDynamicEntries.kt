@@ -8,14 +8,33 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.data.Se
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.data.SettingLibraryResolvedReference
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryAgentReadStrategy
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryDynamicMode
+import com.eleckoi.android.feature.characters.modes.story.regex.data.RegexRuleProcessor
+import com.eleckoi.android.feature.characters.modes.story.regex.model.RegexRule
+import com.eleckoi.android.feature.characters.modes.story.regex.model.RegexRuleTarget
 import com.eleckoi.android.feature.chat.model.ChatMessage
+import com.eleckoi.android.feature.chat.model.MessageRole
+
+internal fun promptRegexedHistory(
+    messages: List<ChatMessage>,
+    rulesFor: (RegexRuleTarget) -> List<RegexRule>,
+): List<ChatMessage> = messages.map { message ->
+    val target = if (message.role == MessageRole.User) RegexRuleTarget.UserInput else RegexRuleTarget.AiOutput
+    message.copy(
+        content = RegexRuleProcessor.transform(
+            text = message.content,
+            rules = rulesFor(target),
+            target = target,
+        ),
+    )
+}
 
 internal suspend fun SettingLibraryAgentTurnContext.resolveDynamicEntries(
     messages: List<ChatMessage>,
+    keywordMessages: List<ChatMessage>,
     stateJson: String,
     runtime: VariableRuntimeService,
 ): SettingLibraryAgentTurnContext {
-    val keywordResolved = withKeywordPromotions(messages)
+    val keywordResolved = withKeywordPromotions(keywordMessages)
     val candidateEntries = keywordResolved.readableEntries
     val visibleEntries = candidateEntries
         .filter { entry ->

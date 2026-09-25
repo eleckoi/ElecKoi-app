@@ -65,6 +65,11 @@ class ChatSessionGenerationStatsProjectorTest {
         val snapshot = projector.snapshot()
         assertEquals(1_001, snapshot.metrics.turns)
         assertEquals(2_501, snapshot.metrics.steps)
+        assertEquals(2_501, snapshot.stepTotalsByTurn["1001"])
+        val secondStep = AgentSessionEvent.StepCompleted("thread", "turn-1001", 2, 240)
+        turn.accept(secondStep)
+        projector.accept(secondStep, turn.snapshot(), turn.contextWindowUsage())
+        assertEquals(2_502, projector.snapshot().stepTotalsByTurn["1001"])
         assertEquals(30_040L, snapshot.metrics.toolDurationMillis)
         assertEquals(10_500_000L, snapshot.metrics.billedInputTokens)
         assertEquals(52_000L, snapshot.metrics.outputTokens)
@@ -105,10 +110,10 @@ class ChatSessionGenerationStatsProjectorTest {
                 modelContextWindow = 1_000_000,
             ),
         )
-        val baseline = before.forRegeneration(retainedTurns = 58)
+        val baseline = before.forRegeneration(retainedTurns = 58, retainedSteps = 364)
         assertEquals("", baseline.runtimeThreadId)
         assertEquals(null, baseline.contextWindowUsage)
-        assertEquals(before.metrics, baseline.metrics)
+        assertEquals(before.metrics.copy(steps = 364), baseline.metrics)
 
         val projector = ChatSessionGenerationStatsProjector(baseline)
         val turn = ChatTurnMetricsCollector()
@@ -116,7 +121,7 @@ class ChatSessionGenerationStatsProjectorTest {
         turn.accept(started)
         projector.accept(started, turn.snapshot(), turn.contextWindowUsage())
         assertEquals(58, projector.snapshot().metrics.turns)
-        assertEquals(367, projector.snapshot().metrics.steps)
+        assertEquals(364, projector.snapshot().metrics.steps)
 
         val step = AgentSessionEvent.StepStarted("new-thread", "new-turn", 1, 110)
         turn.accept(step)
@@ -136,7 +141,7 @@ class ChatSessionGenerationStatsProjectorTest {
         val after = projector.snapshot()
         assertEquals("new-thread", after.runtimeThreadId)
         assertEquals(58, after.metrics.turns)
-        assertEquals(368, after.metrics.steps)
+        assertEquals(365, after.metrics.steps)
         assertEquals(3_030_000L, after.metrics.billedInputTokens)
         assertEquals(30_000L, after.metrics.toolDurationMillis)
         assertEquals(30_000L, after.contextWindowUsage?.latestTokens)
@@ -148,7 +153,7 @@ class ChatSessionGenerationStatsProjectorTest {
             null,
         )
         assertEquals(59, nextTurn.snapshot().metrics.turns)
-        assertEquals(369, nextTurn.snapshot().metrics.steps)
+        assertEquals(366, nextTurn.snapshot().metrics.steps)
     }
 
     private fun usage(input: Long, cacheRead: Long, output: Long) = AgentTokenUsage(

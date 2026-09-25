@@ -96,6 +96,9 @@ internal class CharacterAgentTurnPreparer(
             )
         }
         val regexConfig = regexRules.load(session.characterId)
+        val promptHistory = promptRegexedHistory(roomHistory) { target ->
+            regexRules.rulesFor(regexConfig, target, RegexRuleSurface.Prompt)
+        }
         val storyTurnContext = settingLibrary.loadAgentTurnContext(
             characterId = session.characterId,
             sessionId = session.id,
@@ -116,6 +119,7 @@ internal class CharacterAgentTurnPreparer(
             .resolveCharacterCardMacros(macroValues)
             .resolveDynamicEntries(
                 messages = roomHistory,
+                keywordMessages = promptHistory,
                 stateJson = variableTurnState?.stateJson.orEmpty(),
                 runtime = variableRuntime,
             )
@@ -149,16 +153,6 @@ internal class CharacterAgentTurnPreparer(
             .firstOrNull { it.role == MessageRole.User }
             ?.id
             .orEmpty()
-        val promptHistory = roomHistory.map { message ->
-            val target = if (message.role == MessageRole.User) RegexRuleTarget.UserInput else RegexRuleTarget.AiOutput
-            message.copy(
-                content = RegexRuleProcessor.transform(
-                    text = message.content,
-                    rules = regexRules.rulesFor(regexConfig, target, RegexRuleSurface.Prompt),
-                    target = target,
-                ),
-            )
-        }
         val roomHistoryItems = roomConversationHistory(
             messages = promptHistory.map { it.toLedgerMessage() },
             currentUserMessageId = currentUserMessageId,
@@ -234,6 +228,7 @@ internal class CharacterAgentTurnPreparer(
                         .resolveCharacterCardMacros(macroValues)
                         .resolveDynamicEntries(
                             messages = roomHistory,
+                            keywordMessages = promptHistory,
                             stateJson = variableTurnState?.stateJson.orEmpty(),
                             runtime = variableRuntime,
                         )

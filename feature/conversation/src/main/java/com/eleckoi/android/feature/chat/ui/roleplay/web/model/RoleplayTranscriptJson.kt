@@ -11,6 +11,9 @@ import org.json.JSONObject
 internal fun RoleplayTranscriptModel.toBootstrapJson(): String = JSONObject().apply {
     put("sessionId", sessionId)
     put("layoutMode", layoutMode)
+    put("showRoleplayTimestamps", showRoleplayTimestamps)
+    put("showRoleplayMessageFloors", showRoleplayMessageFloors)
+    put("floorStart", floorStart)
     put("style", style.toJson())
     put("icons", roleplayTranscriptIconsJson())
     put("frontendRendererEnabled", frontendRendererEnabled)
@@ -25,6 +28,7 @@ internal fun RoleplayTranscriptMessage.toJson(): JSONObject = JSONObject().apply
     put("id", source.id)
     put("role", source.role.name.lowercase())
     put("name", name)
+    put("createdAt", source.createdAt)
     put("avatarUrl", avatarUrl ?: JSONObject.NULL)
     put("pending", source.pending)
     put("revision", revision)

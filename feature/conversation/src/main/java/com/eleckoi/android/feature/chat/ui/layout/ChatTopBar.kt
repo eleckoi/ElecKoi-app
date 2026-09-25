@@ -56,7 +56,6 @@ fun ChatTopBar(
     moreMenuExpanded: Boolean,
     onDismissMoreMenu: () -> Unit,
     onOpenPresets: () -> Unit,
-    onOpenTools: () -> Unit,
     onOpenTrajectory: () -> Unit,
     onCustomizeBackground: () -> Unit,
     onCreateChat: () -> Unit,
@@ -158,21 +157,6 @@ fun ChatTopBar(
                         onClick = {
                             onDismissMoreMenu()
                             onOpenPresets()
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("工具", color = appearance.mobileText, fontSize = 14.sp) },
-                        leadingIcon = {
-                            StrokeSvgIcon(
-                                paths = AppIconPaths.Plug,
-                                color = appearance.mobileMuted,
-                                iconSize = 19.dp,
-                                strokeWidth = 1.85f,
-                            )
-                        },
-                        onClick = {
-                            onDismissMoreMenu()
-                            onOpenTools()
                         },
                     )
                     DropdownMenuItem(

@@ -395,6 +395,8 @@ class UiPreferencesRepository(context: Context) {
             )
             if (mode == ChatLayoutMode.Roleplay) {
                 preferences.remove(ChatRoleplayCardPanel)
+                preferences.remove(ChatRoleplayTimestampsEnabled)
+                preferences.remove(ChatRoleplayMessageFloorsEnabled)
             }
         }
         return read()
@@ -478,6 +480,16 @@ class UiPreferencesRepository(context: Context) {
 
     suspend fun setChatRoleplayCardPanel(enabled: Boolean): UiPreferences {
         dataStore.edit { preferences -> preferences[ChatRoleplayCardPanel] = enabled }
+        return read()
+    }
+
+    suspend fun setChatRoleplayTimestampsEnabled(enabled: Boolean): UiPreferences {
+        dataStore.edit { preferences -> preferences[ChatRoleplayTimestampsEnabled] = enabled }
+        return read()
+    }
+
+    suspend fun setChatRoleplayMessageFloorsEnabled(enabled: Boolean): UiPreferences {
+        dataStore.edit { preferences -> preferences[ChatRoleplayMessageFloorsEnabled] = enabled }
         return read()
     }
 

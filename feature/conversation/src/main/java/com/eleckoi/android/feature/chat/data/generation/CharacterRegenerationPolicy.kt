@@ -45,6 +45,12 @@ internal fun regenerationSessionVariableState(
 internal fun retainedChatTurnCount(messages: List<ChatMessage>): Int =
     messages.count { it.role == MessageRole.User }
 
+/** Steps belong to retained replies, not to the old DSH thread being replaced. */
+internal fun retainedChatStepCount(messages: List<ChatMessage>): Int =
+    messages.asSequence()
+        .filter { it.role == MessageRole.Assistant }
+        .sumOf { it.generationMetrics.steps }
+
 /** 保留目标回复对应的用户提问；目标本身是用户消息时，也可直接从该消息重新请求。 */
 internal fun truncateForRegeneration(
     messages: List<ChatMessage>,

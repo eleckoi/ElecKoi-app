@@ -35,6 +35,21 @@ class RoleplayTranscriptModelTest {
     }
 
     @Test
+    fun timestampChangeUpdatesTheMessagePatchRevision() {
+        val source = ChatMessage(
+            id = "message-1",
+            role = MessageRole.Assistant,
+            content = "正文",
+            createdAt = "2026-09-24T19:09:00Z",
+        )
+        val first = transcriptMessage(source, "正文")
+        val second = transcriptMessage(source.copy(createdAt = "2026-09-24T19:10:00Z"), "正文")
+
+        assertNotEquals(first.revision, second.revision)
+        assertEquals("2026-09-24T19:10:00Z", second.toJson().getString("createdAt"))
+    }
+
+    @Test
     fun visualRevisionChangesWhenStreamingSettles() {
         val pending = transcriptMessage(
             ChatMessage(
@@ -234,6 +249,38 @@ class RoleplayTranscriptModelTest {
         assertEquals(beforeCode.markdown, afterCode.markdown)
         assertEquals(codeReply.content, after.messages[1].toJson().getJSONArray("parts")
             .getJSONObject(0).getString("markdown"))
+    }
+
+    @Test
+    fun floorsStayAbsoluteAcrossPagingStreamingAndRepeatedProjection() {
+        val history = (0 until 500).map { index ->
+            ChatMessage(
+                id = "message-$index",
+                role = if (index % 2 == 0) MessageRole.User else MessageRole.Assistant,
+                content = "正文 $index",
+            )
+        }
+        val cache = RoleplayTranscriptProjectionCache()
+        val recent = history.takeLast(20)
+        val source = draft(recent).let { draft ->
+            draft.copy(session = draft.session.copy(historyMessageCount = history.size))
+        }
+
+        val first = buildModel(source, recent, cache)
+        val streaming = ImmutableAppendedList(
+            recent,
+            ChatMessage(id = "pending", role = MessageRole.Assistant, content = "新回复", pending = true),
+        )
+        val next = buildModel(source, streaming, cache)
+        val older = history.takeLast(30) + streaming.last()
+        val prepended = buildModel(source, older, cache)
+        val repeated = buildModel(source, older, cache)
+
+        assertEquals(480, first.floorStart)
+        assertEquals(480, next.floorStart)
+        assertEquals(470, prepended.floorStart)
+        assertEquals(470, repeated.floorStart)
+        assertEquals(31, prepended.messages.size)
     }
 
     @Test

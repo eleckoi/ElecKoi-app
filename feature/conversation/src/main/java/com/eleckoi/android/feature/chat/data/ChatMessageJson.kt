@@ -177,11 +177,13 @@ internal data class ChatSessionGenerationStatsJson(
     val metrics: ChatGenerationMetricsJson = ChatGenerationMetricsJson(),
     @SerialName("context_window_usage")
     val contextWindowUsage: ChatContextWindowUsageJson? = null,
+    @SerialName("step_totals_by_turn") val stepTotalsByTurn: Map<String, Int> = emptyMap(),
 ) {
     fun toDomain() = ChatSessionGenerationStats(
         runtimeThreadId = runtimeThreadId,
         metrics = metrics.toDomain(),
         contextWindowUsage = contextWindowUsage?.toDomain(),
+        stepTotalsByTurn = stepTotalsByTurn,
     )
 
     companion object {
@@ -189,6 +191,7 @@ internal data class ChatSessionGenerationStatsJson(
             runtimeThreadId = stats.runtimeThreadId,
             metrics = ChatGenerationMetricsJson.fromDomain(stats.metrics),
             contextWindowUsage = stats.contextWindowUsage?.let(ChatContextWindowUsageJson::fromDomain),
+            stepTotalsByTurn = stats.stepTotalsByTurn,
         )
     }
 }

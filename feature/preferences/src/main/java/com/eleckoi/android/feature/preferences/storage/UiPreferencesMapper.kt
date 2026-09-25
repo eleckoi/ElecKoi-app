@@ -79,6 +79,10 @@ internal fun Preferences.toUiPreferences(): UiPreferences {
         ]?.let(ChatAvatarShape::fromStorageKey) ?: defaults.avatarShape,
         chatRoleplayCardPanel = preferences[ChatRoleplayCardPanel]
             ?: RoleplayLayoutDefaults.CardPanel,
+        chatRoleplayTimestampsEnabled = preferences[ChatRoleplayTimestampsEnabled]
+            ?: RoleplayLayoutDefaults.TimestampsEnabled,
+        chatRoleplayMessageFloorsEnabled = preferences[ChatRoleplayMessageFloorsEnabled]
+            ?: RoleplayLayoutDefaults.MessageFloorsEnabled,
         chatBubbleCornerRadius = (preferences[
                 profileKey(
                     ChatBubbleCornerRadiusAgent,

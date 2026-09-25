@@ -199,6 +199,8 @@ class ChatViewModel(
                         assistantBubbleEnabled = preferences.assistantBubbleEnabled,
                         chatLayoutMode = preferences.chatLayoutMode,
                         chatRoleplayCardPanel = preferences.chatRoleplayCardPanel,
+                        chatRoleplayTimestampsEnabled = preferences.chatRoleplayTimestampsEnabled,
+                        chatRoleplayMessageFloorsEnabled = preferences.chatRoleplayMessageFloorsEnabled,
                         chatBubbleWideLayout = preferences.chatBubbleWideLayout,
                         chatBubbleCornerRadius = preferences.chatBubbleCornerRadius,
                         chatAvatarSize = preferences.chatAvatarSize,

@@ -4,6 +4,10 @@ internal val RoleplayTranscriptUpdates = """    const authorApiIdle = () => {
       const pendingCount = window.__ElecKoiAuthorPendingCount;
       return typeof pendingCount !== 'function' || pendingCount() === 0;
     };
+    const applyRoleplayMessageOptions = () => {
+      document.body.classList.toggle('show-roleplay-timestamps', state.showRoleplayTimestamps);
+      document.body.classList.toggle('show-roleplay-floors', state.showRoleplayMessageFloors);
+    };
     const transactionIdOf = payload => Number(payload?.transactionId || 0);
     const rejectTransaction = (payload, reason) => post({
       type: 'transactionRejected',
@@ -52,6 +56,10 @@ internal val RoleplayTranscriptUpdates = """    const authorApiIdle = () => {
         state.snapshots.clear();
       }
       state.sessionId = payload.sessionId; state.messages = payload.messages || [];
+      state.showRoleplayTimestamps = payload.showRoleplayTimestamps !== false;
+      state.showRoleplayMessageFloors = payload.showRoleplayMessageFloors !== false;
+      applyRoleplayMessageOptions();
+      state.floorStart = Math.max(0, Number(payload.floorStart) || 0);
       applyLayoutMode(payload.layoutMode);
       state.deleteMode = !!payload.deleteMode;
       state.deleteFromMessageId = String(payload.deleteFromMessageId || '');
@@ -96,6 +104,17 @@ internal val RoleplayTranscriptUpdates = """    const authorApiIdle = () => {
         state.deleteFromMessageId = payload.deleteFromMessageId;
       }
       if (typeof payload.layoutMode === 'string') applyLayoutMode(payload.layoutMode);
+      const roleplayMessageOptionsChanged =
+        typeof payload.showRoleplayTimestamps === 'boolean' ||
+        typeof payload.showRoleplayMessageFloors === 'boolean';
+      if (typeof payload.showRoleplayTimestamps === 'boolean') {
+        state.showRoleplayTimestamps = payload.showRoleplayTimestamps;
+      }
+      if (typeof payload.showRoleplayMessageFloors === 'boolean') {
+        state.showRoleplayMessageFloors = payload.showRoleplayMessageFloors;
+      }
+      if (roleplayMessageOptionsChanged) applyRoleplayMessageOptions();
+      if (Number.isSafeInteger(payload.floorStart)) state.floorStart = Math.max(0, payload.floorStart);
       if (payload.style) applyStyle(payload.style);
 
       const previousById = state.byId;
@@ -160,7 +179,9 @@ internal val RoleplayTranscriptUpdates = """    const authorApiIdle = () => {
       requestGeometryCommit({
         renderRange: true,
         forceRender: Array.isArray(payload.order) || !!payload.style ||
-          typeof payload.layoutMode === 'string' || deleteSelectionChanged,
+          typeof payload.layoutMode === 'string' ||
+          Number.isSafeInteger(payload.floorStart) || roleplayMessageOptionsChanged ||
+          deleteSelectionChanged,
         afterCommit: () => {
           incoming.forEach(message => post({ type: 'messageRendered', messageId: message.id }));
           commitTransaction(payload);

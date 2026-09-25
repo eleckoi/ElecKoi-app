@@ -214,7 +214,8 @@ class CharacterAgentGenerationService(
             ),
             updatedAt = nowIso(),
             generationStats = session.generationStats.forRegeneration(
-                retainedChatTurnCount(regeneration.messages),
+                retainedTurns = retainedChatTurnCount(regeneration.messages),
+                retainedSteps = retainedChatStepCount(regeneration.messages),
             ),
         )
         sessions.truncateForRegeneration(

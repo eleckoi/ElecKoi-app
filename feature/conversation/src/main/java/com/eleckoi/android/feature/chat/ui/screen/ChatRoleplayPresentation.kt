@@ -72,6 +72,8 @@ internal fun rememberChatRoleplayPresentation(
         state.assistantBubbleEnabled,
         state.chatBubbleCornerRadius,
         state.chatRoleplayCardPanel,
+        state.chatRoleplayTimestampsEnabled,
+        state.chatRoleplayMessageFloorsEnabled,
         renderingPreferences,
         frontendWorkspace.messageRendererEnabled,
         state.historyHasMore,
@@ -99,6 +101,8 @@ internal fun rememberChatRoleplayPresentation(
             bubbleCornerRadius = state.chatBubbleCornerRadius,
             cardPanel = state.chatRoleplayCardPanel &&
                 state.chatLayoutMode == com.eleckoi.android.feature.preferences.ChatLayoutMode.Roleplay,
+            showRoleplayTimestamps = state.chatRoleplayTimestampsEnabled,
+            showRoleplayMessageFloors = state.chatRoleplayMessageFloorsEnabled,
             renderingPreferences = renderingPreferences,
             frontendRendererEnabled = frontendWorkspace.messageRendererEnabled,
             historyHasMore = state.historyHasMore,

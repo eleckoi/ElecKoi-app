@@ -35,6 +35,8 @@ data class ChatUiState(
     val assistantBubbleEnabled: Boolean = RoleplayLayoutDefaults.AssistantBubbleEnabled,
     val chatLayoutMode: ChatLayoutMode = ChatLayoutMode.Default,
     val chatRoleplayCardPanel: Boolean = RoleplayLayoutDefaults.CardPanel,
+    val chatRoleplayTimestampsEnabled: Boolean = RoleplayLayoutDefaults.TimestampsEnabled,
+    val chatRoleplayMessageFloorsEnabled: Boolean = RoleplayLayoutDefaults.MessageFloorsEnabled,
     val chatBubbleWideLayout: Boolean = true,
     val chatBubbleCornerRadius: Float = RoleplayLayoutDefaults.BubbleCornerRadius,
     val chatAvatarSize: Float = RoleplayLayoutDefaults.AvatarSize,

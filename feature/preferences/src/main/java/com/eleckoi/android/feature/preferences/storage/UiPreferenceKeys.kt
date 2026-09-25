@@ -40,6 +40,8 @@ internal val ChatAvatarShapeSocial = stringPreferencesKey("chat_avatar_shape_soc
 internal val ChatAvatarShapeAgent = stringPreferencesKey("chat_avatar_shape_agent")
 internal val ChatAvatarShapeRoleplay = stringPreferencesKey("chat_avatar_shape_roleplay")
 internal val ChatRoleplayCardPanel = booleanPreferencesKey("chat_roleplay_card_panel")
+internal val ChatRoleplayTimestampsEnabled = booleanPreferencesKey("chat_roleplay_timestamps_enabled")
+internal val ChatRoleplayMessageFloorsEnabled = booleanPreferencesKey("chat_roleplay_message_floors_enabled")
 
 // Every layout has its own explicit key for every shared metric.
 internal val ChatBubbleCornerRadiusSocial = floatPreferencesKey("chat_bubble_corner_radius_social")

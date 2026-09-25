@@ -7,7 +7,10 @@ import java.io.File
 internal data class RoleplayTranscriptModel(
     val sessionId: String,
     val layoutMode: String = "roleplay",
+    val showRoleplayTimestamps: Boolean = true,
+    val showRoleplayMessageFloors: Boolean = true,
     val messages: List<RoleplayTranscriptMessage>,
+    val floorStart: Int = 0,
     val style: RoleplayTranscriptStyle,
     val media: Map<String, File>,
     val frontendRendererEnabled: Boolean = true,
@@ -51,6 +54,8 @@ internal data class RoleplayTranscriptMessage(
         append(name.hashCode())
         append(':')
         append(avatarUrl.hashCode())
+        append(':')
+        append(source.createdAt.hashCode())
         append(':')
         append(liveStatus.hashCode())
     }

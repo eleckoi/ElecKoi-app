@@ -6,7 +6,7 @@ import org.junit.Test
 
 class ChatGenerationStatsLineTest {
     @Test
-    fun `matches PC DSH statistics strip formatting`() {
+    fun `shows two compact statistics while the context circle stays in the composer`() {
         val groups = generationStatsGroups(
             ChatGenerationMetrics(
                 turns = 1,
@@ -26,11 +26,8 @@ class ChatGenerationStatsLineTest {
 
         assertEquals(
             listOf(
-                "1 轮 · 2 步",
-                "LLM 31.6s · 工具调用 0.8s",
-                "首 token 平均 13s · 76 tok/s",
-                "缓存命中 49%",
-                "输入 37K tok · 输出 429 tok",
+                "1 轮 2 步 · 76 tok/s",
+                "37.4K tok · 缓存命中 49%",
             ),
             groups,
         )

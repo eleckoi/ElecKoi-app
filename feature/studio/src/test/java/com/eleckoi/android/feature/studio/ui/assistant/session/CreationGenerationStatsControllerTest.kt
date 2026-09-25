@@ -101,6 +101,7 @@ class CreationGenerationStatsControllerTest {
                 ChatSessionGenerationStats(
                     runtimeThreadId = "old-thread",
                     metrics = ChatGenerationMetrics(turns = 58, steps = 367, inputTokens = 3_000_000),
+                    stepTotalsByTurn = mapOf("57" to 364, "58" to 367),
                 ),
             )
             val state = MutableStateFlow(stateFor("conversation-1"))
@@ -109,12 +110,14 @@ class CreationGenerationStatsControllerTest {
             controller.restore("conversation-1", "old-thread")
             controller.prepareRegeneration("conversation-1", retainedTurns = 58)
             assertEquals(58, state.value.generationStats.metrics.turns)
+            assertEquals(364, state.value.generationStats.metrics.steps)
 
             val reopenedState = MutableStateFlow(stateFor("conversation-1"))
             val reopened = controller(reopenedState, ChatGenerationStatsStore(root))
             reopened.prepareConversation("conversation-1")
             reopened.restore("conversation-1", "")
             assertEquals(58, reopenedState.value.generationStats.metrics.turns)
+            assertEquals(364, reopenedState.value.generationStats.metrics.steps)
 
             reopened.accept(
                 "conversation-1",
@@ -146,6 +149,9 @@ class CreationGenerationStatsControllerTest {
                 AgentSessionEvent.StepCompleted("new-thread", "next-turn", step = 1, completedAtMillis = 400L),
             )
             assertEquals(59, reopenedState.value.generationStats.metrics.turns)
+            assertEquals(366, reopenedState.value.generationStats.metrics.steps)
+            reopened.prepareRegeneration("conversation-1", retainedTurns = 58)
+            assertEquals(364, reopenedState.value.generationStats.metrics.steps)
         } finally {
             root.deleteRecursively()
         }

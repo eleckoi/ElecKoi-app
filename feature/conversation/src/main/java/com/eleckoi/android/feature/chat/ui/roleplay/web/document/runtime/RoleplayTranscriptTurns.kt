@@ -1,6 +1,22 @@
 package com.eleckoi.android.feature.chat.ui.roleplay.web.document.runtime
 
 internal val RoleplayTranscriptTurns = """    const missingAvatar = () => '<svg class="avatar-placeholder" viewBox="0 0 256 256" aria-hidden="true"><path d="M230.93,220a8,8,0,0,1-6.93,4H32a8,8,0,0,1-6.92-12c15.23-26.33,38.7-45.21,66.09-54.16a72,72,0,1,1,73.66,0c27.39,8.95,50.86,27.83,66.09,54.16A8,8,0,0,1,230.93,220Z"></path></svg>';
+    const timestampFormatter = new Intl.DateTimeFormat('zh-CN', {
+      year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+    });
+    const formatMessageTimestamp = value => {
+      if (!value) return '';
+      const date = new Date(value);
+      return Number.isFinite(date.getTime()) ? timestampFormatter.format(date) : '';
+    };
+    const syncTurnFloor = (turn, index) => {
+      const floor = state.floorStart + index;
+      const label = turn.querySelector(':scope > .portrait-lane > .message-floor');
+      if (!label || label.dataset.floor === String(floor)) return;
+      label.dataset.floor = String(floor);
+      label.textContent = '#' + floor;
+      label.setAttribute('aria-label', '消息楼层 ' + floor);
+    };
     const applyDeletePresentation = (turn, index) => {
       const active = state.deleteMode;
       const message = state.messages[index];
@@ -64,7 +80,7 @@ internal val RoleplayTranscriptTurns = """    const missingAvatar = () => '<svg 
       footer.hidden = !footer.innerHTML;
       return footer;
     };
-    const createTurn = message => {
+    const createTurn = (message, index = 0) => {
       const turn = document.createElement('article');
       const pagerVisible = message.openingOptionIds && message.openingOptionIds.length > 1 && message.selectedOpeningIndex >= 0;
       const expanded = state.expandedToolbarId === message.id;
@@ -76,6 +92,8 @@ internal val RoleplayTranscriptTurns = """    const missingAvatar = () => '<svg 
       if (message.avatarUrl) avatar.innerHTML = `<img src="${'$'}{escapeHtml(message.avatarUrl)}" alt="">`;
       else avatar.innerHTML = missingAvatar();
       lane.append(avatar);
+      const floor = document.createElement('span'); floor.className = 'message-floor';
+      lane.append(floor);
       if (pagerVisible) {
         const pager = document.createElement('div'); pager.className = 'pager';
         pager.innerHTML = `<button data-action="opening-prev" aria-label="上一条开场白" ${'$'}{message.selectedOpeningIndex <= 0 ? 'disabled' : ''}>${'$'}{svgIcon('chevronLeft', 12, 1.85)}</button><button class="pager-index" data-action="opening-jump" aria-label="第 ${'$'}{message.selectedOpeningIndex + 1} 条，共 ${'$'}{message.openingOptionIds.length} 条开场白，点击跳转">${'$'}{message.selectedOpeningIndex + 1}/${'$'}{message.openingOptionIds.length}</button><button data-action="opening-next" aria-label="下一条开场白" ${'$'}{message.selectedOpeningIndex >= message.openingOptionIds.length - 1 ? 'disabled' : ''}>${'$'}{svgIcon('chevronRight', 12, 1.85)}</button>`;
@@ -83,8 +101,10 @@ internal val RoleplayTranscriptTurns = """    const missingAvatar = () => '<svg 
       }
       const main = document.createElement('section'); main.className = 'turn-main';
       const header = document.createElement('header'); header.className = 'turn-header' + (expanded ? ' toolbar-expanded' : '');
-      header.innerHTML = `<div class="name">${'$'}{escapeHtml(message.name)}</div><div class="tools"><div class="tool-strip">${'$'}{toolbarContent(message, expanded)}</div></div>`;
+      const timestamp = formatMessageTimestamp(message.createdAt);
+      header.innerHTML = `<div class="author-line"><div class="name">${'$'}{escapeHtml(message.name)}</div><time class="message-timestamp" datetime="${'$'}{escapeHtml(message.createdAt || '')}">${'$'}{escapeHtml(timestamp)}</time></div><div class="tools"><div class="tool-strip">${'$'}{toolbarContent(message, expanded)}</div></div>`;
       main.append(header, createBody(message), createAgentFooter(message)); turn.append(lane, main);
+      syncTurnFloor(turn, index);
       applyCachedRichHeights(turn, message);
       restoreTurnSnapshot(turn);
       return turn;
@@ -154,6 +174,13 @@ internal val RoleplayTranscriptTurns = """    const missingAvatar = () => '<svg 
       existing.classList.toggle('has-pager', !!pagerVisible);
       const name = existing.querySelector(':scope > .turn-main > .turn-header .name');
       if (name && name.textContent !== String(message.name || '')) name.textContent = message.name || '';
+      if (previousMessage.createdAt !== message.createdAt) {
+        const timestamp = existing.querySelector(':scope > .turn-main > .turn-header .message-timestamp');
+        if (timestamp) {
+          timestamp.textContent = formatMessageTimestamp(message.createdAt);
+          timestamp.setAttribute('datetime', message.createdAt || '');
+        }
+      }
       if (
         previousMessage.avatarUrl !== message.avatarUrl
       ) {
@@ -207,7 +234,7 @@ internal val RoleplayTranscriptTurns = """    const missingAvatar = () => '<svg 
         )),
       );
       captureTurnSnapshot(existing);
-      const next = createTurn(message);
+      const next = createTurn(message, Number(existing.dataset.index) || 0);
       next.dataset.index = existing.dataset.index || '';
       applyDeletePresentation(next, Number(next.dataset.index));
       const nextRichRoots = richRootsWithin(next);

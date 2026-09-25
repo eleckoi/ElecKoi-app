@@ -63,9 +63,10 @@ internal val RoleplayTranscriptProjection = """    const desiredVirtualItems = (
             releaseRichWithin(previous);
             previous.remove();
           }
-          turn = createTurn(message);
+          turn = createTurn(message, item.index);
         }
         turn.dataset.index = String(item.index);
+        syncTurnFloor(turn, item.index);
         applyDeletePresentation(turn, item.index);
         ordered.push(turn);
       }

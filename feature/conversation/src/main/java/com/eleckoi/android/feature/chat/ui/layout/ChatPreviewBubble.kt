@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -57,6 +58,8 @@ data class ChatPreviewMetrics(
     val layoutMode: ChatLayoutMode,
     val avatarShape: ChatAvatarShape,
     val cardPanel: Boolean,
+    val roleplayTimestampsEnabled: Boolean = true,
+    val roleplayMessageFloorsEnabled: Boolean = true,
 )
 
 @Composable
@@ -87,6 +90,8 @@ fun rememberChatPreviewMetrics(): ChatPreviewMetrics {
         layoutMode = preferences.chatLayoutMode,
         avatarShape = preferences.resolvedChatAvatarShape,
         cardPanel = preferences.chatRoleplayCardPanel,
+        roleplayTimestampsEnabled = preferences.chatRoleplayTimestampsEnabled,
+        roleplayMessageFloorsEnabled = preferences.chatRoleplayMessageFloorsEnabled,
     )
 }
 
@@ -267,10 +272,31 @@ private fun PreviewTurn(
         // side-switching is what a messaging app does, and this is meant to read like a script.
         val turn: @Composable () -> Unit = {
             Row(modifier = Modifier.fillMaxWidth()) {
-                avatar()
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    avatar()
+                    if (metrics.roleplayMessageFloorsEnabled) {
+                        Text(
+                            text = if (user) "#1" else "#0",
+                            color = appearance.mobileMuted,
+                            fontSize = (metrics.fontSize.value * .9f).sp,
+                            fontWeight = FontWeight.SemiBold,
+                            lineHeight = (metrics.fontSize.value * 1.04f).sp,
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.width(metrics.nameSpacing))
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    label()
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        label()
+                        if (metrics.roleplayTimestampsEnabled) {
+                            Text(
+                                text = "2026年9月24日 19:09",
+                                color = appearance.mobileMuted,
+                                fontSize = (metrics.fontSize.value * .7f).sp,
+                                lineHeight = (metrics.fontSize.value * .85f).sp,
+                            )
+                        }
+                    }
                     Spacer(modifier = Modifier.height(metrics.replySpacing))
                     content()
                 }

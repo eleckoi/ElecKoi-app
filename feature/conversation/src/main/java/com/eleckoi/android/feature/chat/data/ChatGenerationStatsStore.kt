@@ -178,7 +178,7 @@ class ChatGenerationStatsStore(
 
     private companion object {
         const val CurrentVersion = 1
-        const val MaximumStatsBytes = 64L * 1024L
+        const val MaximumStatsBytes = 1024L * 1024L
         const val GenerationStatsDirectory = "eleckoi-generation-stats"
         const val RegenerationBaselineKey = "_regeneration-baseline"
         val UnsafeSegmentCharacters = Regex("[^A-Za-z0-9._-]")
@@ -191,11 +191,13 @@ private data class StoredChatGenerationStats(
     val runtimeThreadId: String,
     val metrics: ChatGenerationMetricsJson,
     val contextWindowUsage: ChatContextWindowUsageJson? = null,
+    val stepTotalsByTurn: Map<String, Int> = emptyMap(),
 ) {
     fun toDomain() = ChatSessionGenerationStats(
         runtimeThreadId = runtimeThreadId,
         metrics = metrics.toDomain(),
         contextWindowUsage = contextWindowUsage?.toDomain(),
+        stepTotalsByTurn = stepTotalsByTurn,
     )
 
     companion object {
@@ -203,6 +205,7 @@ private data class StoredChatGenerationStats(
             runtimeThreadId = stats.runtimeThreadId,
             metrics = ChatGenerationMetricsJson.fromDomain(stats.metrics),
             contextWindowUsage = stats.contextWindowUsage?.let(ChatContextWindowUsageJson::fromDomain),
+            stepTotalsByTurn = stats.stepTotalsByTurn,
         )
     }
 }

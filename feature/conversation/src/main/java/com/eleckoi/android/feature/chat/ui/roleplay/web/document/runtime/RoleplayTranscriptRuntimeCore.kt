@@ -46,7 +46,7 @@ internal val RoleplayTranscriptRuntimeCore = """
     const virtualRuntime = window.ElecKoiTanStackVirtual;
     if (!virtualRuntime?.Virtualizer) throw new Error('TanStack Virtual runtime failed to load');
     const state = {
-      sessionId: '', messages: [], byId: new Map(),
+      sessionId: '', messages: [], byId: new Map(), floorStart: 0,
       start: 0, end: 0, ready: false, atEnd: true, loadRequested: false,
       readyPosted: false,
       initialPresentation: {
@@ -54,6 +54,8 @@ internal val RoleplayTranscriptRuntimeCore = """
         epoch: 0, stableEpoch: -1, checkQueued: false, watchdog: 0,
       },
       layoutMode: 'roleplay',
+      showRoleplayTimestamps: true,
+      showRoleplayMessageFloors: true,
       cardPanel: false,
       frontendRendererEnabled: true,
       deleteMode: false,

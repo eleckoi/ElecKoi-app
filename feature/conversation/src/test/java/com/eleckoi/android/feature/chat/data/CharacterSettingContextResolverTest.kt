@@ -16,6 +16,8 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.S
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryTriggerMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.hiddenToolTimelinePromptPosition
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.settingLibraryHiddenToolTimelineEntry
+import com.eleckoi.android.feature.characters.modes.story.regex.model.RegexRule
+import com.eleckoi.android.feature.characters.modes.story.regex.model.RegexRuleTarget
 import com.eleckoi.android.feature.chat.model.ChatMessage
 import com.eleckoi.android.feature.chat.model.MessageRole
 import org.junit.Assert.assertEquals
@@ -319,6 +321,55 @@ class CharacterSettingContextResolverTest {
         assertEquals(listOf("cat-rule", "visible"), promoted.readableEntries.map { it.id })
         assertEquals(SettingLibraryAgentReadStrategy.Keyword, promoted.readableEntries.first().readStrategy)
         assertTrue(promoted.readableEntries.first().promotedToRequiredThisTurn)
+    }
+
+    @Test
+    fun `keyword scan uses prompt regexed current message and keeps the depth limit`() {
+        val keywordEntry = SettingLibraryEntry(
+            id = "world-rule",
+            content = "世界设定",
+            keywords = listOf("世界"),
+            triggerMode = SettingLibraryTriggerMode.AgentTool,
+            agentReadStrategy = SettingLibraryAgentReadStrategy.Keyword,
+        )
+        val context = SettingLibraryAgentTurnContext(
+            automaticLibrary = SettingLibrary(characterId = "character"),
+            readableEntries = listOf(
+                SettingLibraryAgentEntry(
+                    id = keywordEntry.id,
+                    title = "世界",
+                    groupPath = "",
+                    path = "世界",
+                    content = keywordEntry.content,
+                    readStrategy = SettingLibraryAgentReadStrategy.Keyword,
+                ),
+            ),
+            groups = emptyList(),
+            keywordStrategyEntries = listOf(keywordEntry),
+        )
+        val messages = listOf(
+            ChatMessage(id = "a1", role = MessageRole.Assistant, content = "世界"),
+            ChatMessage(id = "u1", role = MessageRole.User, content = "我在哪里"),
+        )
+        val promptMessages = promptRegexedHistory(messages) { target ->
+            if (target == RegexRuleTarget.UserInput) {
+                listOf(RegexRule(pattern = "我在哪里", replacement = "世界", targets = setOf(target)))
+            } else {
+                emptyList()
+            }
+        }
+
+        assertTrue(context.withKeywordPromotions(messages).readableEntries.isEmpty())
+        assertEquals("世界", promptMessages.last().content)
+        assertEquals(listOf("world-rule"), context.withKeywordPromotions(promptMessages).readableEntries.map { it.id })
+        assertEquals("我在哪里", messages.last().content)
+
+        val removedKeyword = promptRegexedHistory(
+            listOf(ChatMessage(id = "u2", role = MessageRole.User, content = "世界")),
+        ) { target ->
+            listOf(RegexRule(pattern = "世界", replacement = "别处", targets = setOf(target)))
+        }
+        assertTrue(context.withKeywordPromotions(removedKeyword).readableEntries.isEmpty())
     }
 
     @Test

@@ -43,6 +43,34 @@ internal class RoleplayTranscriptProjectionCache {
 
     private val entries = linkedMapOf<String, Entry>()
     private val stableLists = ArrayDeque<RoleplayTranscriptListCacheEntry>()
+    private var floorAnchorMessages: List<ChatMessage> = emptyList()
+    private var floorAnchorStart = 0
+
+    /** Keep loaded floors fixed while an unsaved streaming tail grows or older pages arrive. */
+    fun floorStart(messages: List<ChatMessage>, persistedCount: Int): Int {
+        val first = messages.firstOrNull() ?: run {
+            floorAnchorMessages = emptyList()
+            floorAnchorStart = 0
+            return 0
+        }
+        val previous = floorAnchorMessages
+        val start = when {
+            first.id == OpeningMessageId -> 0
+            previous.firstOrNull()?.id == first.id -> floorAnchorStart
+            else -> {
+                val oldIndex = previous.indexOfFirst { it.id == first.id }
+                val newIndex = messages.indexOfFirst { it.id == previous.firstOrNull()?.id }
+                when {
+                    oldIndex >= 0 -> floorAnchorStart + oldIndex
+                    newIndex >= 0 -> (floorAnchorStart - newIndex).coerceAtLeast(0)
+                    else -> (persistedCount - messages.size).coerceAtLeast(0)
+                }
+            }
+        }
+        floorAnchorMessages = messages
+        floorAnchorStart = start
+        return start
+    }
 
     fun get(
         source: ChatMessage,
@@ -170,6 +198,8 @@ internal fun buildRoleplayTranscriptModel(
     assistantBubbleEnabled: Boolean = false,
     bubbleCornerRadius: Float = 12f,
     cardPanel: Boolean,
+    showRoleplayTimestamps: Boolean = true,
+    showRoleplayMessageFloors: Boolean = true,
     renderingPreferences: ChatRenderingPreferences,
     frontendRendererEnabled: Boolean,
     historyHasMore: Boolean,
@@ -363,7 +393,11 @@ internal fun buildRoleplayTranscriptModel(
     return RoleplayTranscriptModel(
         sessionId = draft.session.id,
         layoutMode = layoutMode.storageKey,
+        showRoleplayTimestamps = showRoleplayTimestamps,
+        showRoleplayMessageFloors = showRoleplayMessageFloors,
         messages = transcriptMessages,
+        floorStart = projectionCache?.floorStart(messages, draft.session.historyMessageCount)
+            ?: (draft.session.historyMessageCount - messages.size).coerceAtLeast(0),
         style = RoleplayTranscriptStyle(
             text = if (layoutMode == ChatLayoutMode.Agent) {
                 assistantBubblePalette.content.toCssColor()

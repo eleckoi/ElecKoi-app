@@ -56,6 +56,7 @@ internal fun chatSessionFromRoom(
         it.name.equals(session.permissionMode, ignoreCase = true)
     } ?: AgentPermissionMode.AskForApproval,
     messages = messages,
+    historyMessageCount = session.historyMessageCount,
     createdAt = session.createdAt,
     updatedAt = session.updatedAt,
     initialVariableStateJson = record.variableStates

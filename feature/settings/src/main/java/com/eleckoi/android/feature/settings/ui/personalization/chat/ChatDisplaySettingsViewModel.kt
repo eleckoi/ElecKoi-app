@@ -46,6 +46,12 @@ class ChatDisplaySettingsViewModel(
         if (draft.roleplayCardPanel != stored.roleplayCardPanel) {
             repository.setChatRoleplayCardPanel(draft.roleplayCardPanel)
         }
+        if (draft.roleplayTimestampsEnabled != stored.roleplayTimestampsEnabled) {
+            repository.setChatRoleplayTimestampsEnabled(draft.roleplayTimestampsEnabled)
+        }
+        if (draft.roleplayMessageFloorsEnabled != stored.roleplayMessageFloorsEnabled) {
+            repository.setChatRoleplayMessageFloorsEnabled(draft.roleplayMessageFloorsEnabled)
+        }
         if (draft.cornerRadius != stored.cornerRadius) repository.setChatBubbleCornerRadius(draft.cornerRadius)
         if (draft.avatarSize != stored.avatarSize) repository.setChatAvatarSize(draft.avatarSize)
         if (draft.nameFontSize != stored.nameFontSize) repository.setChatNameFontSize(draft.nameFontSize)

@@ -44,6 +44,7 @@ internal fun ChatComposerMenu(
     onDismiss: () -> Unit,
     onPickImages: () -> Unit,
     onOpenHistory: () -> Unit,
+    onOpenTools: () -> Unit,
     onPermissionModeChange: (AgentPermissionMode) -> Unit,
     onOpenVariableViewer: () -> Unit,
     onOpenDynamicSettings: (() -> Unit)?,
@@ -92,6 +93,13 @@ internal fun ChatComposerMenu(
                     onClick = onOpenHistory,
                 )
                 HorizontalDivider(color = appearance.mobileLine)
+                RoleplayMenuAction(
+                    label = "工具",
+                    paths = AppIconPaths.Plug,
+                    appearance = appearance,
+                    onDismiss = onDismiss,
+                    onClick = onOpenTools,
+                )
                 RoleplayMenuAction(
                     label = "变量查看器",
                     paths = DshIconPaths.Data,

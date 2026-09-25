@@ -34,6 +34,13 @@ class ChatSessionGenerationStatsProjector(
             runtimeThreadId = activeThreadId,
             metrics = baseMetrics + if (replacingRetainedTurn) turnMetrics.copy(turns = 0) else turnMetrics,
             contextWindowUsage = turnContextWindowUsage ?: baseContextWindowUsage,
+            stepTotalsByTurn = if (event is AgentSessionEvent.StepCompleted) {
+                projected.stepTotalsByTurn +
+                    ((baseMetrics.turns + if (replacingRetainedTurn) 0 else turnMetrics.turns).toString() to
+                        (baseMetrics.steps + turnMetrics.steps))
+            } else {
+                projected.stepTotalsByTurn
+            },
         )
         if (next == projected) return false
         projected = next

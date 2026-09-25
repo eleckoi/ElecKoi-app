@@ -17,6 +17,15 @@ internal object RoleplayTranscriptPatchPlanner {
         if (baseline.layoutMode != next.layoutMode) {
             patch.put("layoutMode", next.layoutMode)
         }
+        if (baseline.showRoleplayTimestamps != next.showRoleplayTimestamps) {
+            patch.put("showRoleplayTimestamps", next.showRoleplayTimestamps)
+        }
+        if (baseline.showRoleplayMessageFloors != next.showRoleplayMessageFloors) {
+            patch.put("showRoleplayMessageFloors", next.showRoleplayMessageFloors)
+        }
+        if (baseline.floorStart != next.floorStart) {
+            patch.put("floorStart", next.floorStart)
+        }
         if (baseline.style != next.style) {
             patch.put("style", next.style.toJson())
         }

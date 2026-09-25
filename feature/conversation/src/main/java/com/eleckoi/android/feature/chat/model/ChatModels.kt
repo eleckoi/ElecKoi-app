@@ -180,11 +180,18 @@ data class ChatSessionGenerationStats(
     val runtimeThreadId: String = "",
     val metrics: ChatGenerationMetrics = ChatGenerationMetrics(),
     val contextWindowUsage: ChatContextWindowUsage? = null,
+    val stepTotalsByTurn: Map<String, Int> = emptyMap(),
 ) {
-    fun forRegeneration(retainedTurns: Int): ChatSessionGenerationStats = copy(
+    fun forRegeneration(retainedTurns: Int, retainedSteps: Int? = null): ChatSessionGenerationStats = copy(
         runtimeThreadId = "",
-        metrics = metrics.copy(turns = retainedTurns),
+        metrics = metrics.copy(
+            turns = retainedTurns,
+            steps = retainedSteps ?: if (retainedTurns <= 1) 0 else {
+                stepTotalsByTurn[(retainedTurns - 1).toString()] ?: metrics.steps
+            },
+        ),
         contextWindowUsage = null,
+        stepTotalsByTurn = stepTotalsByTurn.filterKeys { key -> key.toIntOrNull()?.let { it < retainedTurns } == true },
     )
 }
 
@@ -259,6 +266,8 @@ data class ChatSession(
     val initialVariableStateJson: String = "",
     val variableStateJson: String = "",
     val generationStats: ChatSessionGenerationStats = ChatSessionGenerationStats(),
+    /** Total persisted messages, including rows outside the current Paging window. */
+    val historyMessageCount: Int = 0,
 )
 
 data class ChatDraft(

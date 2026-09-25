@@ -25,6 +25,7 @@ class ChatGenerationStatsStoreTest {
                     outputTokens = 37_300,
                 ),
                 contextWindowUsage = ChatContextWindowUsage(850_000, 3_437_300, 1_000_000),
+                stepTotalsByTurn = mapOf("119" to 357, "120" to 360),
             )
 
             store.persist("conversation-1", expected)
@@ -63,7 +64,7 @@ class ChatGenerationStatsStoreTest {
                 metrics = ChatGenerationMetrics(turns = 58, steps = 367, inputTokens = 3_000_000),
             )
             store.persist("conversation", old)
-            val baseline = old.forRegeneration(retainedTurns = 58)
+            val baseline = old.forRegeneration(retainedTurns = 58, retainedSteps = 365)
             store.replaceWithRegenerationBaseline("conversation", baseline)
 
             val reopened = ChatGenerationStatsStore(root)
@@ -81,6 +82,7 @@ class ChatGenerationStatsStoreTest {
             )
             val next = replacement.snapshot()
             assertEquals(58, next.metrics.turns)
+            assertEquals(366, next.metrics.steps)
             reopened.persist("conversation", next)
             assertEquals(next, ChatGenerationStatsStore(root).load("conversation", "new-thread"))
             assertEquals(ChatSessionGenerationStats(), reopened.load("conversation", ""))
@@ -96,7 +98,8 @@ class ChatGenerationStatsStoreTest {
             reopened.persist("conversation", continued.snapshot())
             val afterOrdinaryTurn = ChatGenerationStatsStore(root).load("conversation", "rotated-thread")
             assertEquals(59, afterOrdinaryTurn.metrics.turns)
-            assertEquals(369, afterOrdinaryTurn.metrics.steps)
+            assertEquals(367, afterOrdinaryTurn.metrics.steps)
+            assertEquals(367, afterOrdinaryTurn.stepTotalsByTurn["59"])
         } finally {
             root.deleteRecursively()
         }

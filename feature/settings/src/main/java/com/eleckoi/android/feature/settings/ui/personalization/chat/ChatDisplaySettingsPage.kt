@@ -68,6 +68,8 @@ internal data class ChatLayoutDraft(
     val assistantBubbleEnabled: Boolean,
     val avatarShape: ChatAvatarShape,
     val roleplayCardPanel: Boolean,
+    val roleplayTimestampsEnabled: Boolean,
+    val roleplayMessageFloorsEnabled: Boolean,
     val cornerRadius: Float,
     val avatarSize: Float,
     val nameFontSize: Float,
@@ -91,6 +93,8 @@ internal data class ChatLayoutDraft(
         assistantBubbleEnabled = preferences.assistantBubbleEnabled,
         avatarShape = preferences.chatAvatarShape,
         roleplayCardPanel = preferences.chatRoleplayCardPanel,
+        roleplayTimestampsEnabled = preferences.chatRoleplayTimestampsEnabled,
+        roleplayMessageFloorsEnabled = preferences.chatRoleplayMessageFloorsEnabled,
         cornerRadius = preferences.chatBubbleCornerRadius,
         avatarSize = preferences.chatAvatarSize,
         nameFontSize = preferences.chatNameFontSize,
@@ -126,6 +130,8 @@ internal data class ChatLayoutDraft(
         layoutMode = layoutMode,
         avatarShape = resolvedAvatarShape,
         cardPanel = roleplayCardPanel,
+        roleplayTimestampsEnabled = roleplayTimestampsEnabled,
+        roleplayMessageFloorsEnabled = roleplayMessageFloorsEnabled,
     )
 
     // Switching to a layout that cannot hold a portrait avatar must not silently rewrite the stored

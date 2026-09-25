@@ -14,11 +14,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.AccountTree
+import androidx.compose.material.icons.rounded.AccessTime
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.FormatLineSpacing
 import androidx.compose.material.icons.rounded.HourglassEmpty
 import androidx.compose.material.icons.rounded.KeyboardAlt
 import androidx.compose.material.icons.rounded.Memory
+import androidx.compose.material.icons.rounded.Numbers
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.TextFields
@@ -301,6 +303,21 @@ internal fun ChatDisplayHub(
                 cardPanel = draft.roleplayCardPanel,
                 appearance = appearance,
                 onSelect = { onDraftChange(draft.copy(roleplayCardPanel = it)) },
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            ChatToggleRow(
+                title = "聊天时间戳",
+                icon = Icons.Rounded.AccessTime,
+                checked = draft.roleplayTimestampsEnabled,
+                appearance = appearance,
+                onCheckedChange = { onDraftChange(draft.copy(roleplayTimestampsEnabled = it)) },
+            )
+            ChatToggleRow(
+                title = "显示消息楼层",
+                icon = Icons.Rounded.Numbers,
+                checked = draft.roleplayMessageFloorsEnabled,
+                appearance = appearance,
+                onCheckedChange = { onDraftChange(draft.copy(roleplayMessageFloorsEnabled = it)) },
             )
         }
         Spacer(modifier = Modifier.height(10.dp))

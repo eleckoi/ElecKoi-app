@@ -40,6 +40,8 @@ object AgentLayoutDefaults {
 /** Defaults owned only by the roleplay profile. Equal numbers in two profiles are still separate. */
 object RoleplayLayoutDefaults {
     const val AssistantBubbleEnabled = false
+    const val TimestampsEnabled = true
+    const val MessageFloorsEnabled = true
     val AvatarShape = ChatAvatarShape.Portrait
     val TimelineThinkingAnimation = ChatTimelineThinkingAnimation.Default
     const val BubbleCornerRadius = 10f
@@ -187,6 +189,8 @@ data class UiPreferences(
     val chatCodeBlockShowAllEnabled: Boolean = ChatCodeBlockDefaults.ShowAllEnabled,
     val chatAvatarShape: ChatAvatarShape = RoleplayLayoutDefaults.AvatarShape,
     val chatRoleplayCardPanel: Boolean = RoleplayLayoutDefaults.CardPanel,
+    val chatRoleplayTimestampsEnabled: Boolean = RoleplayLayoutDefaults.TimestampsEnabled,
+    val chatRoleplayMessageFloorsEnabled: Boolean = RoleplayLayoutDefaults.MessageFloorsEnabled,
     val chatBubbleCornerRadius: Float = RoleplayLayoutDefaults.BubbleCornerRadius,
     val chatAvatarSize: Float = RoleplayLayoutDefaults.AvatarSize,
     val chatNameFontSize: Float = RoleplayLayoutDefaults.NameFontSize,
