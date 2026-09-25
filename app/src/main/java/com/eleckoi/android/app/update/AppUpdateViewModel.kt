@@ -3,7 +3,6 @@ package com.eleckoi.android.app.update
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,7 +28,6 @@ internal class AppUpdateViewModel(
     private val repository: AppUpdateRepository,
     private val installedVersion: String,
     private val scheduler: AppUpdateScheduler,
-    private val nowMillis: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(AppUpdateUiState(installedVersion = installedVersion))
     val uiState: StateFlow<AppUpdateUiState> = _uiState.asStateFlow()
@@ -49,15 +47,14 @@ internal class AppUpdateViewModel(
         viewModelScope.launch {
             val snapshot = repository.current()
             scheduler.setEnabled(snapshot.remindersEnabled)
-            val stale = nowMillis() - snapshot.lastCheckedAtMillis >= ForegroundRefreshIntervalMillis
-            if (snapshot.lastCheckedAtMillis == 0L || stale) refresh()
         }
+        refresh()
     }
 
     fun refresh() {
         if (_uiState.value.checking) return
+        _uiState.update { it.copy(checking = true, errorMessage = "") }
         viewModelScope.launch {
-            _uiState.update { it.copy(checking = true, errorMessage = "") }
             runCatching { repository.checkForUpdate() }
                 .onFailure { error ->
                     _uiState.update {
@@ -79,8 +76,6 @@ internal class AppUpdateViewModel(
     }
 
     companion object {
-        private val ForegroundRefreshIntervalMillis = TimeUnit.HOURS.toMillis(6)
-
         fun factory(
             repository: AppUpdateRepository,
             installedVersion: String,
