@@ -23,6 +23,7 @@ internal data class RuntimeGuestCommand(
     val guestWorkingDirectory: String = "/",
     val environment: Map<String, String> = emptyMap(),
     val timeoutMillis: Long = DefaultGuestCommandTimeoutMillis,
+    val retainFullOutput: Boolean = false,
 )
 
 internal data class RuntimeGuestCommandResult(
@@ -65,7 +66,7 @@ internal class ProotRuntimeGuestCommandExecutor(
         val spec = specFactory.create(command)
         val process = withContext(Dispatchers.IO) { processFactory.start(spec) }
         try {
-            val stdout = async(Dispatchers.IO) { process.inputStream.readBoundedOutput() }
+            val stdout = async(Dispatchers.IO) { process.inputStream.readBoundedOutput(command.retainFullOutput) }
             val stderr = async(Dispatchers.IO) { process.errorStream.readBoundedOutput() }
             val exitCode = withTimeout(command.timeoutMillis) {
                 withContext(Dispatchers.IO) { process.waitFor() }
@@ -211,7 +212,7 @@ internal class RuntimeGuestProcessSpecFactory(
     }
 }
 
-private fun InputStream.readBoundedOutput(): String {
+internal fun InputStream.readBoundedOutput(retainFullOutput: Boolean = false): String {
     val reader = InputStreamReader(this, Charsets.UTF_8)
     val retained = StringBuilder()
     val line = StringBuilder()
@@ -225,7 +226,7 @@ private fun InputStream.readBoundedOutput(): String {
         repeat(count) { index ->
             val char = buffer[index]
             if (char == '\n') {
-                appendRetained(retained, line)
+                appendRetained(retained, line, retainFullOutput)
                 line.setLength(0)
             } else if (char != '\r') {
                 require(line.length < MaxProcessLineChars) { "Ubuntu 命令单行输出超过安全上限" }
@@ -233,14 +234,14 @@ private fun InputStream.readBoundedOutput(): String {
             }
         }
     }
-    if (line.isNotEmpty()) appendRetained(retained, line)
+    if (line.isNotEmpty()) appendRetained(retained, line, retainFullOutput)
     return retained.toString()
 }
 
-private fun appendRetained(retained: StringBuilder, line: StringBuilder) {
+private fun appendRetained(retained: StringBuilder, line: StringBuilder, retainFullOutput: Boolean) {
     if (retained.isNotEmpty()) retained.append('\n')
     retained.append(line)
-    if (retained.length > MaxRetainedOutputChars) {
+    if (!retainFullOutput && retained.length > MaxRetainedOutputChars) {
         retained.delete(0, retained.length - MaxRetainedOutputChars)
     }
 }

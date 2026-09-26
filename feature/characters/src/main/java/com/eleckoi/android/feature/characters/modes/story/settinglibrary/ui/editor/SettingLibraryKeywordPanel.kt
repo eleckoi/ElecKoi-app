@@ -46,6 +46,29 @@ import com.eleckoi.android.foundation.design.components.imeBringIntoViewOnFocus
 import com.eleckoi.android.foundation.design.components.noRippleClickable
 
 @Composable
+internal fun KeywordMatchConditionToggle(
+    enabled: Boolean,
+    appearance: AppearanceTheme,
+    onChange: (Boolean) -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth().padding(top = StoryEditorCardSpacing)) {
+        Text(
+            "判断条件",
+            color = appearance.mobileText,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+        KeywordSwitchRow(
+            title = "关键词命中",
+            description = if (enabled) "命中后列为本轮必读" else "关闭时由 AI 选读",
+            checked = enabled,
+            appearance = appearance,
+            onChange = onChange,
+        )
+    }
+}
+
+@Composable
 internal fun KeywordRulesPanel(
     entry: SettingLibraryEntry,
     expanded: Boolean,

@@ -48,8 +48,12 @@ private fun createCharacterSettingLibraryGlobTool(
     definition = AgentToolDefinition(
         name = AgentGlobSettingFilesTool,
         description = "使用 Glob 路径模式浏览当前对话的虚拟设定文件。" +
-            "路径没有 .md 后缀，例如 **、人物/**、**/*关系*。" +
-            "返回真实完整路径、标题和作者注释；不会读取正文。" +
+            "需要本轮必读清单时，省略 pattern 和 path，以 ** 一次列出全部当前可读路径及 required_entries。" +
+            "不要从根目录逐层进入子目录重复调用 Glob；结果已有完整路径时直接读取目标文件。" +
+            "仅在明确需要筛选某个已知目录时传 path；它会递归搜索该目录及其子目录。" +
+            "同一轮内，目录和条件未变化时不要重复相同搜索；条件变化后可重新搜索，以最新必读清单为准。" +
+            "路径没有 .md 后缀；" +
+            "返回真实完整路径、标题和作者注释，不读取正文。" +
             RequiredEntriesReadInstruction,
         parameters = searchParameters(includeOutputMode = false),
     ),
@@ -68,7 +72,6 @@ private fun createCharacterSettingLibraryGlobTool(
                 files = byVirtualPath.keys.map { path -> AgentVirtualFile(path, "") },
                 request = AgentVirtualGlobRequest(
                     pattern = pattern,
-                    limit = DefaultSearchResults,
                 ),
             )
         }.getOrElse { error ->
@@ -213,7 +216,7 @@ private fun searchParameters(includeOutputMode: Boolean): JsonObject = buildJson
                 if (includeOutputMode) {
                     "ripgrep 正则表达式。"
                 } else {
-                    "可选的虚拟文件路径 Glob 模式；省略时列出全部设定。"
+                    "可选的虚拟文件路径 Glob 模式；省略时使用 ** 列出当前 path 范围内全部可读设定路径。"
                 },
             )
             put("minLength", 1)
@@ -221,7 +224,7 @@ private fun searchParameters(includeOutputMode: Boolean): JsonObject = buildJson
         })
         put(PathArgument, buildJsonObject {
             put("type", "string")
-            put("description", "可选的精确虚拟目录路径；留空表示整个设定库。")
+            put("description", "可选的精确虚拟目录路径；留空表示整个设定库，指定后递归搜索该目录下的条目。")
         })
         if (includeOutputMode) {
             put(GlobArgument, buildJsonObject {
@@ -318,10 +321,10 @@ private fun SettingLibraryAgentEntry.isRequiredThisTurn(): Boolean =
     readStrategy == SettingLibraryAgentReadStrategy.Required || promotedToRequiredThisTurn
 
 private val RequiredEntriesReadInstruction =
-    "搜索结果的 required_entries 是本回合必读清单（固定必读及关键词、EJS/变量触发项），" +
-        "与 entries/matches 是否命中无关。" +
-        "若非空，回复用户前必须调用 $AgentReadSettingFilesTool，" +
-        "把其中所有 path 一次传入 paths；仅搜索不算读取。" +
+    "搜索结果的 required_entries 是本回合必读清单（固定必读、关键词命中或 EJS 条件成立项），" +
+        "不受 pattern、path 或 entries/matches 是否命中影响。" +
+    "若非空，回复用户前必须调用 $AgentReadSettingFilesTool，" +
+        "把本轮尚未读取或已失效的 path 一次传入 paths；已读取且正文未变化的条目无需重复读取；仅搜索不算读取。" +
         "即使固定必读项标记为 cached_reference、正文已在前置设定区，也必须读取，" +
         "用工具回执的编号和标题核对前置正文。"
 

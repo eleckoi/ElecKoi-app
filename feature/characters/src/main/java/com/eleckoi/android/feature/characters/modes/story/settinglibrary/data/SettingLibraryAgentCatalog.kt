@@ -2,6 +2,7 @@ package com.eleckoi.android.feature.characters.modes.story.settinglibrary.data
 
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryAgentReadStrategy
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryContentMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryDynamicMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryGroup
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryTriggerMode
@@ -13,6 +14,7 @@ internal data class SettingLibraryAgentCatalogItem(
     val path: String,
     val selectionHint: String = "",
     val readStrategy: SettingLibraryAgentReadStrategy = SettingLibraryAgentReadStrategy.Normal,
+    val contentMode: SettingLibraryContentMode = SettingLibraryContentMode.PlainText,
     /** Author-defined order from the root group down to this entry. */
     val treeOrderPath: List<Int> = emptyList(),
 )
@@ -35,8 +37,11 @@ internal fun settingLibraryAgentCatalogPreview(
             SettingLibraryAgentCatalogItem(
                 id = entry.id,
                 path = listOf(folder, entryName).filter(String::isNotBlank).joinToString("/"),
-                selectionHint = entry.agentSelectionHint,
+                selectionHint = if (entry.agentReadStrategy == SettingLibraryAgentReadStrategy.Normal &&
+                    entry.contentMode == SettingLibraryContentMode.PlainText
+                ) entry.agentSelectionHint else "",
                 readStrategy = entry.agentReadStrategy,
+                contentMode = entry.contentMode,
                 treeOrderPath = settingLibraryTreeOrderPath(entry, groupsById),
             )
         }
@@ -138,9 +143,12 @@ private fun appendDirectoryPreviewTree(
             is SettingTreeChild.File -> {
                 val strategy = when (child.item.readStrategy) {
                     SettingLibraryAgentReadStrategy.Required -> " [必读]"
-                    SettingLibraryAgentReadStrategy.Keyword -> " [关键词]"
-                    SettingLibraryAgentReadStrategy.Normal -> " [按需]"
-                    SettingLibraryAgentReadStrategy.VariableCondition -> " [变量条件]"
+                    SettingLibraryAgentReadStrategy.Keyword -> if (child.item.contentMode == SettingLibraryContentMode.Ejs) {
+                        " [关键词 + EJS]"
+                    } else " [关键词]"
+                    SettingLibraryAgentReadStrategy.Normal -> if (child.item.contentMode == SettingLibraryContentMode.Ejs) {
+                        " [EJS 条件]"
+                    } else " [选读]"
                 }
                 val hint = child.item.normalizedSelectionHint()
                     .takeIf(String::isNotBlank)

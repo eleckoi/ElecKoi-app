@@ -41,9 +41,8 @@ class RipgrepAgentVirtualFileSearch(
     override suspend fun glob(
         files: List<AgentVirtualFile>,
         request: AgentVirtualGlobRequest,
-    ): AgentVirtualGlobResult = withSnapshot(files) { guestDirectory, command ->
+    ): AgentVirtualGlobResult = withSnapshot(files, maxFiles = null, retainFullOutput = true) { guestDirectory, command ->
         require(request.pattern.isNotBlank()) { "Glob pattern 不能为空" }
-        require(request.limit in 1..MaxResultLimit) { "Glob limit 必须在 1 到 $MaxResultLimit 之间" }
         val pattern = request.pattern.normalizedPattern()
         val arguments = buildList {
             add("rg")
@@ -67,8 +66,8 @@ class RipgrepAgentVirtualFileSearch(
             .distinct()
             .toList()
         AgentVirtualGlobResult(
-            paths = allPaths.take(request.limit),
-            omitted = (allPaths.size - request.limit).coerceAtLeast(0),
+            paths = allPaths,
+            omitted = 0,
         )
     }
 
@@ -125,12 +124,14 @@ class RipgrepAgentVirtualFileSearch(
 
     private suspend fun <T> withSnapshot(
         files: List<AgentVirtualFile>,
+        maxFiles: Int? = MaxCorpusFiles,
+        retainFullOutput: Boolean = false,
         block: suspend (
             guestDirectory: String,
             command: suspend (List<String>, String) -> com.eleckoi.android.engine.workspace.runtime.process.RuntimeGuestCommandResult,
         ) -> T,
     ): T = withContext(Dispatchers.IO) {
-        require(files.size <= MaxCorpusFiles) { "虚拟搜索文件超过 $MaxCorpusFiles 个" }
+        maxFiles?.let { require(files.size <= it) { "虚拟搜索文件超过 $it 个" } }
         val activeRuntime = requireNotNull(RuntimeInstallationInspector.activePaths(runtimePaths)) {
             "本地 Agent 运行时尚未安装完成"
         }
@@ -170,6 +171,7 @@ class RipgrepAgentVirtualFileSearch(
                         arguments = arguments,
                         guestWorkingDirectory = workingDirectory,
                         timeoutMillis = SearchTimeoutMillis,
+                        retainFullOutput = retainFullOutput,
                     ),
                 )
             }

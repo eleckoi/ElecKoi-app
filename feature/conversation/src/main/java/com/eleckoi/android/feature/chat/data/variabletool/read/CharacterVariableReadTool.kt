@@ -19,7 +19,8 @@ internal fun characterVariableReadTool(
 ): AgentDynamicTool = AgentDynamicTool(
     definition = AgentToolDefinition(
         name = AgentReadVariablesTool,
-        description = "读取 Glob 或 Grep 已返回的变量路径，返回当前值、默认值、说明和完整更新规则。" +
+        description = "读取当前回合变量搜索结果中的完整路径，返回当前值、默认值、说明和完整更新规则。" +
+            "每轮先用变量 Glob 获取 required_variables 并读取这些必读变量；上轮读取不能代替本轮状态。" +
             "current_present 区分‘实际存储为 null’和‘尚未写入状态’。" +
             "修改前建议先读以理解作者规则；补丁工具会独立执行路径和 Zod 校验。",
         parameters = buildJsonObject {
@@ -27,13 +28,12 @@ internal fun characterVariableReadTool(
             put("properties", buildJsonObject {
                 put(VariablePathsArgument, buildJsonObject {
                     put("type", "array")
-                    put("description", "Glob 或 Grep 已返回的完整变量 JSON Pointer 路径。")
+                    put("description", "当前回合 Glob 或 Grep 已返回的完整变量 JSON Pointer 路径。")
                     put("items", buildJsonObject {
                         put("type", "string")
                         put("pattern", "^/")
                     })
                     put("minItems", 1)
-                    put("maxItems", MaxReadVariables)
                     put("uniqueItems", true)
                 })
             })
@@ -47,10 +47,6 @@ internal fun characterVariableReadTool(
         when {
             paths.isEmpty() -> AgentDynamicToolResult(
                 """{"status":"invalid_arguments","message":"至少选择一个变量路径。"}""",
-                success = false,
-            )
-            paths.size > MaxReadVariables -> AgentDynamicToolResult(
-                """{"status":"invalid_arguments","message":"一次最多读取 $MaxReadVariables 个变量。"}""",
                 success = false,
             )
             paths.any { it !in byPath } -> {
@@ -104,4 +100,3 @@ internal fun characterVariableReadTool(
 )
 
 private const val VariablePathsArgument = "paths"
-private const val MaxReadVariables = 16

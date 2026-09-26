@@ -216,9 +216,9 @@ private fun PickerNodeRow(
                 tint = appearance.mobileMuted.copy(alpha = 0.78f),
                 iconSize = 20.dp,
             )
-            is SettingTreeNode.File -> if (node.isEjsController || node.isEjsReference) {
+            is SettingTreeNode.File -> if (node.isEjsReference) {
                 Icon(
-                    imageVector = if (node.isEjsController) Icons.Rounded.Code else Icons.Rounded.Link,
+                    imageVector = Icons.Rounded.Link,
                     contentDescription = null,
                     tint = appearance.mobileBlue.copy(alpha = 0.62f),
                     modifier = Modifier.size(19.dp),

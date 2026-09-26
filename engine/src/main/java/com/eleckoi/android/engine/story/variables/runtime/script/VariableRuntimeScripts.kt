@@ -130,8 +130,8 @@ internal object VariableRuntimeScripts {
             };
 
             const renderSource = async (source, referenceTrace) => {
-              if (!source) return '';
-              if (!source.content.includes('<%')) return source.content;
+              if (!source || source.enabled === false) return '';
+              if (source.render_ejs === false || !source.content.includes('<%')) return source.content;
               if (renderStack.includes(source.id)) {
                 throw new Error(`getwi 循环引用：${ '$' }{[...renderStack, source.id].join(' -> ')}`);
               }
@@ -142,6 +142,7 @@ internal object VariableRuntimeScripts {
                   if (!requested) return '';
                   const nested = sourceByName.get(`${ '$' }{source.controller_id}\u0000${ '$' }{requested}`);
                   if (!nested) throw new Error(`getwi 找不到条目：${ '$' }{requested}`);
+                  if (nested.enabled === false) return '';
                   referenceTrace.push({ id: nested.id, title: nested.title ?? '', path: nested.path ?? '' });
                   return renderSource(nested, referenceTrace);
                 };

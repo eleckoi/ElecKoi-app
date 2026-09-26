@@ -34,4 +34,5 @@ internal fun characterSettingLibraryReadTool(
 internal fun characterSettingLibraryReadTool(
     contextProvider: suspend () -> SettingLibraryAgentTurnContext,
     requiredCache: RequiredSettingLibraryCache = RequiredSettingLibraryCache(emptyList()),
-): AgentDynamicTool = buildCharacterSettingLibraryReadTool(contextProvider, requiredCache)
+    ejsReadTracker: SettingLibraryEjsReadTracker? = null,
+): AgentDynamicTool = buildCharacterSettingLibraryReadTool(contextProvider, requiredCache, ejsReadTracker)

@@ -143,15 +143,7 @@ internal fun SettingTreeNodeRow(
                 )
             }
             is SettingTreeNode.File -> {
-                if (node.isEjsController) {
-                    Spacer(modifier = Modifier.width(27.dp))
-                    Icon(
-                        imageVector = Icons.Rounded.Code,
-                        contentDescription = null,
-                        tint = if (node.entry.enabled) appearance.mobileBlue else appearance.mobileMuted,
-                        modifier = Modifier.size(20.dp).alpha(contentAlpha),
-                    )
-                } else if (node.isEjsReference) {
+                if (node.isEjsReference) {
                     Spacer(modifier = Modifier.width(27.dp))
                     Icon(
                         imageVector = Icons.Rounded.Link,

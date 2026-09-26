@@ -75,7 +75,7 @@ import com.eleckoi.android.foundation.storage.room.agent.entity.GenerationAttemp
         AgentPresetVersionGroupEntity::class,
     ],
     views = [SettingLibraryEntryEntity::class, SettingLibraryVersionEntryEntity::class],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class ElecKoiDatabase : RoomDatabase() {
@@ -109,6 +109,7 @@ abstract class ElecKoiDatabase : RoomDatabase() {
                     ElecKoiDatabaseMigrations.version1To2,
                     ElecKoiDatabaseMigrations.version2To3,
                     ElecKoiDatabaseMigrations.version3To4,
+                    ElecKoiDatabaseMigrations.version4To5,
                 )
                 .addCallback(object : Callback() {
                     override fun onOpen(db: SupportSQLiteDatabase) {

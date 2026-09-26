@@ -185,7 +185,7 @@ fun GlobToolResultBlock(
                                 }
                                 path in onDemandPathSet -> {
                                     Text(
-                                        text = "按需",
+                                        text = "选读",
                                         color = appearance.mobileMuted,
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Medium,
@@ -290,7 +290,7 @@ fun SettingEntriesResultBlock(
                                     fontWeight = FontWeight.Medium,
                                 )
                                 entry.readStrategy == "normal" -> Text(
-                                    text = "按需",
+                                    text = "选读",
                                     color = appearance.mobileMuted,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Medium,

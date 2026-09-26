@@ -4,9 +4,12 @@ import com.eleckoi.android.feature.characters.modes.story.ui.shared.*
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
@@ -22,15 +25,19 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryAgentReadStrategy
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryDynamicMode
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryContentMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryGroup
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPromptPosition
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryTriggerMode
@@ -39,6 +46,7 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.i
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.isOpeningEntry
 import com.eleckoi.android.foundation.design.components.ConfirmDialog
 import com.eleckoi.android.foundation.design.components.PinnedStatusScaffold
+import com.eleckoi.android.foundation.design.components.noRippleClickable
 
 private class EntryEditorState {
     var orderPreviewExpanded by mutableStateOf(false)
@@ -201,11 +209,7 @@ internal fun EntryEditorPage(
                 EntryEditorSectionTabs(
                     selected = selectedSection,
                     sections = editorSections,
-                    contentLabel = if (entry.dynamicMode == SettingLibraryDynamicMode.EjsController) {
-                        "EJS 代码"
-                    } else {
-                        "正文"
-                    },
+                    contentLabel = "正文",
                     appearance = appearance,
                     onSelect = { selectedSection = it },
                 )
@@ -256,7 +260,14 @@ internal fun EntryEditorPage(
                     EntryTriggerModePicker(
                         selected = entry.triggerMode,
                         appearance = appearance,
-                        onSelect = { mode -> onEntryChange { it.copy(triggerMode = mode) } },
+                        onSelect = { mode -> onEntryChange {
+                            it.copy(
+                                triggerMode = mode,
+                                contentMode = if (mode == SettingLibraryTriggerMode.AgentTool) {
+                                    it.contentMode
+                                } else SettingLibraryContentMode.PlainText,
+                            )
+                        } },
                     )
                     if (entry.triggerMode == SettingLibraryTriggerMode.AgentTool) {
                         AgentReadStrategySettings(
@@ -264,19 +275,32 @@ internal fun EntryEditorPage(
                             appearance = appearance,
                             onSelect = { strategy ->
                                 onEntryChange { current ->
-                                    current.copy(
+                                    if (strategy == SettingLibraryAgentReadStrategy.Normal &&
+                                        current.agentReadStrategy == SettingLibraryAgentReadStrategy.Keyword
+                                    ) current else current.copy(
                                         agentReadStrategy = strategy,
-                                        dynamicMode = if (strategy == SettingLibraryAgentReadStrategy.VariableCondition) {
-                                            SettingLibraryDynamicMode.EjsController
-                                        } else {
-                                            SettingLibraryDynamicMode.Standard
-                                        },
+                                        contentMode = if (strategy == SettingLibraryAgentReadStrategy.Required) {
+                                            SettingLibraryContentMode.PlainText
+                                        } else current.contentMode,
                                     )
                                 }
                             },
                         )
-                        when (entry.agentReadStrategy) {
-                            SettingLibraryAgentReadStrategy.Keyword -> {
+                        if (entry.agentReadStrategy != SettingLibraryAgentReadStrategy.Required) {
+                            KeywordMatchConditionToggle(
+                                enabled = entry.agentReadStrategy == SettingLibraryAgentReadStrategy.Keyword,
+                                appearance = appearance,
+                                onChange = { enabled ->
+                                    onEntryChange {
+                                        it.copy(agentReadStrategy = if (enabled) {
+                                            SettingLibraryAgentReadStrategy.Keyword
+                                        } else {
+                                            SettingLibraryAgentReadStrategy.Normal
+                                        })
+                                    }
+                                },
+                            )
+                            if (entry.agentReadStrategy == SettingLibraryAgentReadStrategy.Keyword) {
                                 KeywordInput(
                                     label = "触发关键词",
                                     keywords = entry.keywords,
@@ -297,39 +321,22 @@ internal fun EntryEditorPage(
                                     onEntryChange = onEntryChange,
                                 )
                             }
-                            SettingLibraryAgentReadStrategy.Normal -> AgentToolTriggerSettings(
-                                currentEntry = entry,
-                                entries = entries,
-                                groups = groups,
-                                showSelectionHint = true,
-                                appearance = appearance,
-                                scrollState = scrollState,
-                                imeBottomPx = imeBottomPx,
-                                onEntryChange = onEntryChange,
-                            )
-                            SettingLibraryAgentReadStrategy.VariableCondition -> Unit
-                            SettingLibraryAgentReadStrategy.Required -> Unit
                         }
-                        if (entry.agentReadStrategy != SettingLibraryAgentReadStrategy.Normal) {
-                            AgentToolTriggerSettings(
-                                currentEntry = entry,
-                                entries = entries,
-                                groups = groups,
-                                showSelectionHint = false,
-                                appearance = appearance,
-                                scrollState = scrollState,
-                                imeBottomPx = imeBottomPx,
-                                onEntryChange = onEntryChange,
-                            )
-                        }
+                        AgentToolTriggerSettings(
+                            currentEntry = entry,
+                            entries = entries,
+                            groups = groups,
+                            showSelectionHint = entry.agentReadStrategy == SettingLibraryAgentReadStrategy.Normal &&
+                                entry.contentMode == SettingLibraryContentMode.PlainText,
+                            appearance = appearance,
+                            scrollState = scrollState,
+                            imeBottomPx = imeBottomPx,
+                            onEntryChange = onEntryChange,
+                        )
                     }
                 }
                     EntryEditorSection.Content -> Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp)) {
-                val contentLabel = if (entry.dynamicMode == SettingLibraryDynamicMode.EjsController) {
-                    "EJS 代码"
-                } else {
-                    "设定正文"
-                }
+                val contentLabel = "设定正文"
                 PlainInput(
                     label = contentLabel,
                     value = entry.content,
@@ -337,18 +344,29 @@ internal fun EntryEditorPage(
                     scrollState = scrollState,
                     imeBottomPx = imeBottomPx,
                     minHeight = contentEditorHeight,
-                    placeholder = if (entry.dynamicMode == SettingLibraryDynamicMode.EjsController) {
-                        "使用 <% … %> 编写判断；可通过 getvar 读取变量、getwi 读取已开启的EJS引用设定"
-                    } else {
-                        "写入世界观、人物背景、地点规则、隐藏信息等"
+                    placeholder = if (entry.contentMode == SettingLibraryContentMode.Ejs &&
+                        entry.triggerMode == SettingLibraryTriggerMode.AgentTool &&
+                        entry.agentReadStrategy != SettingLibraryAgentReadStrategy.Required
+                    ) "填写 EJS 模板" else "填写设定正文",
+                    labelAction = {
+                        SettingContentModeSelector(
+                            selected = if (entry.triggerMode == SettingLibraryTriggerMode.AgentTool &&
+                                entry.agentReadStrategy != SettingLibraryAgentReadStrategy.Required
+                            ) entry.contentMode else SettingLibraryContentMode.PlainText,
+                            allowEjs = entry.triggerMode == SettingLibraryTriggerMode.AgentTool &&
+                                entry.agentReadStrategy != SettingLibraryAgentReadStrategy.Required,
+                            appearance = appearance,
+                            onSelect = { mode -> onEntryChange { it.copy(contentMode = mode) } },
+                        )
                     },
                     immersiveTitle = contentLabel,
                     groupedStyle = true,
                     onChange = { value -> onEntryChange { it.copy(content = value) } },
                 )
-                if (entry.dynamicMode == SettingLibraryDynamicMode.EjsController) {
+                if (entry.contentMode == SettingLibraryContentMode.Ejs &&
+                    literalGetwiTargets(entry.content).isNotEmpty()) {
                     val referencedTitles = literalGetwiTargets(entry.content)
-                    EjsControllerReferencesPanel(
+                    EjsReferencesPanel(
                         references = entries.filter { candidate ->
                             candidate.dynamicMode == SettingLibraryDynamicMode.EjsReference &&
                                 candidate.title in referencedTitles
@@ -408,16 +426,8 @@ internal fun EntryEditorPage(
     if (confirmDelete) {
         val title = entry.title.trim().ifBlank { "这条待命名设定" }
         ConfirmDialog(
-            title = if (entry.dynamicMode == SettingLibraryDynamicMode.EjsController) {
-                "删除这个控制器？"
-            } else {
-                "删除这条设定？"
-            },
-            message = if (entry.dynamicMode == SettingLibraryDynamicMode.EjsController) {
-                "将移除“$title”；它读取的EJS引用设定会保留。此操作会自动保存。"
-            } else {
-                "将从设定库移除“$title”，此操作会自动保存。"
-            },
+            title = "删除这条设定？",
+            message = "将从设定库移除“$title”，被引用的设定会保留。此操作会自动保存。",
             appearance = appearance,
             onDismiss = ::closeDelete,
             onConfirm = {
@@ -433,5 +443,44 @@ internal fun EntryEditorPage(
             onDismiss = { conflictingOrder = null },
         )
     }
+    }
+}
+
+@Composable
+internal fun SettingContentModeSelector(
+    selected: SettingLibraryContentMode,
+    allowEjs: Boolean,
+    appearance: AppearanceTheme,
+    onSelect: (SettingLibraryContentMode) -> Unit,
+) {
+    val options = if (allowEjs) SettingLibraryContentMode.entries else listOf(SettingLibraryContentMode.PlainText)
+    Row(
+        modifier = Modifier
+            .height(34.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(appearance.storyEditorPalette().track)
+            .padding(3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        options.forEach { mode ->
+            val active = mode == selected
+            Box(
+                modifier = Modifier
+                    .height(28.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (active) appearance.mobileSurface else Color.Transparent)
+                    .noRippleClickable { if (allowEjs) onSelect(mode) }
+                    .padding(horizontal = 9.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = mode.label,
+                    color = if (active) appearance.mobileText else appearance.mobileMuted,
+                    fontSize = 11.5.sp,
+                    fontWeight = if (active) FontWeight.Medium else FontWeight.Normal,
+                    maxLines = 1,
+                )
+            }
+        }
     }
 }

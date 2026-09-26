@@ -46,4 +46,7 @@ internal fun SettingLibraryAgentTurnContext.resolveCharacterCardMacros(
             selectionHint = entry.selectionHint.resolveCharacterCardMacros(values),
         )
     },
+    referenceEntries = referenceEntries.map { entry ->
+        entry.copy(content = entry.content.resolveCharacterCardMacros(values))
+    },
 )

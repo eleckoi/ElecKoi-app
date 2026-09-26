@@ -42,6 +42,7 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.data.re
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.data.settingLibraryAgentCatalogPreview
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryAgentReadStrategy
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryContentMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryGroup
 import com.eleckoi.android.foundation.design.components.DshFolderGlyph
 import com.eleckoi.android.foundation.design.components.DshTreeDisclosureGlyph
@@ -241,9 +242,13 @@ private fun AgentCatalogTree(
                             fontSize = 10.5.sp,
                             fontWeight = FontWeight.Medium,
                         )
-                    } else if (row.keywordPriority) {
+                    } else if (row.keywordPriority || row.ejsConditional) {
                         Text(
-                            "关键词",
+                            when {
+                                row.keywordPriority && row.ejsConditional -> "关键词+EJS"
+                                row.keywordPriority -> "关键词"
+                                else -> "EJS条件"
+                            },
                             modifier = Modifier
                                 .clip(RoundedCornerShape(5.dp))
                                 .background(Color(0xFF9B6BD6).copy(alpha = 0.12f))
@@ -251,19 +256,9 @@ private fun AgentCatalogTree(
                             color = Color(0xFF9B6BD6),
                             fontSize = 10.5.sp,
                         )
-                    } else if (row.variableCondition) {
-                        Text(
-                            "变量条件",
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(5.dp))
-                                .background(Color(0xFF3A9B84).copy(alpha = 0.12f))
-                                .padding(horizontal = 7.dp, vertical = 1.5.dp),
-                            color = Color(0xFF3A9B84),
-                            fontSize = 10.5.sp,
-                        )
                     } else if (row.onDemand) {
                         Text(
-                            "按需",
+                            "选读",
                             modifier = Modifier
                                 .clip(RoundedCornerShape(5.dp))
                                 .background(appearance.mobileText.copy(alpha = 0.045f))
@@ -286,7 +281,7 @@ private data class AgentCatalogRow(
     val ancestorFolderPaths: List<String> = emptyList(),
     val required: Boolean = false,
     val keywordPriority: Boolean = false,
-    val variableCondition: Boolean = false,
+    val ejsConditional: Boolean = false,
     val onDemand: Boolean = false,
     val id: String = "",
 )
@@ -323,8 +318,9 @@ private fun agentCatalogRows(items: List<SettingLibraryAgentCatalogItem>): List<
             },
             required = item.readStrategy == SettingLibraryAgentReadStrategy.Required,
             keywordPriority = item.readStrategy == SettingLibraryAgentReadStrategy.Keyword,
-            variableCondition = item.readStrategy == SettingLibraryAgentReadStrategy.VariableCondition,
-            onDemand = item.readStrategy == SettingLibraryAgentReadStrategy.Normal,
+            ejsConditional = item.contentMode == SettingLibraryContentMode.Ejs,
+            onDemand = item.readStrategy == SettingLibraryAgentReadStrategy.Normal &&
+                item.contentMode == SettingLibraryContentMode.PlainText,
             id = item.id,
         )
     }

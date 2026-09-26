@@ -29,9 +29,6 @@ internal sealed interface SettingTreeNode {
     }
 }
 
-internal val SettingTreeNode.File.isEjsController: Boolean
-    get() = entry.dynamicMode == SettingLibraryDynamicMode.EjsController
-
 internal val SettingTreeNode.File.isEjsReference: Boolean
     get() = entry.dynamicMode == SettingLibraryDynamicMode.EjsReference
 

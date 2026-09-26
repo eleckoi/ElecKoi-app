@@ -94,7 +94,7 @@ internal fun EjsReferenceEditorPage(
                 scrollState = scrollState,
                 imeBottomPx = imeBottomPx,
                 minHeight = 300,
-                placeholder = "填写供一个或多个 EJS 控制器读取的内容",
+                placeholder = "填写设定正文",
                 immersiveTitle = "设定正文",
                 groupedStyle = true,
                 onChange = { value -> onEntryChange { it.copy(content = value) } },
@@ -105,7 +105,7 @@ internal fun EjsReferenceEditorPage(
     if (confirmDelete) {
         ConfirmDialog(
             title = "删除这条EJS引用设定？",
-            message = "使用它的控制器将无法再通过 getwi 读取“${entry.title.ifBlank { "未命名EJS引用设定" }}”。",
+            message = "其他设定将无法再通过 getwi 读取“${entry.title.ifBlank { "未命名EJS引用设定" }}”。",
             appearance = appearance,
             onDismiss = { confirmDelete = false },
             onConfirm = {
@@ -117,7 +117,7 @@ internal fun EjsReferenceEditorPage(
 }
 
 @Composable
-internal fun EjsControllerReferencesPanel(
+internal fun EjsReferencesPanel(
     references: List<SettingLibraryEntry>,
     appearance: AppearanceTheme,
     onOpenReference: (String) -> Unit,

@@ -17,12 +17,13 @@ internal fun characterSettingLibraryTools(
     contextProvider: suspend () -> SettingLibraryAgentTurnContext,
     virtualFileSearch: AgentVirtualFileSearch,
     requiredCache: RequiredSettingLibraryCache = RequiredSettingLibraryCache(emptyList()),
+    ejsReadTracker: SettingLibraryEjsReadTracker? = null,
     applyChanges: suspend (List<SettingLibrarySessionMutation>) -> SettingLibrarySessionMutationResult,
 ): List<AgentDynamicTool> {
     return buildList {
         add(characterSettingLibraryGlobTool(contextProvider, virtualFileSearch, requiredCache))
         add(characterSettingLibraryGrepTool(contextProvider, virtualFileSearch, requiredCache))
-        add(characterSettingLibraryReadTool(contextProvider, requiredCache))
+        add(characterSettingLibraryReadTool(contextProvider, requiredCache, ejsReadTracker))
         add(characterSettingLibraryPatchTool(contextProvider, applyChanges))
     }
 }

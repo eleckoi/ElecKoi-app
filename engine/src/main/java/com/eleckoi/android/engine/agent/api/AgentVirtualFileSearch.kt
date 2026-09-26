@@ -8,7 +8,6 @@ data class AgentVirtualFile(
 data class AgentVirtualGlobRequest(
     val pattern: String,
     val ignoreCase: Boolean = false,
-    val limit: Int = 100,
 )
 
 data class AgentVirtualGlobResult(

@@ -4,6 +4,8 @@ import com.eleckoi.android.foundation.storage.ElecKoiDataException
 import com.eleckoi.android.foundation.storage.nowIso
 import com.eleckoi.android.foundation.storage.room.ConversationSettingChangeEntity
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibrary
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryContentMode
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryDynamicMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryGroup
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryTriggerMode
@@ -63,6 +65,7 @@ internal fun applySettingLibrarySessionMutations(
                     title = requiredEntryTitle(mutation.title),
                     groupId = mutation.groupId,
                     content = requiredEntryContent(mutation.content),
+                    contentMode = if (mutation.content.contains("<%")) SettingLibraryContentMode.Ejs else SettingLibraryContentMode.PlainText,
                     agentSelectionHint = normalizedSelectionHint(mutation.selectionHint),
                     triggerMode = SettingLibraryTriggerMode.AgentTool,
                     enabled = true,
@@ -95,6 +98,11 @@ internal fun applySettingLibrarySessionMutations(
                     title = mutation.title?.let(::requiredEntryTitle) ?: current.title,
                     groupId = nextGroupId,
                     content = mutation.content?.let(::requiredEntryContent) ?: current.content,
+                    contentMode = if (current.dynamicMode == SettingLibraryDynamicMode.EjsReference) {
+                        SettingLibraryContentMode.PlainText
+                    } else if (mutation.content?.contains("<%") == true) {
+                        SettingLibraryContentMode.Ejs
+                    } else current.contentMode,
                     agentSelectionHint = mutation.selectionHint?.let(::normalizedSelectionHint)
                         ?: current.agentSelectionHint,
                     updatedAt = nowIso(),

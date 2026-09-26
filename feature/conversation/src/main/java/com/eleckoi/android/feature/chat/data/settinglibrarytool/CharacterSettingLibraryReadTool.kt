@@ -22,27 +22,30 @@ internal fun buildCharacterSettingLibraryReadTool(
 internal fun buildCharacterSettingLibraryReadTool(
     contextProvider: suspend () -> SettingLibraryAgentTurnContext,
     requiredCache: RequiredSettingLibraryCache,
+    ejsReadTracker: SettingLibraryEjsReadTracker? = null,
 ): AgentDynamicTool = createCharacterSettingLibraryReadTool(
     entriesProvider = { contextProvider().readableEntries },
     requiredCache = requiredCache,
+    ejsReadTracker = ejsReadTracker,
 )
 
 private fun createCharacterSettingLibraryReadTool(
     entriesProvider: suspend () -> List<SettingLibraryAgentEntry>,
     requiredCache: RequiredSettingLibraryCache,
+    ejsReadTracker: SettingLibraryEjsReadTracker? = null,
 ): AgentDynamicTool = AgentDynamicTool(
     definition = AgentToolDefinition(
         name = AgentReadSettingFilesTool,
-        description = "读取 Glob 或 Grep 已返回的虚拟设定文件。" +
-            "路径没有 .md 后缀；不得猜测路径；不会修改设定。" +
+        description = "按完整路径读取当前可用的虚拟设定文件；已知准确路径时无需重新搜索。" +
+            "路径没有 .md 后缀；不得猜测未知路径；不会修改设定。" +
             "只返回显式请求的文件；固定必读设定正文已在前置缓存设定区，" +
-            "读取时返回可在前文定位的编号和标题；动态及按需设定返回正文。",
+            "读取时返回可在前文定位的编号和标题；选读设定返回渲染后的正文。",
         parameters = buildJsonObject {
             put("type", "object")
             put("properties", buildJsonObject {
                 put(SettingLibraryPathsArgument, buildJsonObject {
                     put("type", "array")
-                    put("description", "Glob 或 Grep 返回的完整虚拟设定文件路径。")
+                    put("description", "当前可用设定的完整虚拟文件路径，可使用已知路径或 Glob/Grep 返回的路径。")
                     put("minItems", 1)
                     put("uniqueItems", true)
                     put("items", buildJsonObject {
@@ -64,7 +67,7 @@ private fun createCharacterSettingLibraryReadTool(
             normalizeSettingLibraryPath(path, allowRoot = false)
         }
         if (normalizedPaths.any { it == null }) {
-            return@AgentDynamicTool invalidPath("paths 必须是 Glob 或 Grep 返回的完整虚拟设定文件路径。")
+            return@AgentDynamicTool invalidPath("paths 必须是当前可用设定的完整虚拟文件路径。")
         }
         val requestedPaths = normalizedPaths.filterNotNull().distinct()
         val missing = requestedPaths.filterNot(byPath::containsKey)
@@ -80,6 +83,7 @@ private fun createCharacterSettingLibraryReadTool(
                 success = false,
             )
         }
+        ejsReadTracker?.record(requestedPaths.map { path -> requireNotNull(byPath[path]) })
         AgentDynamicToolResult(
             content = buildJsonObject {
                 put("status", "ok")

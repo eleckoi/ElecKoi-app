@@ -1,8 +1,11 @@
 package com.eleckoi.android.feature.chat.ui.composer
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.eleckoi.android.engine.agent.api.AgentPermissionMode
 import com.eleckoi.android.feature.chat.model.ChatGenerationMetrics
 import com.eleckoi.android.feature.chat.model.ChatUserImageAttachment
@@ -49,6 +52,8 @@ fun ChatComposer(
     onDismissMore: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val hasVisibleGenerationStats = showGenerationStats &&
+        generationStatsGroups(generationMetrics).isNotEmpty()
     Column(modifier = modifier) {
         UnifiedChatComposerSurface(
             appearance = appearance,
@@ -101,5 +106,6 @@ fun ChatComposer(
             appearance = appearance,
             enabled = showGenerationStats,
         )
+        if (!hasVisibleGenerationStats) Spacer(Modifier.height(10.dp))
     }
 }

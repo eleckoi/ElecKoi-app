@@ -3,6 +3,7 @@ package com.eleckoi.android.feature.studio.authoring.capability
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibrary
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryAgentReadStrategy
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryDynamicMode
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryContentMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryGroup
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryInsertRole
@@ -235,6 +236,10 @@ private fun JsonObject.patchEntry(current: SettingLibraryEntry, index: Int): Set
         SettingLibraryDynamicMode.entries.firstOrNull { it.storageValue == raw }
             ?: invalid(index, "dynamic_mode 无效：$raw")
     } ?: current.dynamicMode
+    val contentMode = enumValue("content_mode")?.let { raw ->
+        SettingLibraryContentMode.entries.firstOrNull { it.storageValue == raw }
+            ?: invalid(index, "content_mode 无效：$raw")
+    } ?: current.contentMode
     val position = if (containsKey("position")) {
         creatorString("position").takeIf(String::isNotBlank)?.let { raw ->
             SettingLibraryPosition.entries.firstOrNull { candidate -> candidate.storageValue == raw }
@@ -255,8 +260,16 @@ private fun JsonObject.patchEntry(current: SettingLibraryEntry, index: Int): Set
         content = if (containsKey("content")) requiredText("content", index, 200_000) else current.content,
         groupId = if (containsKey("group_id")) creatorString("group_id") else current.groupId,
         enabled = if (containsKey("enabled")) creatorBoolean("enabled") else current.enabled,
-        triggerMode = triggerMode,
-        agentReadStrategy = strategy,
+        triggerMode = if (dynamicMode == SettingLibraryDynamicMode.EjsReference) {
+            SettingLibraryTriggerMode.AgentTool
+        } else triggerMode,
+        agentReadStrategy = if (dynamicMode == SettingLibraryDynamicMode.EjsReference) {
+            SettingLibraryAgentReadStrategy.Normal
+        } else strategy,
+        contentMode = if (triggerMode != SettingLibraryTriggerMode.AgentTool ||
+            strategy == SettingLibraryAgentReadStrategy.Required ||
+            dynamicMode == SettingLibraryDynamicMode.EjsReference
+        ) SettingLibraryContentMode.PlainText else contentMode,
         agentSelectionHint = if (containsKey("agent_selection_hint")) creatorString("agent_selection_hint").take(1_000) else current.agentSelectionHint,
         dynamicMode = dynamicMode,
         keywords = keywords,

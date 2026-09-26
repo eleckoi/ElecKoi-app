@@ -12,7 +12,6 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.i
 internal fun SettingLibraryEntry.triggerPreviewLabel(): String {
     if (isFixedEntry()) return "固定"
     if (dynamicMode == SettingLibraryDynamicMode.EjsReference) return "EJS引用设定"
-    if (dynamicMode == SettingLibraryDynamicMode.EjsController) return "EJS 控制器"
     return when (triggerMode) {
         SettingLibraryTriggerMode.Always -> "常驻"
         SettingLibraryTriggerMode.AgentTool -> "Agent 读取"

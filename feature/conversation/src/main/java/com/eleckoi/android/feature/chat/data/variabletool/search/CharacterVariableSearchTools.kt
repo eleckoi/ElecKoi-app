@@ -26,11 +26,15 @@ internal fun characterVariableGlobTool(
 ): AgentDynamicTool = AgentDynamicTool(
     definition = AgentToolDefinition(
         name = AgentGlobVariablesTool,
-        description = "按变量路径模式查找变量，语义与编程 Agent 的 Glob 相同。" +
-            "pattern 省略时默认 **。例如 **、星见绫音/**、**/*好感*。" +
+        description = "使用 Glob 路径模式查找虚拟变量路径。" +
+            "每轮最终回复前至少调用一次，省略 pattern 和 path，以 ** 一次列出全部变量路径及当前 required_variables。" +
+            "不要按变量组逐层进入并重复调用 Glob；结果已有完整路径时直接读取目标变量。" +
+            "仅在明确需要筛选某个已知变量组时传 path；它会递归搜索该组及其子组。" +
+            "同一轮内变量结构未变化时不要重复相同搜索。" +
+            "例如 **、角色/**、**/*好感*。" +
             "数组是一个变量，只返回数组本身的路径，不把 0、1、2 等索引当成变量。" +
             "返回真实 JSON Pointer 路径，不返回完整值与规则。" +
-            "required_variables 始终列出当前配置中的必读变量，本回合必须逐项读取。",
+            "required_variables 始终列出当前配置中的必读变量，不受 pattern 或 path 影响；本回合必须逐项读取。",
         parameters = variableSearchParameters(includeOutputMode = false),
     ),
     handler = { arguments ->
@@ -47,7 +51,6 @@ internal fun characterVariableGlobTool(
                 request = AgentVirtualGlobRequest(
                     pattern = pattern,
                     ignoreCase = false,
-                    limit = DefaultVariableSearchResults,
                 ),
             )
         }.getOrElse { error ->
@@ -183,14 +186,14 @@ private fun variableSearchParameters(includeOutputMode: Boolean): JsonObject = b
             put("type", "string")
             put(
                 "description",
-                if (includeOutputMode) "ripgrep 正则表达式。" else "变量路径 Glob 模式。",
+                if (includeOutputMode) "ripgrep 正则表达式。" else "变量路径 Glob 模式；省略时使用 ** 列出当前 path 范围内全部变量路径。",
             )
             put("minLength", 1)
             put("maxLength", MaxVariablePatternCharacters)
         })
         put(VariablePathArgument, buildJsonObject {
             put("type", "string")
-            put("description", "可选的精确变量组 JSON Pointer；留空表示所有变量。")
+            put("description", "可选的精确变量组 JSON Pointer；留空表示所有变量，指定后递归搜索该组下的变量。")
         })
         if (includeOutputMode) {
             put(VariableGlobArgument, buildJsonObject {

@@ -28,14 +28,17 @@ enum class SettingLibraryTriggerMode(val storageValue: String, val label: String
 enum class SettingLibraryAgentReadStrategy(val storageValue: String, val label: String) {
     Required("required", "必读"),
     Keyword("keyword", "关键词"),
-    Normal("normal", "按需"),
-    VariableCondition("variable_condition", "变量条件");
+    Normal("normal", "选读");
 }
 
 enum class SettingLibraryDynamicMode(val storageValue: String, val label: String) {
     Standard("standard", "设定"),
-    EjsController("ejs_controller", "EJS 控制器"),
     EjsReference("ejs_reference", "EJS引用设定");
+}
+
+enum class SettingLibraryContentMode(val storageValue: String, val label: String) {
+    PlainText("plain_text", "纯文字"),
+    Ejs("ejs", "EJS");
 }
 
 enum class SettingLibraryKeywordCondition(val storageValue: String, val label: String) {
@@ -117,6 +120,7 @@ data class SettingLibraryEntry(
     val agentSelectionHint: String = "",
     val agentReadStrategy: SettingLibraryAgentReadStrategy = SettingLibraryAgentReadStrategy.Normal,
     val dynamicMode: SettingLibraryDynamicMode = SettingLibraryDynamicMode.Standard,
+    val contentMode: SettingLibraryContentMode = SettingLibraryContentMode.PlainText,
     val keywords: List<String> = emptyList(),
     val keywordScanDepth: Int = 1,
     val conditionKeywords: List<String> = emptyList(),

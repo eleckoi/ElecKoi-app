@@ -3,6 +3,7 @@ package com.eleckoi.android.feature.characters.modes.story.settinglibrary.data
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibrary
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryAgentReadStrategy
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryDynamicMode
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryContentMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryGroup
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPromptPosition
@@ -16,10 +17,12 @@ data class SettingLibraryAgentEntry(
     /** Human-readable logical path exposed to Agent tools; never a Room/editor ID. */
     val path: String,
     val content: String,
+    val enabled: Boolean = true,
     val selectionHint: String = "",
     val readStrategy: SettingLibraryAgentReadStrategy = SettingLibraryAgentReadStrategy.Normal,
     val dynamicMode: SettingLibraryDynamicMode = SettingLibraryDynamicMode.Standard,
-    /** True when a keyword or EJS controller promoted this entry for the current turn. */
+    val contentMode: SettingLibraryContentMode = SettingLibraryContentMode.PlainText,
+    /** True when a keyword promoted this entry for the current turn. */
     val promotedToRequiredThisTurn: Boolean = false,
     /** Concrete getwi() references resolved while rendering this entry for the current turn. */
     val resolvedReferences: List<SettingLibraryResolvedReference> = emptyList(),
@@ -45,6 +48,8 @@ data class SettingLibraryAgentTurnContext(
     val automaticLibrary: SettingLibrary,
     /** Structured entries the model may read through request-scoped setting-library tools. */
     val readableEntries: List<SettingLibraryAgentEntry>,
+    /** Reference-only entries, including disabled ones so getwi can honor their switches. */
+    val referenceEntries: List<SettingLibraryAgentEntry> = emptyList(),
     /** Keyword rules used to promote matching entries for the current turn. */
     val keywordStrategyEntries: List<SettingLibraryEntry> = emptyList(),
     /** Stable logical groups available to the session-scoped mutation tool. */

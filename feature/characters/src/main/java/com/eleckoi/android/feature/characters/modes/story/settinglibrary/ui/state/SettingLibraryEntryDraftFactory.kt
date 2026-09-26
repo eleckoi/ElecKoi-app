@@ -2,6 +2,7 @@ package com.eleckoi.android.feature.characters.modes.story.settinglibrary.ui
 
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryAgentReadStrategy
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryDynamicMode
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryContentMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryInsertRole
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryTriggerMode
@@ -39,8 +40,9 @@ internal fun createSettingLibraryEntryDraft(
         base.copy(
             enabled = true,
             triggerMode = SettingLibraryTriggerMode.AgentTool,
-            agentReadStrategy = SettingLibraryAgentReadStrategy.VariableCondition,
+            agentReadStrategy = SettingLibraryAgentReadStrategy.Normal,
             dynamicMode = SettingLibraryDynamicMode.EjsReference,
+            contentMode = SettingLibraryContentMode.PlainText,
         )
     } else {
         base

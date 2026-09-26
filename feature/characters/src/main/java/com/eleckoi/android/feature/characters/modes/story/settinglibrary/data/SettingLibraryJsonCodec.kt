@@ -5,6 +5,7 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.S
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryEntryKind
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryDynamicMode
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryContentMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryGroup
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryInsertRole
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryKeywordCondition
@@ -15,6 +16,7 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.S
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryTriggerMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryVersion
 import com.eleckoi.android.foundation.storage.ElecKoiDataException
+import com.eleckoi.android.foundation.storage.SettingLibraryEntryFormatMigration
 import com.eleckoi.android.foundation.storage.room.SettingLibraryEntity
 import com.eleckoi.android.foundation.storage.room.SettingLibraryEntryEntity
 import com.eleckoi.android.foundation.storage.room.SettingLibraryGroupEntity
@@ -33,8 +35,9 @@ internal data class SettingLibrarySnapshot(
 /** Owns every JSON representation used by the setting-library repository and session change log. */
 internal object SettingLibraryJsonCodec {
     private const val Format = "eleckoi.workspace-setting-library"
-    private const val FormatVersion = 3
+    private const val FormatVersion = 4
     private const val SnapshotFormat = "eleckoi.setting-library-snapshot"
+    private const val SnapshotVersion = 2
 
     fun exportLibrary(library: SettingLibrary): String = JSONObject()
         .put("format", Format)
@@ -50,7 +53,7 @@ internal object SettingLibraryJsonCodec {
 
     fun exportSnapshot(library: SettingLibrary): String = JSONObject()
         .put("format", SnapshotFormat)
-        .put("version", 1)
+        .put("version", SnapshotVersion)
         .put("active_version_id", library.activeVersionId)
         .put("versions", JSONArray(library.versions.map(::versionToJson)))
         .toString()
@@ -60,6 +63,16 @@ internal object SettingLibraryJsonCodec {
             .getOrElse { throw ElecKoiDataException("设定库快照格式不正确", it) }
         if (source.optString("format") != SnapshotFormat) {
             throw ElecKoiDataException("这不是 ElecKoi 设定库快照")
+        }
+        when (source.optInt("version")) {
+            1 -> source.optJSONArray("versions")?.let { versions ->
+                for (index in 0 until versions.length()) {
+                    versions.optJSONObject(index)?.migrateEntriesFromV3()
+                }
+                source.put("version", SnapshotVersion)
+            }
+            SnapshotVersion -> Unit
+            else -> throw ElecKoiDataException("设定库快照版本不受支持")
         }
         val versions = source.optJSONArray("versions")
             ?.jsonObjects()
@@ -74,6 +87,10 @@ internal object SettingLibraryJsonCodec {
     fun parseExport(json: String, versionId: String): SettingLibraryVersion {
         val source = runCatching { JSONObject(json) }
             .getOrElse { throw ElecKoiDataException("设定库文件格式不正确", it) }
+        if (source.optString("format") == Format && source.optInt("version") == 3) {
+            source.migrateEntriesFromV3()
+            source.put("version", FormatVersion)
+        }
         requireCurrentFormat(source)
         return SettingLibraryVersion(
             id = versionId,
@@ -219,6 +236,9 @@ internal object SettingLibraryJsonCodec {
         .put("agent_selection_hint", entry.agentSelectionHint)
         .put("agent_read_strategy", entry.agentReadStrategy.storageValue)
         .put("dynamic_mode", entry.dynamicMode.storageValue)
+        .put("content_mode", if (entry.dynamicMode == SettingLibraryDynamicMode.EjsReference) {
+            SettingLibraryContentMode.PlainText.storageValue
+        } else entry.contentMode.storageValue)
         .put("keywords", JSONArray(entry.keywords))
         .put("keyword_scan_depth", entry.keywordScanDepth)
         .put("condition_keywords", JSONArray(entry.conditionKeywords))
@@ -260,6 +280,9 @@ internal object SettingLibraryJsonCodec {
         dynamicMode = SettingLibraryDynamicMode.entries.firstOrNull {
             it.storageValue == value.optString("dynamic_mode")
         } ?: SettingLibraryDynamicMode.Standard,
+        contentMode = SettingLibraryContentMode.entries.firstOrNull {
+            it.storageValue == value.optString("content_mode")
+        } ?: SettingLibraryContentMode.PlainText,
         keywords = value.optJSONArray("keywords")?.strings().orEmpty(),
         keywordScanDepth = value.optInt("keyword_scan_depth", 1),
         conditionKeywords = value.optJSONArray("condition_keywords")?.strings().orEmpty(),
@@ -371,6 +394,16 @@ internal object SettingLibraryJsonCodec {
     private fun requireCurrentFormat(value: JSONObject) {
         if (value.optString("format") != Format || value.optInt("version") != FormatVersion) {
             throw ElecKoiDataException("设定库格式版本不匹配，请删除旧设定库后重新创建")
+        }
+    }
+
+    private fun JSONObject.migrateEntriesFromV3() {
+        val entries = optJSONArray("entries") ?: return
+        for (index in 0 until entries.length()) {
+            val entry = entries.optJSONObject(index) ?: continue
+            SettingLibraryEntryFormatMigration.migrateV3Entry(entry.toString())?.let { migrated ->
+                entries.put(index, JSONObject(migrated))
+            }
         }
     }
 }

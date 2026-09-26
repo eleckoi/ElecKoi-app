@@ -4,10 +4,13 @@ import com.eleckoi.android.engine.agent.api.AgentContextAnchor
 import com.eleckoi.android.engine.agent.api.AgentContextActivation
 import com.eleckoi.android.engine.agent.api.AgentContextRole
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibrary
+import com.eleckoi.android.engine.story.variables.runtime.EjsTemplateSource
+import com.eleckoi.android.engine.story.variables.runtime.EjsTemplateRenderResult
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.data.SettingLibraryAgentEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.data.SettingLibraryAgentTurnContext
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryAgentReadStrategy
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryDynamicMode
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryContentMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryInsertRole
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPosition
@@ -27,7 +30,90 @@ import org.junit.Test
 
 class CharacterSettingContextResolverTest {
     @Test
-    fun `EJS controllers remain controllers when another controller reads them`() {
+    fun `keyword switch and EJS output jointly control directory visibility`() {
+        val keywordRule = SettingLibraryEntry(
+            id = "event",
+            content = "<% if (getvar('事件.阶段') >= 3) { %>事件已开始<% } %>",
+            keywords = listOf("庆典"),
+            triggerMode = SettingLibraryTriggerMode.AgentTool,
+            agentReadStrategy = SettingLibraryAgentReadStrategy.Keyword,
+            contentMode = SettingLibraryContentMode.Ejs,
+        )
+        val keywordEntry = SettingLibraryAgentEntry(
+            id = keywordRule.id, title = "事件", groupPath = "", path = "事件",
+            content = keywordRule.content, readStrategy = SettingLibraryAgentReadStrategy.Keyword,
+            contentMode = SettingLibraryContentMode.Ejs,
+        )
+        val noKeywordEntry = keywordEntry.copy(
+            id = "optional", title = "可选", path = "可选",
+            readStrategy = SettingLibraryAgentReadStrategy.Normal,
+        )
+        val context = SettingLibraryAgentTurnContext(
+            automaticLibrary = SettingLibrary(characterId = "character"),
+            readableEntries = listOf(keywordEntry, noKeywordEntry),
+            keywordStrategyEntries = listOf(keywordRule),
+            groups = emptyList(),
+        )
+
+        val unmatched = context.withKeywordPromotions(emptyList())
+        assertEquals(listOf("optional"), unmatched.readableEntries.ejsRenderTargets().map { it.id })
+        assertTrue(unmatched.withRenderedEjsResults(
+            mapOf("optional" to EjsTemplateRenderResult("")),
+        ).readableEntries.isEmpty())
+        assertTrue(unmatched.withRenderedEjsResults(emptyMap()).readableEntries.isEmpty())
+        val ejsConditionMet = unmatched.withRenderedEjsResults(
+            mapOf("optional" to EjsTemplateRenderResult("事件已开始")),
+        )
+        assertEquals(listOf("optional"), ejsConditionMet.readableEntries.map { it.id })
+        assertTrue(ejsConditionMet.readableEntries.single().promotedToRequiredThisTurn)
+
+        val matched = context.withKeywordPromotions(
+            listOf(ChatMessage(id = "u1", role = MessageRole.User, content = "庆典开始了吗")),
+        )
+        assertEquals(listOf("event", "optional"), matched.readableEntries.ejsRenderTargets().map { it.id })
+        assertTrue(matched.withRenderedEjsResults(mapOf(
+            "event" to EjsTemplateRenderResult(""),
+            "optional" to EjsTemplateRenderResult(""),
+        )).readableEntries.isEmpty())
+        val visible = matched.withRenderedEjsResults(mapOf(
+            "event" to EjsTemplateRenderResult("事件已开始"),
+            "optional" to EjsTemplateRenderResult(""),
+        ))
+        assertEquals(listOf("event"), visible.readableEntries.map { it.id })
+        assertTrue(visible.readableEntries.single().promotedToRequiredThisTurn)
+    }
+
+    @Test
+    fun `required cache preserves source unchanged on repeated construction`() {
+        val entries = listOf(
+            SettingLibraryAgentEntry(
+                id = "plain",
+                title = "基础设定",
+                groupPath = "",
+                path = "基础设定",
+                content = "普通正文",
+                readStrategy = SettingLibraryAgentReadStrategy.Required,
+            ),
+            SettingLibraryAgentEntry(
+                id = "template",
+                title = "错误的必读模板",
+                groupPath = "",
+                path = "错误的必读模板",
+                content = "<%= getvar('剧情.阶段') %>",
+                readStrategy = SettingLibraryAgentReadStrategy.Required,
+            ),
+        )
+
+        repeat(4) {
+            val cache = RequiredSettingLibraryCache(entries)
+            assertEquals(listOf("plain", "template"), cache.entries.map { it.id })
+            assertEquals("[Setting #S01: 基础设定]\n普通正文", cache.entries[0].prompt)
+            assertEquals("[Setting #S02: 错误的必读模板]\n<%= getvar('剧情.阶段') %>", cache.entries[1].prompt)
+        }
+    }
+
+    @Test
+    fun `ordinary EJS settings can each read independently switched references`() {
         fun source(
             id: String,
             title: String,
@@ -38,22 +124,21 @@ class CharacterSettingContextResolverTest {
             groupPath = "",
             path = title,
             content = "<$title>",
-            readStrategy = SettingLibraryAgentReadStrategy.VariableCondition,
+            readStrategy = SettingLibraryAgentReadStrategy.Keyword,
             dynamicMode = mode,
         )
-        val root = source("root", "主控制器", SettingLibraryDynamicMode.EjsController)
-        val nestedController = source("nested", "复用控制器", SettingLibraryDynamicMode.EjsController)
+        val root = source("root", "节日设定", SettingLibraryDynamicMode.Standard)
         val reference = source("reference", "共享引用", SettingLibraryDynamicMode.EjsReference)
 
         val sources = ejsTemplateSources(
-            candidates = listOf(root, nestedController, reference),
-            targets = listOf(root),
+            targets = listOf(EjsTemplateSource(root.id, root.id, root.title, root.path, root.content)),
+            references = listOf(reference.copy(enabled = false)),
         )
 
-        assertEquals(setOf("主控制器", "复用控制器", "共享引用"), sources.map { it.title }.toSet())
+        assertEquals(setOf("节日设定", "共享引用"), sources.map { it.title }.toSet())
         assertTrue(sources.all { it.controllerId == root.id })
-        assertTrue(sources.single { it.title == "复用控制器" }.id != nestedController.id)
-        assertEquals(SettingLibraryDynamicMode.EjsController, nestedController.dynamicMode)
+        assertFalse(sources.single { it.id == reference.id }.enabled)
+        assertFalse(sources.single { it.id == reference.id }.renderEjs)
     }
 
     @Test

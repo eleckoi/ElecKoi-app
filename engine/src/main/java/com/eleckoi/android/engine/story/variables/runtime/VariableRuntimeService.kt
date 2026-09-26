@@ -21,6 +21,8 @@ data class EjsTemplateSource(
     val title: String,
     val path: String,
     val content: String,
+    val enabled: Boolean = true,
+    val renderEjs: Boolean = true,
 )
 
 data class EjsTemplateMessage(
@@ -72,6 +74,8 @@ class VariableRuntimeService(
                         .put("title", source.title)
                         .put("path", source.path)
                         .put("content", source.content)
+                        .put("enabled", source.enabled)
+                        .put("render_ejs", source.renderEjs)
                 }),
             )
             .put("target_ids", JSONArray(targetIds))

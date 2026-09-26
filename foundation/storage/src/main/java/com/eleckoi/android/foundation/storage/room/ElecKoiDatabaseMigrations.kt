@@ -510,4 +510,12 @@ internal object ElecKoiDatabaseMigrations {
             }
         }
     }
+
+    val version4To5: Migration by lazy {
+        object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                SettingLibraryEjsMigration.migrate(db)
+            }
+        }
+    }
 }

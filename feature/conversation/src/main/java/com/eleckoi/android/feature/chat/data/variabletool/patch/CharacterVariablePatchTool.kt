@@ -21,6 +21,7 @@ internal fun characterVariablePatchTool(
     config: VariableConfig,
     turnState: CharacterVariableTurnState,
     validateState: suspend (schemaCode: String, stateJson: String) -> VariableRuntimeCheckResult,
+    settingChangesForPatch: (suspend (String, String) -> SettingLibraryEjsChanges)? = null,
 ): AgentDynamicTool = AgentDynamicTool(
     definition = AgentToolDefinition(
         name = AgentApplyVariablePatchTool,
@@ -185,13 +186,33 @@ internal fun characterVariablePatchTool(
             }
         }
 
+        val previousState = turnState.stateJson
         turnState.replaceState(validatedState)
+        val settingChangesResult = runCatching {
+            settingChangesForPatch?.invoke(previousState, turnState.stateJson)
+        }
+        val settingChanges = settingChangesResult.getOrNull()
         AgentDynamicToolResult(
             JSONObject()
                 .put("status", "ok")
                 .put("applied_operations", operations.size)
                 .put("paths", JSONArray(operationPaths.distinct()))
-                .put("message", "变量补丁已通过校验并暂存，将随本回合成功完成后提交。")
+                .put("message", if (settingChanges?.isEmpty == false) {
+                    "变量补丁已暂存。设定条件已变化：newly_available_paths 请重新浏览目录，若属于 required_entries 则必须读取；stale_read_paths 需重新读取；unavailable_read_paths 已失效。其余设定无需重读。"
+                } else {
+                    "变量补丁已通过校验并暂存，将随本回合成功完成后提交。"
+                })
+                .apply {
+                    if (settingChanges?.isEmpty == false) {
+                        put("setting_library_changes", JSONObject()
+                            .put("newly_available_paths", JSONArray(settingChanges.newlyAvailablePaths))
+                            .put("stale_read_paths", JSONArray(settingChanges.staleReadPaths))
+                            .put("unavailable_read_paths", JSONArray(settingChanges.unavailableReadPaths)))
+                    }
+                    settingChangesResult.exceptionOrNull()?.let { error ->
+                        put("setting_library_refresh_error", error.message ?: "EJS 设定重新计算失败")
+                    }
+                }
                 .toString(),
         )
     },

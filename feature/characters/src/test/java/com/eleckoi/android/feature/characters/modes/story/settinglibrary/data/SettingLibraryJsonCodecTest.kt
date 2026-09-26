@@ -4,6 +4,7 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.S
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryAgentReadStrategy
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryDynamicMode
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryContentMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryEntryKind
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryGroup
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryInsertRole
@@ -13,6 +14,7 @@ import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.S
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryPromptPositionSide
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryTriggerMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryVersion
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -143,10 +145,11 @@ class SettingLibraryJsonCodecTest {
     }
 
     @Test
-    fun `entry json retains independent reference mode`() {
+    fun `entry json keeps references plain even if an in development entry was marked EJS`() {
         val reference = entry.copy(
-            agentReadStrategy = SettingLibraryAgentReadStrategy.VariableCondition,
+            agentReadStrategy = SettingLibraryAgentReadStrategy.Normal,
             dynamicMode = SettingLibraryDynamicMode.EjsReference,
+            contentMode = SettingLibraryContentMode.Ejs,
         )
 
         val restored = SettingLibraryJsonCodec.entryFromJson(
@@ -154,6 +157,41 @@ class SettingLibraryJsonCodecTest {
         )
 
         assertEquals(SettingLibraryDynamicMode.EjsReference, restored.dynamicMode)
+        assertEquals(SettingLibraryAgentReadStrategy.Normal, restored.agentReadStrategy)
+        assertEquals(SettingLibraryContentMode.PlainText, restored.contentMode)
+    }
+
+    @Test
+    fun `version three export migrates old EJS controller to selectable setting`() {
+        val oldEntry = SettingLibraryJsonCodec.entryToJson(entry)
+            .put("content", "<%- await getwi('可选正文') %>")
+            .put("agent_read_strategy", "variable_condition")
+            .put("dynamic_mode", "ejs_controller")
+        val source = JSONObject(SettingLibraryJsonCodec.exportLibrary(library))
+            .put("version", 3)
+            .put("entries", org.json.JSONArray().put(oldEntry))
+        val restored = SettingLibraryJsonCodec.parseExport(source.toString(), "imported").entries.single()
+
+        assertEquals("<%- await getwi('可选正文') %>", restored.content)
+        assertEquals(SettingLibraryAgentReadStrategy.Normal, restored.agentReadStrategy)
+        assertEquals(SettingLibraryDynamicMode.Standard, restored.dynamicMode)
+        assertEquals(SettingLibraryContentMode.Ejs, restored.contentMode)
+    }
+
+    @Test
+    fun `version one snapshot migrates saved EJS entries before decoding`() {
+        val source = JSONObject(SettingLibraryJsonCodec.exportSnapshot(library)).put("version", 1)
+        source.getJSONArray("versions").getJSONObject(0).getJSONArray("entries").getJSONObject(0)
+            .put("content", "<%= getvar('剧情.阶段') %>")
+            .put("agent_read_strategy", "variable_condition")
+            .put("dynamic_mode", "ejs_controller")
+
+        val restored = SettingLibraryJsonCodec.parseSnapshot(source.toString()).versions.single().entries.single()
+
+        assertEquals(SettingLibraryAgentReadStrategy.Normal, restored.agentReadStrategy)
+        assertEquals(SettingLibraryDynamicMode.Standard, restored.dynamicMode)
+        assertEquals(SettingLibraryContentMode.Ejs, restored.contentMode)
+        assertEquals("<%= getvar('剧情.阶段') %>", restored.content)
     }
 
 }

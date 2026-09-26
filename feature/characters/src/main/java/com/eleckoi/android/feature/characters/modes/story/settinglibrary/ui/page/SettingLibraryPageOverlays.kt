@@ -129,11 +129,6 @@ internal fun SettingLibraryPageOverlays(
                 title = "删除${selectedTreeKindLabel()}？",
                 message = if (selectedTreeNodeId.startsWith("folder:")) {
                     "会同时删除这个文件夹里的子文件夹和设定。"
-                } else if (
-                    entries.firstOrNull { fileNodeId(it.id) == selectedTreeNodeId }
-                        ?.dynamicMode == SettingLibraryDynamicMode.EjsController
-                ) {
-                    "会删除这个控制器；它读取的EJS引用设定不会被删除。"
                 } else {
                     "会删除这个设定条目。"
                 },

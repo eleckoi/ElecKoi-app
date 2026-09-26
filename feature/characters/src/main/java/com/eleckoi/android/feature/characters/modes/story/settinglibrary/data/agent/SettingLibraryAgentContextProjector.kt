@@ -2,6 +2,7 @@ package com.eleckoi.android.feature.characters.modes.story.settinglibrary.data
 
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibrary
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryAgentReadStrategy
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryContentMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryDynamicMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryGroup
@@ -31,9 +32,15 @@ internal object SettingLibraryAgentContextProjector {
                     settingLibrarySafePathSegment(title.ifBlank { "未命名设定" }),
                 ).filter(String::isNotBlank).joinToString("/"),
                 content = content,
-                selectionHint = agentSelectionHint,
+                enabled = enabled,
+                selectionHint = if (agentReadStrategy == SettingLibraryAgentReadStrategy.Normal &&
+                    contentMode == SettingLibraryContentMode.PlainText
+                ) agentSelectionHint else "",
                 readStrategy = agentReadStrategy,
                 dynamicMode = dynamicMode,
+                contentMode = if (dynamicMode == SettingLibraryDynamicMode.EjsReference) {
+                    SettingLibraryContentMode.PlainText
+                } else contentMode,
                 treeOrderPath = settingLibraryTreeOrderPath(this, groupsById),
             )
         }
@@ -42,7 +49,8 @@ internal object SettingLibraryAgentContextProjector {
             .filter { entry ->
                     entry.enabled &&
                     entry.triggerMode == SettingLibraryTriggerMode.AgentTool &&
-                    (entry.content.isNotBlank() || entry.dynamicMode == SettingLibraryDynamicMode.EjsReference)
+                    entry.dynamicMode != SettingLibraryDynamicMode.EjsReference &&
+                    entry.content.isNotBlank()
             }
             .map(SettingLibraryEntry::toAgentEntry)
             .distinctBy(SettingLibraryAgentEntry::id)
@@ -66,6 +74,14 @@ internal object SettingLibraryAgentContextProjector {
                 activeVersionId = library.activeVersionId,
             ),
             readableEntries = readableEntries,
+            referenceEntries = library.entries.asSequence()
+                .filter { entry ->
+                    !entry.isFixedEntry() &&
+                        entry.triggerMode == SettingLibraryTriggerMode.AgentTool &&
+                        entry.dynamicMode == SettingLibraryDynamicMode.EjsReference
+                }
+                .map(SettingLibraryEntry::toAgentEntry)
+                .toList(),
             keywordStrategyEntries = library.entries.filter { entry ->
                 !entry.isFixedEntry() &&
                     entry.enabled &&

@@ -25,8 +25,8 @@ internal object CreationWorkspaceAgentInstructions {
           author asks for an exhaustive audit, every match, or a complete review, pagination is mandatory until
           hasMore=false/nextCursor is empty; similarly continue nextOffset until a long entry reports hasMore=false.
           In the final answer, state how many pages were inspected for an exhaustive task.
-        - Before creating or changing setting-library trigger modes, Agent read strategies, keyword rules, dynamic
-          modes, prompt-resident positions, or insertion roles, read setting_library.get_authoring_guide and preserve
+        - Before creating or changing setting-library entries, read modes, keyword conditions, content modes,
+          EJS references, prompt-resident positions, or insertion roles, read setting_library.get_authoring_guide and preserve
           fields the author did not ask to change. The fixed assistant opening and roleplay plan are author content:
           they may be read, previewed and modified through setting_library operations, though they cannot be deleted.
         - Before changing variable object structure, read modes, initialization JSON, schema code, or versions, read

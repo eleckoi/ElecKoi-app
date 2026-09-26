@@ -66,14 +66,14 @@ internal object SettingLibraryCreatorCapabilities {
     val toolset = CreatorToolsetDefinition(
         id = "creator.setting_library",
         title = "角色设定库",
-        description = "查看并修改角色设定库，包括开场白、角色扮演计划、Agent 读取策略、提示词常驻位置、分组与普通条目。",
+        description = "查看并修改角色设定库：开场白、角色扮演计划、必读与选读、关键词条件、EJS 正文、纯文字引用设定、提示词常驻位置和分组。",
     )
 
     fun capabilities(): List<CreatorCapability<CreatorAuthoringContext, CreatorOperationDefinition>> = listOf(
         capability(
             id = "setting_library.get_authoring_guide",
             title = "读取设定库技术说明",
-            description = "返回触发方式、Agent 读取策略、动态模式、关键词规则和提示词常驻位置的运行语义；修改这些字段前应先读取。",
+            description = "返回必读与选读、关键词开关、纯文字与 EJS 正文、引用设定、变量变更后的读取规则及提示词常驻位置；修改相关配置前先读取。",
             schema = rootSchema(),
         ) { context, arguments ->
             context.resolveRootId(arguments.creatorString("root_id"))

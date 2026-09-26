@@ -214,6 +214,7 @@ internal class CharacterAgentTurnPreparer(
                 )
             }
         }
+        val ejsReadTracker = SettingLibraryEjsReadTracker()
         val dynamicTools = buildList {
             if (roleplayPlanEnabled && resolvedRoleplayPlanItems.isNotEmpty()) {
                 add(roleplayPlanDynamicTool(resolvedRoleplayPlanItems))
@@ -238,6 +239,7 @@ internal class CharacterAgentTurnPreparer(
                         contextProvider = liveSettingContext,
                         virtualFileSearch = virtualFileSearch,
                         requiredCache = requireNotNull(requiredSettingCache),
+                        ejsReadTracker = ejsReadTracker,
                     ) { mutations ->
                         settingLibrary.applySessionMutations(
                             characterId = session.characterId,
@@ -254,6 +256,30 @@ internal class CharacterAgentTurnPreparer(
                         turnState = variableTurnState,
                         runtime = variableRuntime,
                         virtualFileSearch = virtualFileSearch,
+                        settingChangesForPatch = if (settingLibraryEnabled) { beforeState, afterState ->
+                            if (beforeState == afterState) {
+                                SettingLibraryEjsChanges()
+                            } else {
+                                val currentLibrary = settingLibrary.loadAgentTurnContext(
+                                    characterId = session.characterId,
+                                    sessionId = session.id,
+                                    additionalLibrary = agentPreset.asRuntimeSettingLibrary(),
+                                ).resolveCharacterCardMacros(macroValues)
+                                val before = currentLibrary.resolveDynamicEntries(
+                                    messages = roomHistory,
+                                    keywordMessages = promptHistory,
+                                    stateJson = beforeState,
+                                    runtime = variableRuntime,
+                                )
+                                val after = currentLibrary.resolveDynamicEntries(
+                                    messages = roomHistory,
+                                    keywordMessages = promptHistory,
+                                    stateJson = afterState,
+                                    runtime = variableRuntime,
+                                )
+                                ejsReadTracker.changesAfterVariablePatch(before, after)
+                            }
+                        } else null,
                     ),
                 )
             }

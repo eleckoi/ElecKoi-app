@@ -54,8 +54,11 @@ internal fun AgentReadStrategySettings(
     appearance: AppearanceTheme,
     onSelect: (SettingLibraryAgentReadStrategy) -> Unit,
 ) {
-    val options = SettingLibraryAgentReadStrategy.entries
-    val activeIndex = options.indexOf(selected).coerceAtLeast(0)
+    val options = listOf(
+        SettingLibraryAgentReadStrategy.Required,
+        SettingLibraryAgentReadStrategy.Normal,
+    )
+    val activeIndex = if (selected == SettingLibraryAgentReadStrategy.Required) 0 else 1
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -97,7 +100,8 @@ internal fun AgentReadStrategySettings(
                 )
                 Row(modifier = Modifier.fillMaxSize()) {
                     options.forEach { option ->
-                        val active = option == selected
+                        val active = option == selected ||
+                            (option == SettingLibraryAgentReadStrategy.Normal && selected == SettingLibraryAgentReadStrategy.Keyword)
                         Box(
                             modifier = Modifier
                                 .weight(1f)
@@ -108,9 +112,8 @@ internal fun AgentReadStrategySettings(
                             Text(
                                 when (option) {
                                     SettingLibraryAgentReadStrategy.Required -> "必读"
-                                    SettingLibraryAgentReadStrategy.Keyword -> "关键词"
-                                    SettingLibraryAgentReadStrategy.Normal -> "按需"
-                                    SettingLibraryAgentReadStrategy.VariableCondition -> "变量条件"
+                                    SettingLibraryAgentReadStrategy.Keyword -> "选读"
+                                    SettingLibraryAgentReadStrategy.Normal -> "选读"
                                 },
                                 color = if (active) appearance.mobileText else appearance.mobileMuted,
                                 fontSize = 13.5.sp,
@@ -121,15 +124,6 @@ internal fun AgentReadStrategySettings(
                     }
                 }
             }
-        }
-        if (selected == SettingLibraryAgentReadStrategy.Required) {
-            Text(
-                "固定必读：正文自动进入缓存区，读取时返回带标题的编号。关键词、变量等命中后也会成为本轮必读，读取时仍返回正文。",
-                color = appearance.mobileMuted,
-                fontSize = 12.5.sp,
-                lineHeight = 19.sp,
-                modifier = Modifier.padding(top = 10.dp),
-            )
         }
     }
 }

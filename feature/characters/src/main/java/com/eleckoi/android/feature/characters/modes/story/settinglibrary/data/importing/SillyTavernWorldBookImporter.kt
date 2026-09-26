@@ -3,6 +3,7 @@ package com.eleckoi.android.feature.characters.modes.story.settinglibrary.data.i
 import com.eleckoi.android.compatibility.mvu.importer.MvuCharacterImportAdapter
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryAgentReadStrategy
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryDynamicMode
+import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryContentMode
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryEntry
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryGroup
 import com.eleckoi.android.feature.characters.modes.story.settinglibrary.model.SettingLibraryKeywordCondition
@@ -90,14 +91,14 @@ internal object SillyTavernWorldBookImporter {
         }
         val byRawTitle = imported.groupBy(TavernWorldEntry::rawTitle)
         val controllerResources = imported
-            .filter(TavernWorldEntry::isEjsController)
+            .filter(TavernWorldEntry::containsEjsTemplate)
             .associateWith { controller ->
                 val literalNames = LiteralGetwiTarget.findAll(controller.content)
                     .mapNotNull { match -> match.groupValues.getOrNull(2)?.takeIf(String::isNotBlank) }
                     .toList()
                 val hasDynamicGetwi = GetwiCall.findAll(controller.content).count() > literalNames.size
                 val candidates = if (hasDynamicGetwi) {
-                    imported.filterNot(TavernWorldEntry::isEjsController)
+                    imported.filterNot(TavernWorldEntry::containsEjsTemplate)
                 } else {
                     literalNames.flatMap { name -> byRawTitle[name].orEmpty().take(1) }
                 }
@@ -108,25 +109,20 @@ internal object SillyTavernWorldBookImporter {
             .toSet()
         return imported.map { entry ->
             when {
-                entry.isEjsController() -> entry.toControllerEntry()
+                entry.containsEjsTemplate() -> entry.toTemplateEntry()
                 entry.entryId in materialIds -> entry.toReferenceEntry()
                 else -> entry.toNormalEntry()
             }
         }
     }
 
-    private fun TavernWorldEntry.toControllerEntry(): SettingLibraryEntry = SettingLibraryEntry(
-        id = entryId,
-        title = title,
-        groupId = SillyTavernWorldBookGroupId,
-        content = content,
-        agentSelectionHint = "酒馆 EJS 动态控制器，渲染结果为 Agent 必读",
-        agentReadStrategy = SettingLibraryAgentReadStrategy.VariableCondition,
-        dynamicMode = SettingLibraryDynamicMode.EjsController,
-        triggerMode = SettingLibraryTriggerMode.AgentTool,
-        enabled = enabledFrom(item),
-        order = index + 1,
-        treeViewOrder = index + 1,
+    private fun TavernWorldEntry.toTemplateEntry(): SettingLibraryEntry = toNormalEntry().copy(
+        contentMode = SettingLibraryContentMode.Ejs,
+        agentReadStrategy = if (primaryKeys.isEmpty()) {
+            SettingLibraryAgentReadStrategy.Normal
+        } else {
+            SettingLibraryAgentReadStrategy.Keyword
+        },
     )
 
     private fun TavernWorldEntry.toReferenceEntry(): SettingLibraryEntry = SettingLibraryEntry(
@@ -134,9 +130,10 @@ internal object SillyTavernWorldBookImporter {
         title = title,
         groupId = SillyTavernWorldBookGroupId,
         content = content,
-        agentSelectionHint = "供 EJS 控制器通过 getwi 读取的EJS引用设定",
-        agentReadStrategy = SettingLibraryAgentReadStrategy.VariableCondition,
+        agentSelectionHint = "供其他设定正文通过 getwi 读取的EJS引用设定",
+        agentReadStrategy = SettingLibraryAgentReadStrategy.Normal,
         dynamicMode = SettingLibraryDynamicMode.EjsReference,
+        contentMode = SettingLibraryContentMode.PlainText,
         triggerMode = SettingLibraryTriggerMode.AgentTool,
         // SillyTavern disables getwi-only entries to prevent ordinary scanning. Here the
         // reference type already prevents standalone delivery, so its switch means availability.
@@ -243,6 +240,6 @@ internal object SillyTavernWorldBookImporter {
         val primaryKeys: List<String>,
         val entryId: String,
     ) {
-        fun isEjsController(): Boolean = EjsTag.containsMatchIn(content)
+        fun containsEjsTemplate(): Boolean = EjsTag.containsMatchIn(content)
     }
 }
