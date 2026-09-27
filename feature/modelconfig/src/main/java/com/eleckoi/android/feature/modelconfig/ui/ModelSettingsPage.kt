@@ -135,7 +135,7 @@ fun ModelSettingsPage(
             onClose = { editorState.modelPickerOpen = false },
             onSelect = { model ->
                 editorState.modelPickerOpen = false
-                editorState.update(editorState.form.addAndSelectModel(model))
+                editorState.selectModel(editorState.form.addAndSelectModel(model))
             },
             onAdd = { model -> editorState.update(editorState.form.addAndSelectModel(model)) },
             onDelete = { model -> editorState.update(editorState.form.removeManualModel(model)) },

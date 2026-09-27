@@ -52,7 +52,7 @@ object RoleplayLayoutDefaults {
     const val HorizontalPadding = 10f
     const val ReplySpacing = 4f
     const val TurnSpacing = 5f
-    const val MessageFontSize = 14f
+    const val MessageFontSize = 15f
     const val LineHeightMultiplier = 1f
     const val LetterSpacing = 0f
     const val ParagraphSpacing = 10f

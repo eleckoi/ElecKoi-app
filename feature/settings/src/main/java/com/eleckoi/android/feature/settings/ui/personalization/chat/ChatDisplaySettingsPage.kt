@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -26,6 +27,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import com.eleckoi.android.foundation.design.components.ErrorDialog
+import com.eleckoi.android.foundation.design.components.UnsavedChangesDialog
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -56,13 +59,11 @@ import com.eleckoi.android.feature.preferences.ChatTimelineThinkingAnimation
 import com.eleckoi.android.feature.preferences.ChatToolTimelineStyle
 import com.eleckoi.android.feature.preferences.UiPreferences
 import com.eleckoi.android.feature.preferences.layoutDefaults
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.DecimalFormat
 
 // Every value on this page describes what the chat looks like, so the page shows the chat. The
-// preview is pinned above the controls and driven by the local draft rather than by storage, so a
-// slider moves it on the same frame while the write is debounced behind it.
+// preview follows the local draft immediately; storage changes only when the user saves.
 internal data class ChatLayoutDraft(
     val layoutMode: ChatLayoutMode,
     val assistantBubbleEnabled: Boolean,
@@ -154,38 +155,77 @@ fun ChatDisplaySettingsPage(
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val stored = ChatLayoutDraft(preferences)
-    var draft by remember { mutableStateOf(stored) }
-    var generationStatsEnabled by remember { mutableStateOf(preferences.chatGenerationStatsEnabled) }
-    val defaults = draft.layoutMode.layoutDefaults
+    var editor by remember {
+        mutableStateOf(ChatLayoutEditorState(stored, preferences.chatGenerationStatsEnabled))
+    }
+    val draft = editor.draft
     var confirmReset by remember { mutableStateOf(false) }
+    var unsavedDialogOpen by remember { mutableStateOf(false) }
+    var pendingBackAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var saving by remember { mutableStateOf(false) }
+    var switchingMode by remember { mutableStateOf(false) }
+    var initialized by remember { mutableStateOf(false) }
+    var awaitingStored by remember { mutableStateOf(false) }
+    var saveError by remember { mutableStateOf("") }
     val sectionStateHolder = rememberSaveableStateHolder()
 
-    LaunchedEffect(stored) { draft = stored }
-    LaunchedEffect(preferences.chatGenerationStatsEnabled) {
-        generationStatsEnabled = preferences.chatGenerationStatsEnabled
-    }
-    LaunchedEffect(draft) {
-        if (draft == stored) return@LaunchedEffect
-        // A profile switch must load that profile's own values immediately. Debouncing the enum
-        // leaves the old layout's numbers on screen and makes independent profiles look shared.
-        if (draft.layoutMode != stored.layoutMode) {
-            viewModel.selectLayoutMode(draft.layoutMode)
-            return@LaunchedEffect
+    LaunchedEffect(Unit) {
+        try {
+            val actual = viewModel.readStored()
+            if (!editor.hasUnsavedChanges) {
+                editor = ChatLayoutEditorState(
+                    ChatLayoutDraft(actual),
+                    actual.chatGenerationStatsEnabled,
+                )
+            }
+            initialized = true
+        } catch (error: Exception) {
+            saveError = error.message ?: "聊天显示设置读取失败"
         }
-        delay(250)
-        viewModel.commitChangedLayout(draft, stored)
+    }
+    LaunchedEffect(stored, preferences.chatGenerationStatsEnabled, awaitingStored) {
+        if (awaitingStored) {
+            if (stored == editor.draft &&
+                preferences.chatGenerationStatsEnabled == editor.generationStatsEnabled
+            ) awaitingStored = false
+        } else if (!saving) {
+            editor = editor.storedChanged(stored, preferences.chatGenerationStatsEnabled)
+        }
     }
 
     // One route, its own little stack. Every section edits the same draft and watches the same
     // preview, so pushing them onto the app's navigator would mean threading that draft through it.
     var section by rememberSaveable { mutableStateOf<ChatDisplaySection?>(null) }
-    fun finishPage() {
+    fun saveDraft(onSaved: () -> Unit = {}) {
+        if (!initialized || saving || switchingMode || !editor.hasUnsavedChanges) return
+        val snapshot = editor
+        saving = true
         scope.launch {
-            viewModel.commitChangedLayout(draft, stored)
-            onBack()
+            try {
+                val saved = viewModel.save(snapshot)
+                editor = ChatLayoutEditorState(ChatLayoutDraft(saved), saved.chatGenerationStatsEnabled)
+                awaitingStored = true
+                unsavedDialogOpen = false
+                onSaved()
+                pendingBackAction = null
+            } catch (error: Exception) {
+                saveError = error.message ?: "聊天显示设置保存失败"
+            } finally {
+                saving = false
+            }
         }
     }
-    BackHandler { if (section != null) section = null else finishPage() }
+    fun requestBack(action: () -> Unit) {
+        if (saving || switchingMode) return
+        if (editor.hasUnsavedChanges) {
+            pendingBackAction = action
+            unsavedDialogOpen = true
+        } else {
+            action()
+        }
+    }
+    fun requestPageBack() = requestBack { if (section != null) section = null else onBack() }
+    BackHandler(onBack = ::requestPageBack)
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -206,7 +246,7 @@ fun ChatDisplaySettingsPage(
                     tint = appearance.mobileText,
                     modifier = Modifier
                         .noRippleClickable {
-                            if (openSection == null) finishPage() else section = null
+                            requestPageBack()
                         }
                         .padding(end = 10.dp, bottom = 5.dp)
                         .size(22.dp),
@@ -218,14 +258,22 @@ fun ChatDisplaySettingsPage(
                     fontSize = if (openSection != null) 22.sp else 28.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
-                if (openSection == null) {
+                val saveEnabled = initialized && editor.hasUnsavedChanges && !saving && !switchingMode
+                Box(
+                    modifier = Modifier
+                        .height(38.dp)
+                        .widthIn(min = 72.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(appearance.mobileBlue.copy(alpha = if (saveEnabled) 1f else 0.38f))
+                        .noRippleClickable(enabled = saveEnabled) { saveDraft() },
+                    contentAlignment = Alignment.Center,
+                ) {
                     Text(
-                        "恢复当前布局",
-                        color = appearance.mobileMuted,
-                        fontSize = 13.sp,
-                        modifier = Modifier
-                            .noRippleClickable { confirmReset = true }
-                            .padding(bottom = 4.dp),
+                        if (saving) "保存中" else "保存",
+                        color = appearance.mobileAccentFg,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(horizontal = 14.dp),
                     )
                 }
             }
@@ -264,7 +312,7 @@ fun ChatDisplaySettingsPage(
                             modifier = Modifier.fillMaxSize(),
                         )
                         ChatDisplaySection.GenerationStats -> ChatGenerationStatsPreview(
-                            enabled = generationStatsEnabled,
+                            enabled = editor.generationStatsEnabled,
                             appearance = appearance,
                             modifier = Modifier.fillMaxSize(),
                         )
@@ -301,13 +349,36 @@ fun ChatDisplaySettingsPage(
                         section = section,
                         draft = draft,
                         appearance = appearance,
-                        generationStatsEnabled = generationStatsEnabled,
-                        onDraftChange = { draft = it },
+                        generationStatsEnabled = editor.generationStatsEnabled,
+                        onDraftChange = { change ->
+                            val next = editor.draft.change()
+                            if (initialized && !saving && !switchingMode) {
+                                if (next.layoutMode == editor.selectedMode) {
+                                    editor = editor.updated(change)
+                                } else {
+                                    switchingMode = true
+                                    scope.launch {
+                                        try {
+                                            editor = editor.switched(
+                                                next.layoutMode,
+                                                viewModel.previewLayout(next.layoutMode),
+                                            )
+                                        } catch (error: Exception) {
+                                            saveError = error.message ?: "布局预览加载失败"
+                                        } finally {
+                                            switchingMode = false
+                                        }
+                                    }
+                                }
+                            }
+                        },
                         onOpenSection = { section = it },
-                        onOpenMarkdownReadingColors = onOpenMarkdownReadingColors,
+                        onOpenMarkdownReadingColors = { requestBack(onOpenMarkdownReadingColors) },
+                        onResetLayout = { confirmReset = true },
                         onGenerationStatsEnabledChange = { enabled ->
-                            generationStatsEnabled = enabled
-                            scope.launch { viewModel.setGenerationStatsEnabled(enabled) }
+                            if (initialized && !saving) {
+                                editor = editor.copy(generationStatsEnabled = enabled)
+                            }
                         },
                     )
                 }
@@ -337,7 +408,7 @@ fun ChatDisplaySettingsPage(
                     modifier = Modifier
                         .noRippleClickable {
                             confirmReset = false
-                            scope.launch { viewModel.resetLayout(draft.layoutMode) }
+                            editor = editor.resetCurrentLayout()
                         }
                         .padding(12.dp),
                 )
@@ -352,6 +423,39 @@ fun ChatDisplaySettingsPage(
                         .padding(12.dp),
                 )
             },
+        )
+    }
+
+    if (unsavedDialogOpen) {
+        UnsavedChangesDialog(
+            message = "离开前是否保存聊天显示的修改？",
+            appearance = appearance,
+            saving = saving,
+            onSave = {
+                val action = pendingBackAction
+                saveDraft { action?.invoke() }
+            },
+            onDiscard = {
+                val action = pendingBackAction
+                editor = ChatLayoutEditorState(
+                    editor.baselines.getValue(editor.storedMode),
+                    editor.storedGenerationStatsEnabled,
+                )
+                pendingBackAction = null
+                unsavedDialogOpen = false
+                action?.invoke()
+            },
+            onCancel = {
+                pendingBackAction = null
+                unsavedDialogOpen = false
+            },
+        )
+    }
+    if (saveError.isNotBlank()) {
+        ErrorDialog(
+            message = saveError,
+            appearance = appearance,
+            onDismiss = { saveError = "" },
         )
     }
 }

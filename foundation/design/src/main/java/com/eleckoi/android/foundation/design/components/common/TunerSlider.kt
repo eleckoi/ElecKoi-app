@@ -36,6 +36,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,6 +77,11 @@ fun TunerSlider(
     onInteractionFinished: () -> Unit = {},
 ) {
     val interactionHeight = 44.dp
+    // The pointer coroutine lives across recompositions while the range is unchanged.
+    // Keep its callbacks current as the hosting screen updates.
+    val currentOnValueChange = rememberUpdatedState(onValueChange)
+    val currentOnInteractionStart = rememberUpdatedState(onInteractionStart)
+    val currentOnInteractionFinished = rememberUpdatedState(onInteractionFinished)
     var trackWidthPx by remember { mutableStateOf(0f) }
     var pressed by remember { mutableStateOf(false) }
     val knobMotion = tween<androidx.compose.ui.unit.Dp>(
@@ -121,7 +127,7 @@ fun TunerSlider(
         val span = (range.endInclusive - range.start).takeIf { it > 0f } ?: 1f
         val fraction = ((value - range.start) / span).coerceIn(0f, 1f)
 
-        fun emitAt(x: Float) = onValueChange(
+        fun emitAt(x: Float) = currentOnValueChange.value(
             tunerValueAtPosition(
                 positionX = x,
                 width = trackWidthPx,
@@ -183,7 +189,7 @@ fun TunerSlider(
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         pressed = true
-                        onInteractionStart()
+                        currentOnInteractionStart.value()
                         try {
                             emitAt(down.position.x)
                             down.consume()
@@ -194,7 +200,7 @@ fun TunerSlider(
                             }
                         } finally {
                             pressed = false
-                            onInteractionFinished()
+                            currentOnInteractionFinished.value()
                         }
                     }
                 },

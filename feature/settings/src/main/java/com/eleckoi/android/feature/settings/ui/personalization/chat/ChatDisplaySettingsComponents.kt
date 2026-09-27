@@ -159,16 +159,17 @@ internal val ChatAvatarShape.label: String
 internal fun ChatDisplayHub(
     draft: ChatLayoutDraft,
     appearance: AppearanceTheme,
-    onDraftChange: (ChatLayoutDraft) -> Unit,
+    onDraftChange: (ChatLayoutDraft.() -> ChatLayoutDraft) -> Unit,
     generationStatsEnabled: Boolean,
     onOpenSection: (ChatDisplaySection) -> Unit,
     onOpenMarkdownReadingColors: () -> Unit,
+    onResetLayout: () -> Unit,
 ) {
-    ChatSection("对话布局", appearance) {
+    ChatSection("对话布局", appearance, resetEnabled = true, onReset = onResetLayout) {
         LayoutModePicker(
             selected = draft.layoutMode,
             appearance = appearance,
-            onSelect = { onDraftChange(draft.copy(layoutMode = it)) },
+            onSelect = { onDraftChange { copy(layoutMode = it) } },
         )
         Spacer(modifier = Modifier.height(12.dp))
     }
@@ -293,16 +294,14 @@ internal fun ChatDisplayHub(
                     appearance = appearance,
                     contentDescription = "恢复消息底板默认值",
                     onClick = {
-                        onDraftChange(
-                            draft.copy(roleplayCardPanel = RoleplayLayoutDefaults.CardPanel),
-                        )
+                        onDraftChange { copy(roleplayCardPanel = RoleplayLayoutDefaults.CardPanel) }
                     },
                 )
             }
             MessagePanelPicker(
                 cardPanel = draft.roleplayCardPanel,
                 appearance = appearance,
-                onSelect = { onDraftChange(draft.copy(roleplayCardPanel = it)) },
+                onSelect = { onDraftChange { copy(roleplayCardPanel = it) } },
             )
             Spacer(modifier = Modifier.height(8.dp))
             ChatToggleRow(
@@ -310,14 +309,14 @@ internal fun ChatDisplayHub(
                 icon = Icons.Rounded.AccessTime,
                 checked = draft.roleplayTimestampsEnabled,
                 appearance = appearance,
-                onCheckedChange = { onDraftChange(draft.copy(roleplayTimestampsEnabled = it)) },
+                onCheckedChange = { onDraftChange { copy(roleplayTimestampsEnabled = it) } },
             )
             ChatToggleRow(
                 title = "显示消息楼层",
                 icon = Icons.Rounded.Numbers,
                 checked = draft.roleplayMessageFloorsEnabled,
                 appearance = appearance,
-                onCheckedChange = { onDraftChange(draft.copy(roleplayMessageFloorsEnabled = it)) },
+                onCheckedChange = { onDraftChange { copy(roleplayMessageFloorsEnabled = it) } },
             )
         }
         Spacer(modifier = Modifier.height(10.dp))

@@ -29,9 +29,10 @@ internal fun ChatDisplaySettingsControls(
     draft: ChatLayoutDraft,
     appearance: AppearanceTheme,
     generationStatsEnabled: Boolean,
-    onDraftChange: (ChatLayoutDraft) -> Unit,
+    onDraftChange: (ChatLayoutDraft.() -> ChatLayoutDraft) -> Unit,
     onOpenSection: (ChatDisplaySection) -> Unit,
     onOpenMarkdownReadingColors: () -> Unit,
+    onResetLayout: () -> Unit,
     onGenerationStatsEnabledChange: (Boolean) -> Unit,
 ) {
     val defaults = draft.layoutMode.layoutDefaults
@@ -43,6 +44,7 @@ internal fun ChatDisplaySettingsControls(
             generationStatsEnabled = generationStatsEnabled,
             onOpenSection = onOpenSection,
             onOpenMarkdownReadingColors = onOpenMarkdownReadingColors,
+            onResetLayout = onResetLayout,
         )
 
         ChatDisplaySection.AvatarAndName -> {
@@ -50,14 +52,14 @@ internal fun ChatDisplaySettingsControls(
                 label = "头像形状",
                 appearance = appearance,
                 resetEnabled = draft.avatarShape != defaults.avatarShape,
-                onReset = { onDraftChange(draft.copy(avatarShape = defaults.avatarShape)) },
+                onReset = { onDraftChange { copy(avatarShape = defaults.avatarShape) } },
             ) {
                 AvatarShapePicker(
                     selected = draft.avatarShape,
                     layoutMode = draft.layoutMode,
                     appearance = appearance,
                     onSelect = { shape ->
-                        onDraftChange(draft.copy(avatarShape = shape))
+                        onDraftChange { copy(avatarShape = shape) }
                     },
                 )
                 Spacer(modifier = Modifier.height(12.dp))
@@ -69,7 +71,7 @@ internal fun ChatDisplaySettingsControls(
                     range = ChatLayoutDefaults.AvatarSizeMin..ChatLayoutDefaults.AvatarSizeMax,
                     appearance = appearance,
                     defaultValue = defaults.avatarSize,
-                    onValueChange = { onDraftChange(draft.copy(avatarSize = it)) },
+                    onValueChange = { onDraftChange { copy(avatarSize = it) } },
                 )
                 if (draft.layoutMode == ChatLayoutMode.Social) {
                     TunerSliderRow(
@@ -78,7 +80,7 @@ internal fun ChatDisplaySettingsControls(
                         range = 0f..20f,
                         appearance = appearance,
                         defaultValue = defaults.nameAvatarSpacing,
-                        onValueChange = { onDraftChange(draft.copy(nameSpacing = it)) },
+                        onValueChange = { onDraftChange { copy(nameSpacing = it) } },
                     )
                 } else {
                     TunerSliderRow(
@@ -87,7 +89,7 @@ internal fun ChatDisplaySettingsControls(
                         range = ChatLayoutDefaults.NameFontSizeMin..ChatLayoutDefaults.NameFontSizeMax,
                         appearance = appearance,
                         defaultValue = defaults.nameFontSize,
-                        onValueChange = { onDraftChange(draft.copy(nameFontSize = it)) },
+                        onValueChange = { onDraftChange { copy(nameFontSize = it) } },
                     )
                     TunerSliderRow(
                         title = "名字间距",
@@ -95,7 +97,7 @@ internal fun ChatDisplaySettingsControls(
                         range = 0f..20f,
                         appearance = appearance,
                         defaultValue = defaults.nameAvatarSpacing,
-                        onValueChange = { onDraftChange(draft.copy(nameSpacing = it)) },
+                        onValueChange = { onDraftChange { copy(nameSpacing = it) } },
                     )
                 }
             }
@@ -108,7 +110,7 @@ internal fun ChatDisplaySettingsControls(
                 range = ChatLayoutDefaults.MessageFontSizeMin..ChatLayoutDefaults.MessageFontSizeMax,
                 appearance = appearance,
                 defaultValue = defaults.messageFontSize,
-                onValueChange = { onDraftChange(draft.copy(fontSize = it)) },
+                onValueChange = { onDraftChange { copy(fontSize = it) } },
             )
             TunerSliderRow(
                 title = "行距",
@@ -119,7 +121,7 @@ internal fun ChatDisplaySettingsControls(
                 decimalPlaces = 2,
                 suffix = "×",
                 defaultValue = defaults.lineHeightMultiplier,
-                onValueChange = { onDraftChange(draft.copy(lineHeight = it)) },
+                onValueChange = { onDraftChange { copy(lineHeight = it) } },
             )
             TunerSliderRow(
                 title = "字距",
@@ -127,7 +129,7 @@ internal fun ChatDisplaySettingsControls(
                 range = -1f..4f,
                 appearance = appearance,
                 defaultValue = defaults.letterSpacing,
-                onValueChange = { onDraftChange(draft.copy(letterSpacing = it)) },
+                onValueChange = { onDraftChange { copy(letterSpacing = it) } },
             )
             TunerSliderRow(
                 title = "段距",
@@ -135,7 +137,7 @@ internal fun ChatDisplaySettingsControls(
                 range = 0f..24f,
                 appearance = appearance,
                 defaultValue = defaults.paragraphSpacing,
-                onValueChange = { onDraftChange(draft.copy(paragraphSpacing = it)) },
+                onValueChange = { onDraftChange { copy(paragraphSpacing = it) } },
             )
         }
 
@@ -146,7 +148,7 @@ internal fun ChatDisplaySettingsControls(
                 range = 0f..32f,
                 appearance = appearance,
                 defaultValue = defaults.horizontalPadding,
-                onValueChange = { onDraftChange(draft.copy(horizontalPadding = it)) },
+                onValueChange = { onDraftChange { copy(horizontalPadding = it) } },
             )
             when (draft.layoutMode) {
                 ChatLayoutMode.Social -> {
@@ -156,7 +158,7 @@ internal fun ChatDisplaySettingsControls(
                         range = 0f..32f,
                         appearance = appearance,
                         defaultValue = defaults.turnSpacing,
-                        onValueChange = { onDraftChange(draft.copy(turnSpacing = it)) },
+                        onValueChange = { onDraftChange { copy(turnSpacing = it) } },
                     )
                 }
                 ChatLayoutMode.Roleplay -> {
@@ -166,7 +168,7 @@ internal fun ChatDisplaySettingsControls(
                         range = 0f..32f,
                         appearance = appearance,
                         defaultValue = defaults.replySpacing,
-                        onValueChange = { onDraftChange(draft.copy(replySpacing = it)) },
+                        onValueChange = { onDraftChange { copy(replySpacing = it) } },
                     )
                     TunerSliderRow(
                         title = "消息间距",
@@ -174,7 +176,7 @@ internal fun ChatDisplaySettingsControls(
                         range = 0f..32f,
                         appearance = appearance,
                         defaultValue = defaults.turnSpacing,
-                        onValueChange = { onDraftChange(draft.copy(turnSpacing = it)) },
+                        onValueChange = { onDraftChange { copy(turnSpacing = it) } },
                     )
                 }
                 ChatLayoutMode.Agent -> {
@@ -184,7 +186,7 @@ internal fun ChatDisplaySettingsControls(
                         range = 0f..32f,
                         appearance = appearance,
                         defaultValue = defaults.replySpacing,
-                        onValueChange = { onDraftChange(draft.copy(replySpacing = it)) },
+                        onValueChange = { onDraftChange { copy(replySpacing = it) } },
                     )
                     TunerSliderRow(
                         title = "轮次间距",
@@ -192,7 +194,7 @@ internal fun ChatDisplaySettingsControls(
                         range = 0f..32f,
                         appearance = appearance,
                         defaultValue = defaults.turnSpacing,
-                        onValueChange = { onDraftChange(draft.copy(turnSpacing = it)) },
+                        onValueChange = { onDraftChange { copy(turnSpacing = it) } },
                     )
                 }
             }
@@ -206,7 +208,7 @@ internal fun ChatDisplaySettingsControls(
                     checked = draft.assistantBubbleEnabled,
                     appearance = appearance,
                     onCheckedChange = {
-                        onDraftChange(draft.copy(assistantBubbleEnabled = it))
+                        onDraftChange { copy(assistantBubbleEnabled = it) }
                     },
                 )
                 HorizontalDivider(color = appearance.mobileLine)
@@ -217,7 +219,7 @@ internal fun ChatDisplaySettingsControls(
                 range = 0f..24f,
                 appearance = appearance,
                 defaultValue = defaults.bubbleCornerRadius,
-                onValueChange = { onDraftChange(draft.copy(cornerRadius = it)) },
+                onValueChange = { onDraftChange { copy(cornerRadius = it) } },
             )
         }
 
@@ -228,16 +230,16 @@ internal fun ChatDisplaySettingsControls(
                 resetEnabled = draft.timelineThinkingAnimation !=
                     defaults.timelineThinkingAnimation,
                 onReset = {
-                    onDraftChange(draft.copy(
+                    onDraftChange { copy(
                         timelineThinkingAnimation = defaults.timelineThinkingAnimation,
-                    ))
+                    ) }
                 },
             ) {
                 TimelineThinkingAnimationPicker(
                     selected = draft.timelineThinkingAnimation,
                     appearance = appearance,
                     onSelect = {
-                        onDraftChange(draft.copy(timelineThinkingAnimation = it))
+                        onDraftChange { copy(timelineThinkingAnimation = it) }
                     },
                 )
                 Spacer(modifier = Modifier.height(12.dp))
@@ -249,9 +251,9 @@ internal fun ChatDisplaySettingsControls(
             appearance = appearance,
             resetEnabled = draft.reasoningDisplayMode != ChatReasoningDisplayMode.Default,
             onReset = {
-                onDraftChange(draft.copy(
+                onDraftChange { copy(
                     reasoningDisplayMode = ChatReasoningDisplayMode.Default,
-                ))
+                ) }
             },
         ) {
             ChatTextChoicePicker(
@@ -270,7 +272,7 @@ internal fun ChatDisplaySettingsControls(
                 selected = draft.reasoningDisplayMode,
                 appearance = appearance,
                 onSelect = {
-                    onDraftChange(draft.copy(reasoningDisplayMode = it))
+                    onDraftChange { copy(reasoningDisplayMode = it) }
                 },
             )
             Spacer(modifier = Modifier.height(12.dp))
@@ -281,9 +283,9 @@ internal fun ChatDisplaySettingsControls(
             appearance = appearance,
             resetEnabled = draft.toolTimelineStyle != ChatToolTimelineStyle.Default,
             onReset = {
-                onDraftChange(draft.copy(
+                onDraftChange { copy(
                     toolTimelineStyle = ChatToolTimelineStyle.Default,
-                ))
+                ) }
             },
         ) {
             ChatTextChoicePicker(
@@ -302,7 +304,7 @@ internal fun ChatDisplaySettingsControls(
                 selected = draft.toolTimelineStyle,
                 appearance = appearance,
                 onSelect = {
-                    onDraftChange(draft.copy(toolTimelineStyle = it))
+                    onDraftChange { copy(toolTimelineStyle = it) }
                 },
             )
             Spacer(modifier = Modifier.height(12.dp))
@@ -332,17 +334,17 @@ internal fun ChatDisplaySettingsControls(
                 draft.codeBlockWrapEnabled != ChatCodeBlockDefaults.WrapEnabled ||
                 draft.codeBlockShowAllEnabled != ChatCodeBlockDefaults.ShowAllEnabled,
             onReset = {
-                onDraftChange(draft.copy(
+                onDraftChange { copy(
                     codeBlockStyle = ChatCodeBlockStyle.Default,
                     codeBlockWrapEnabled = ChatCodeBlockDefaults.WrapEnabled,
                     codeBlockShowAllEnabled = ChatCodeBlockDefaults.ShowAllEnabled,
-                ))
+                ) }
             },
         ) {
             ChatCodeBlockStylePicker(
                 selected = draft.codeBlockStyle,
                 appearance = appearance,
-                onSelect = { onDraftChange(draft.copy(codeBlockStyle = it)) },
+                onSelect = { onDraftChange { copy(codeBlockStyle = it) } },
             )
             Spacer(modifier = Modifier.height(8.dp))
             ChatToggleRow(
@@ -352,7 +354,7 @@ internal fun ChatDisplaySettingsControls(
                 checked = draft.codeBlockWrapEnabled,
                 appearance = appearance,
                 onCheckedChange = {
-                    onDraftChange(draft.copy(codeBlockWrapEnabled = it))
+                    onDraftChange { copy(codeBlockWrapEnabled = it) }
                 },
             )
             ChatToggleRow(
@@ -362,7 +364,7 @@ internal fun ChatDisplaySettingsControls(
                 checked = draft.codeBlockShowAllEnabled,
                 appearance = appearance,
                 onCheckedChange = {
-                    onDraftChange(draft.copy(codeBlockShowAllEnabled = it))
+                    onDraftChange { copy(codeBlockShowAllEnabled = it) }
                 },
             )
             Spacer(modifier = Modifier.height(12.dp))

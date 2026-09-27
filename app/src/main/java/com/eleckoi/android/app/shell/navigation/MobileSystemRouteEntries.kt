@@ -94,7 +94,11 @@ internal fun mobileSystemRouteEntry(
                         currentThemeState.value.appearance
                     },
                     onSave = { updated ->
-                        themeViewModel.onIntent(ThemeIntent.SaveAppearanceTheme(updated))
+                        themeViewModel.onIntent(ThemeIntent.SaveAppearanceTheme(
+                            currentThemeState.value.appearance.copy(
+                                markdownReadingColors = updated.markdownReadingColors,
+                            ),
+                        ))
                     },
                     onBack = goBackInsideApp,
                 )

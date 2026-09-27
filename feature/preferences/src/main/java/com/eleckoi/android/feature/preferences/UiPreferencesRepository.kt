@@ -67,6 +67,10 @@ class UiPreferencesRepository(context: Context) {
     /** Exact persisted snapshot for suspend workflows; [preferencesFlow] serves non-blocking UI reads. */
     suspend fun read(): UiPreferences = storedPreferencesFlow.first()
 
+    /** Read another layout's profile for an editor preview without changing the active layout. */
+    suspend fun previewChatLayout(mode: ChatLayoutMode): UiPreferences =
+        dataStore.data.first().toUiPreferences(layoutModeOverride = mode)
+
     /**
      * Portable snapshot of the DataStore values. The type is stored next to every value because
      * DataStore's key declarations are intentionally private to this feature.

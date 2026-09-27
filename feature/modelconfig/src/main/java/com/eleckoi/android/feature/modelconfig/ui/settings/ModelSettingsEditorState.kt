@@ -22,6 +22,7 @@ internal class ModelSettingsEditorState(
     initialNewDraft: Boolean = false,
 ) {
     var form by mutableStateOf(initialForm)
+    private var editBaseline by mutableStateOf(initialForm)
     var dirty by mutableStateOf(initialDirty)
     var isNewDraft by mutableStateOf(initialNewDraft)
     var saveState by mutableStateOf("idle")
@@ -32,12 +33,13 @@ internal class ModelSettingsEditorState(
     var headersSheetOpen by mutableStateOf(false)
     var apiFormatSheetOpen by mutableStateOf(false)
     var modelPickerOpen by mutableStateOf(false)
+    private var fetchedFirstModelNeedsSelection = false
     var testState by mutableStateOf<ModelTestState?>(null)
     var unsavedDialogOpen by mutableStateOf(false)
     private var pendingDraftAction: (() -> Unit)? = null
 
     val hasUnsavedChanges: Boolean
-        get() = dirty || isNewDraft
+        get() = dirty
 
     val saving: Boolean
         get() = saveState == "saving"
@@ -46,6 +48,8 @@ internal class ModelSettingsEditorState(
         if (hasUnsavedChanges || saving) return
         val current = configs.firstOrNull { it.id == form.id }
         form = current ?: resolveInitialConfig(configs, target)
+        editBaseline = form
+        fetchedFirstModelNeedsSelection = false
         // A draft becomes dirty only after an actual user edit. Merely opening the provider
         // picker must not persist an empty channel during the first Room synchronization.
         dirty = false
@@ -56,9 +60,19 @@ internal class ModelSettingsEditorState(
 
     fun update(next: ModelConfig) {
         form = next
-        dirty = true
+        dirty = next != editBaseline
         saveState = "idle"
         testMessage = ""
+    }
+
+    fun selectModel(next: ModelConfig) {
+        update(next)
+        // Reading a list may display its first model for preview. Choosing it explicitly still
+        // creates a configuration when the previously saved model field was empty.
+        if (fetchedFirstModelNeedsSelection && next.model.isNotBlank()) {
+            dirty = true
+        }
+        fetchedFirstModelNeedsSelection = false
     }
 
     fun markSaving() {
@@ -67,6 +81,8 @@ internal class ModelSettingsEditorState(
 
     fun markSaved(saved: ModelConfig) {
         form = saved
+        editBaseline = saved
+        fetchedFirstModelNeedsSelection = false
         dirty = false
         isNewDraft = false
         saveState = "saved"
@@ -79,6 +95,8 @@ internal class ModelSettingsEditorState(
 
     fun selectConfig(selected: ModelConfig) {
         form = selected
+        editBaseline = selected
+        fetchedFirstModelNeedsSelection = false
         dirty = false
         isNewDraft = false
         saveState = "idle"
@@ -125,9 +143,10 @@ internal class ModelSettingsEditorState(
     fun finishFetchModels(result: Result<ModelConfig>) {
         loadingModels = false
         result.onSuccess { fetched ->
+            fetchedFirstModelNeedsSelection = form.model.isBlank() && fetched.model.isNotBlank()
             form = fetched
-            dirty = true
-            saveState = "idle"
+            // Fetching refreshes picker choices; selecting a model is the actual edit.
+            if (!dirty) editBaseline = fetched
             testMessage = ""
             modelPickerOpen = true
         }.onFailure { error ->

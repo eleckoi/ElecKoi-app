@@ -145,7 +145,10 @@ class AgentPresetModelsTest {
     fun `legacy default hidden timeline prompt gains the strict final wrapper rule`() {
         val legacyContent = DefaultHiddenToolTimelineContent
             .lineSequence()
-            .filterNot { it.trimStart().startsWith("mandatory:") }
+            .filterNot {
+                it.trimStart().startsWith("mandatory:") ||
+                    it.trimStart().startsWith("reasoning_channel:")
+            }
             .joinToString("\n")
         val normalized = defaultAgentPreset().copy(
             entries = defaultAgentPreset().entries.map { entry ->
@@ -157,6 +160,36 @@ class AgentPresetModelsTest {
             DefaultHiddenToolTimelineContent,
             normalized.entries.single { it.isHiddenToolTimelineEntry() }.content,
         )
+    }
+
+    @Test
+    fun `previous default hidden timeline gains the reasoning channel rule`() {
+        val previousContent = DefaultHiddenToolTimelineContent
+            .lineSequence()
+            .filterNot { it.trimStart().startsWith("reasoning_channel:") }
+            .joinToString("\n")
+        val normalized = defaultAgentPreset().copy(
+            entries = defaultAgentPreset().entries.map { entry ->
+                if (entry.isHiddenToolTimelineEntry()) entry.copy(content = previousContent) else entry
+            },
+        ).withRequiredBuiltIns()
+
+        assertEquals(
+            DefaultHiddenToolTimelineContent,
+            normalized.entries.single { it.isHiddenToolTimelineEntry() }.content,
+        )
+    }
+
+    @Test
+    fun `custom hidden timeline content is not replaced by the new default`() {
+        val customContent = "<roleplay_output_protocol>作者自定义规则</roleplay_output_protocol>"
+        val normalized = defaultAgentPreset().copy(
+            entries = defaultAgentPreset().entries.map { entry ->
+                if (entry.isHiddenToolTimelineEntry()) entry.copy(content = customContent) else entry
+            },
+        ).withRequiredBuiltIns()
+
+        assertEquals(customContent, normalized.entries.single { it.isHiddenToolTimelineEntry() }.content)
     }
 
     @Test

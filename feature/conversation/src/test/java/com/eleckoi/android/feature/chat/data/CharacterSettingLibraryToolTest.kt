@@ -345,6 +345,23 @@ class CharacterSettingLibraryToolTest {
         })
         assertFalse(payload.containsKey("auto_included_count"))
         assertFalse(files.single().containsKey("auto_included"))
+
+        val controllerResult = tool.handler.execute(
+            buildJsonObject {
+                put(
+                    SettingLibraryPathsArgument,
+                    buildJsonArray { add(JsonPrimitive("世界书/剧情控制器")) },
+                )
+            },
+        )
+        val controller = Json.parseToJsonElement(controllerResult.content).jsonObject
+            .getValue("files").jsonArray.single().jsonObject
+        val reference = controller.getValue("resolved_references").jsonArray.single().jsonObject
+        assertEquals("第一集", reference.getValue("title").jsonPrimitive.content)
+        assertEquals(setOf("title"), reference.keys)
+        assertFalse(reference.containsKey("path"))
+        assertFalse(reference.containsKey("id"))
+        assertFalse(controller.containsKey("reference_note"))
     }
 
     @Test

@@ -112,7 +112,7 @@ class ModelSettingsVersionSelectionTest {
         state.syncFrom(emptyList(), target)
 
         assertFalse(state.dirty)
-        assertTrue(state.hasUnsavedChanges)
+        assertFalse(state.hasUnsavedChanges)
     }
 
     @Test
@@ -127,7 +127,7 @@ class ModelSettingsVersionSelectionTest {
         assertTrue(state.modelPickerOpen)
         assertEquals("", state.testMessage)
         assertEquals(fetched.modelOptions, state.form.modelOptions)
-        assertTrue(state.dirty)
+        assertFalse(state.dirty)
         assertEquals("idle", state.saveState)
     }
 

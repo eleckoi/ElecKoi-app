@@ -22,16 +22,26 @@ class ChatDisplaySettingsViewModel(
         initialValue = UiPreferences(),
     )
 
-    suspend fun selectLayoutMode(mode: ChatLayoutMode) = withContext(Dispatchers.IO) {
-        repository.setChatLayoutMode(mode)
+    internal suspend fun readStored(): UiPreferences = withContext(Dispatchers.IO) {
+        repository.read()
     }
 
-    suspend fun setGenerationStatsEnabled(enabled: Boolean) = withContext(Dispatchers.IO) {
-        repository.setChatGenerationStatsEnabled(enabled)
+    internal suspend fun previewLayout(mode: ChatLayoutMode): ChatLayoutDraft = withContext(Dispatchers.IO) {
+        ChatLayoutDraft(repository.previewChatLayout(mode))
     }
 
-    suspend fun resetLayout(mode: ChatLayoutMode) = withContext(Dispatchers.IO) {
-        repository.resetChatLayoutPreferences(mode)
+    internal suspend fun save(state: ChatLayoutEditorState): UiPreferences = withContext(Dispatchers.IO) {
+        state.changedLayouts.forEach { draft ->
+            repository.setChatLayoutMode(draft.layoutMode)
+            commitChangedLayout(draft, state.baselines.getValue(draft.layoutMode))
+        }
+        if (repository.read().chatLayoutMode != state.selectedMode) {
+            repository.setChatLayoutMode(state.selectedMode)
+        }
+        if (state.generationStatsEnabled != state.storedGenerationStatsEnabled) {
+            repository.setChatGenerationStatsEnabled(state.generationStatsEnabled)
+        }
+        repository.read()
     }
 
     internal suspend fun commitChangedLayout(

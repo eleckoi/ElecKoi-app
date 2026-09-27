@@ -23,7 +23,7 @@ class ChatLayoutProfileDefaultsTest {
         assertEquals(16f, ChatLayoutMode.Social.layoutDefaults.messageFontSize)
         assertEquals(16f, ChatLayoutMode.Agent.layoutDefaults.messageFontSize)
         assertEquals(25f / (16f * 1.4f), ChatLayoutMode.Agent.layoutDefaults.lineHeightMultiplier)
-        assertEquals(14f, ChatLayoutMode.Roleplay.layoutDefaults.messageFontSize)
+        assertEquals(15f, ChatLayoutMode.Roleplay.layoutDefaults.messageFontSize)
     }
 
     @Test

@@ -54,7 +54,10 @@ fun GlobToolResultBlock(
     val onDemandPathSet = result.pathDetails
         .filterValues { detail -> detail.readStrategy == "normal" }
         .keys
-    val staticRequiredCount = (requiredPathSet - keywordPathSet - variableConditionPathSet).size
+    val fixedRequiredPathSet = requiredPathSet.filterTo(mutableSetOf()) { path ->
+        result.pathDetails[path]?.readStrategy == "required"
+    }
+    val conditionalRequiredPathSet = requiredPathSet - fixedRequiredPathSet
     Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
         Text(
             text = buildString {
@@ -73,19 +76,14 @@ fun GlobToolResultBlock(
             Text(
                 text = buildAnnotatedString {
                     append("匹配 ${result.paths.size}")
-                    if (staticRequiredCount > 0) {
+                    if (fixedRequiredPathSet.isNotEmpty()) {
                         withStyle(SpanStyle(color = appearance.mobileBlue)) {
-                            append(" · 必读 $staticRequiredCount")
+                            append(" · 固定必读 ${fixedRequiredPathSet.size}")
                         }
                     }
-                    if (keywordPathSet.isNotEmpty()) {
+                    if (conditionalRequiredPathSet.isNotEmpty()) {
                         withStyle(SpanStyle(color = KeywordResultColor)) {
-                            append(" · 关键词 ${keywordPathSet.size}")
-                        }
-                    }
-                    if (variableConditionPathSet.isNotEmpty()) {
-                        withStyle(SpanStyle(color = KeywordResultColor)) {
-                            append(" · 已触发 ${variableConditionPathSet.size}")
+                            append(" · 本轮须读 ${conditionalRequiredPathSet.size}")
                         }
                     }
                 },
@@ -159,6 +157,22 @@ fun GlobToolResultBlock(
                                     }
                             }
                             when {
+                                path in conditionalRequiredPathSet -> {
+                                    Text(
+                                        text = "本轮须读",
+                                        color = KeywordResultColor,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                    )
+                                }
+                                path in fixedRequiredPathSet -> {
+                                    Text(
+                                        text = "固定必读",
+                                        color = appearance.mobileBlue,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                    )
+                                }
                                 path in variableConditionPathSet -> {
                                     Text(
                                         text = "已触发",
@@ -171,14 +185,6 @@ fun GlobToolResultBlock(
                                     Text(
                                         text = "关键词",
                                         color = KeywordResultColor,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Medium,
-                                    )
-                                }
-                                path in requiredPathSet -> {
-                                    Text(
-                                        text = "必读",
-                                        color = appearance.mobileBlue,
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Medium,
                                     )

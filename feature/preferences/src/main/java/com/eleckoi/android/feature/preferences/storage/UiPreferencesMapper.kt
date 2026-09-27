@@ -2,9 +2,9 @@ package com.eleckoi.android.feature.preferences
 
 import androidx.datastore.preferences.core.Preferences
 
-internal fun Preferences.toUiPreferences(): UiPreferences {
+internal fun Preferences.toUiPreferences(layoutModeOverride: ChatLayoutMode? = null): UiPreferences {
     val preferences = this
-    val resolvedMode = ChatLayoutMode.fromStorageKey(preferences[ChatLayoutModeKey])
+    val resolvedMode = layoutModeOverride ?: ChatLayoutMode.fromStorageKey(preferences[ChatLayoutModeKey])
     val defaults = resolvedMode.layoutDefaults
     return UiPreferences(
         pinnedChatIds = preferences[PinnedChatIdsJson]

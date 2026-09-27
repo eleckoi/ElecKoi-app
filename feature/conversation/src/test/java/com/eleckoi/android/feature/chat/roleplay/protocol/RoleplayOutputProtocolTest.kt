@@ -28,6 +28,8 @@ class RoleplayOutputProtocolTest {
         assertTrue(instructions.contains("仅允许原生 Tool Call"))
         assertTrue(instructions.contains("- \"角色对白\""))
         assertTrue(instructions.contains("本轮完整的最终扮演回复"))
+        assertTrue(instructions.contains("禁止在其中写入 <FINAL>、</FINAL> 或角色扮演正文"))
+        assertTrue(instructions.contains("必须切换到普通 assistant 文本"))
         assertFalse(instructions.contains("<ACTION_CALL"))
         assertFalse(instructions.contains("</ACTION_CALL>"))
     }

@@ -100,9 +100,7 @@ private fun createCharacterSettingLibraryReadTool(
                             put("resolved_references", buildJsonArray {
                                 entry.resolvedReferences.forEach { reference ->
                                     add(buildJsonObject {
-                                        put("id", reference.id)
                                         put("title", reference.title)
-                                        put("path", reference.path.normalizedSettingPath())
                                     })
                                 }
                             })

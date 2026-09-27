@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -30,6 +31,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,6 +49,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.foundation.design.markdownReadingColors
+import com.eleckoi.android.foundation.design.components.UnsavedChangesDialog
+import com.eleckoi.android.foundation.design.components.noRippleClickable
 
 /** Chat-reading controls for the colours that carry meaning inside Markdown replies. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -58,9 +62,33 @@ fun MarkdownReadingColorsPage(
     onBack: () -> Unit,
 ) {
     var editing by remember { mutableStateOf<MarkdownReadingColorRole?>(null) }
-    val resolved = previewAppearance.markdownReadingColors(isUser = false)
+    var draftAppearance by remember { mutableStateOf(appearance) }
+    var savedColors by remember { mutableStateOf(appearance.markdownReadingColors) }
+    var unsavedDialogOpen by remember { mutableStateOf(false) }
+    val dirty = draftAppearance.markdownReadingColors != savedColors
+    val draftPreview = previewAppearance.copy(
+        markdownReadingColors = draftAppearance.markdownReadingColors,
+    )
+    val resolved = draftPreview.markdownReadingColors(isUser = false)
 
-    BackHandler(onBack = onBack)
+    LaunchedEffect(appearance) {
+        if (!dirty) {
+            draftAppearance = appearance
+            savedColors = appearance.markdownReadingColors
+        }
+    }
+    fun saveAndContinue(leave: Boolean) {
+        if (!dirty) return
+        onSave(draftAppearance)
+        savedColors = draftAppearance.markdownReadingColors
+        unsavedDialogOpen = false
+        if (leave) onBack()
+    }
+    fun requestBack() {
+        if (dirty) unsavedDialogOpen = true else onBack()
+    }
+
+    BackHandler(onBack = ::requestBack)
     androidx.compose.material3.Scaffold(
         containerColor = appearance.mobileBg,
         topBar = {
@@ -69,11 +97,30 @@ fun MarkdownReadingColorsPage(
                     Text("阅读文字颜色", fontWeight = FontWeight.SemiBold, color = appearance.mobileText)
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = ::requestBack) {
                         Icon(
                             Icons.AutoMirrored.Rounded.ArrowBack,
                             contentDescription = "返回",
                             tint = appearance.mobileText,
+                        )
+                    }
+                },
+                actions = {
+                    Box(
+                        modifier = Modifier
+                            .padding(end = 16.dp)
+                            .height(38.dp)
+                            .widthIn(min = 72.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(appearance.mobileBlue.copy(alpha = if (dirty) 1f else 0.38f))
+                            .noRippleClickable(enabled = dirty) { saveAndContinue(leave = false) },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            "保存",
+                            color = appearance.mobileAccentFg,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
                         )
                     }
                 },
@@ -89,7 +136,7 @@ fun MarkdownReadingColorsPage(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(22.dp),
         ) {
-            ReadingColorPreview(appearance = previewAppearance)
+            ReadingColorPreview(appearance = draftPreview)
             ReadingColorGroup(
                 title = "文本格式",
                 roles = listOf(
@@ -119,18 +166,30 @@ fun MarkdownReadingColorsPage(
     editing?.let { role ->
         ReadingColorPickerDialog(
             role = role,
-            initial = role.overrideIn(appearance.markdownReadingColors) ?: role.resolvedIn(resolved),
-            followsTheme = role.overrideIn(appearance.markdownReadingColors) == null,
+            initial = role.overrideIn(draftAppearance.markdownReadingColors) ?: role.resolvedIn(resolved),
+            followsTheme = role.overrideIn(draftAppearance.markdownReadingColors) == null,
             appearance = appearance,
             onDismiss = { editing = null },
             onFollowTheme = {
-                onSave(appearance.withMarkdownReadingColor(role, null))
+                draftAppearance = draftAppearance.withMarkdownReadingColor(role, null)
                 editing = null
             },
             onSave = { color ->
-                onSave(appearance.withMarkdownReadingColor(role, color))
+                draftAppearance = draftAppearance.withMarkdownReadingColor(role, color)
                 editing = null
             },
+        )
+    }
+    if (unsavedDialogOpen) {
+        UnsavedChangesDialog(
+            message = "离开前是否保存阅读文字颜色的修改？",
+            appearance = appearance,
+            onSave = { saveAndContinue(leave = true) },
+            onDiscard = {
+                unsavedDialogOpen = false
+                onBack()
+            },
+            onCancel = { unsavedDialogOpen = false },
         )
     }
 }
