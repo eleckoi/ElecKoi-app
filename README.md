@@ -9,7 +9,7 @@
   <a href="./README.en.md">English</a>
 </p>
 
-电子爱是一个由 DSH Agent 驱动的 AI 角色卡创作与演绎客户端，首先提供免费开源的 Android 版本，随后开发 PC 客户端。
+电子爱是一个由 DSH Agent 驱动的 AI 角色卡创作与演绎客户端，现已支持 Windows PC 与 Android。Android 版源码位于本仓库；Windows 版源码请前往 [ElecKoi](https://github.com/eleckoi/ElecKoi)。
 
 ## 核心亮点
 
@@ -26,11 +26,19 @@
 <table>
   <tr>
     <td align="center" valign="top">
-      <img src="docs/screenshots/roleplay-chat.png" alt="角色扮演对话界面" width="260">
-      <br><sub>角色扮演对话</sub>
+      <img src="docs/screenshots/conversations-home.png" alt="会话主页" width="220">
+      <br><sub>会话主页</sub>
     </td>
     <td align="center" valign="top">
-      <img src="docs/screenshots/agent-details.png" alt="Agent 执行详情界面" width="260">
+      <img src="docs/screenshots/roleplay-chat.png" alt="角色扮演布局" width="220">
+      <br><sub>角色扮演布局</sub>
+    </td>
+    <td align="center" valign="top">
+      <img src="docs/screenshots/agent-chat.png" alt="Agent 对话布局" width="220">
+      <br><sub>Agent 对话布局</sub>
+    </td>
+    <td align="center" valign="top">
+      <img src="docs/screenshots/agent-details.png" alt="Agent 执行详情界面" width="220">
       <br><sub>Agent 执行详情</sub>
     </td>
   </tr>
@@ -40,11 +48,9 @@
 
 > 这里只展示未来要完成的任务，不代表当前已经实现的功能。
 
-- [ ] 兼容提示词模板和前端角色卡的启动流程，让角色卡点击开始后能够按模板向 AI 发起首轮对话。
-- [ ] 完善前端 API 文档与示例，支持 Agent 自动设计前端样式并自动载入角色卡。
+- [ ] 完善角色作品的前端扩展 API，为创作 Agent 和角色卡提供更丰富的界面、交互与玩法能力。
 - [ ] 完善 DSH 插件管理与 MCP 接入，提供统一的配置、权限和运行状态管理。
-- [ ] 适配更多模型厂商的官方 API。
-- [ ] 开发 PC 端电子爱客户端，逐步实现跨平台的角色创作与演绎体验。
+- [ ] 持续完善 Windows 与 Android 客户端，逐步对齐跨平台的角色创作与演绎体验。
 - [ ] 完善生图能力，扩展模型接入、参数控制、编辑和连续创作流程。
 
 ## 当前开发难题
@@ -69,7 +75,7 @@
 
 电子爱想为这件事提供一套长期开放的工具，也希望聚集同样相信这件事的人。一个人能够做到的事情很有限；如果未来项目拥有收入，我希望能够邀请真正有能力的开发者、设计师和创作者加入，给予他们应得的报酬，一起把这个项目做得更好、更久。
 
-我承诺：电子爱官方发布的 Android 客户端和未来的 PC 客户端将一直保持免费开源，不会转为闭源产品。官方客户端不内置任何付费功能，不内置推荐任何API中转站；用户自主选择并配置自己信任的模型服务。
+我承诺：电子爱官方发布的 Windows 与 Android 客户端将一直保持免费开源，不会转为闭源产品。官方客户端不内置任何付费功能，不内置推荐任何 API 中转站；用户自主选择并配置自己信任的模型服务。
 
 如果项目未来获得持续收入，目前设想的主要方向是建立面向 AI 角色创作生态的资源与服务平台，帮助创作者展示、发布和交易角色作品、OC 定制、美术素材、界面设计、插件与扩展及其他创作内容与服务，并持续维护自己的作品。平台未来可能通过公开透明的平台服务、赞助或捐赠获得收入，用于基础设施、支付协作者报酬、组建专业团队以及项目长期维护。具体规则将在相关服务上线前公开说明。
 
@@ -107,7 +113,7 @@
 
 ## 项目方向与贡献约定
 
-电子爱官方 Android 客户端和未来的 PC 客户端将持续免费开源。项目未来可能与独立的 AI 角色创作资源与服务平台有联系，平台将通过服务、赞助或捐赠支持长期开发和支付协作者报酬，这是必须履行的义务与职责。
+电子爱官方 Windows 与 Android 客户端将持续免费开源。项目未来可能与独立的 AI 角色创作资源与服务平台有联系，平台将通过服务、赞助或捐赠支持长期开发和支付协作者报酬，这是必须履行的义务与职责。
 
 ### 关于项目方向的共同认知
 

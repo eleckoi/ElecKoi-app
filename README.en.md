@@ -9,7 +9,7 @@
   <strong>English</strong>
 </p>
 
-ElecKoi is an AI character-card creation and roleplay client powered by DSH Agent. It will first provide a free and open-source Android client, followed by a PC client.
+ElecKoi is a DSH Agent-powered AI character-card creation and roleplay client for Windows PC and Android. This repository contains the Android client; visit [ElecKoi](https://github.com/eleckoi/ElecKoi) for the Windows source code.
 
 ## Highlights
 
@@ -26,11 +26,19 @@ ElecKoi aims to build a continuously improving creative flywheel: turn the commu
 <table>
   <tr>
     <td align="center" valign="top">
-      <img src="docs/screenshots/roleplay-chat.png" alt="Roleplay conversation screen" width="260">
-      <br><sub>Roleplay conversation</sub>
+      <img src="docs/screenshots/conversations-home.png" alt="Conversation home screen" width="220">
+      <br><sub>Conversation home</sub>
     </td>
     <td align="center" valign="top">
-      <img src="docs/screenshots/agent-details.png" alt="Agent execution details screen" width="260">
+      <img src="docs/screenshots/roleplay-chat.png" alt="Roleplay chat layout" width="220">
+      <br><sub>Roleplay layout</sub>
+    </td>
+    <td align="center" valign="top">
+      <img src="docs/screenshots/agent-chat.png" alt="Agent chat layout" width="220">
+      <br><sub>Agent chat layout</sub>
+    </td>
+    <td align="center" valign="top">
+      <img src="docs/screenshots/agent-details.png" alt="Agent execution details screen" width="220">
       <br><sub>Agent execution details</sub>
     </td>
   </tr>
@@ -40,11 +48,9 @@ ElecKoi aims to build a continuously improving creative flywheel: turn the commu
 
 > This section lists future work and does not indicate that these features are already implemented.
 
-- [ ] Support prompt templates and frontend character-card startup flows, so clicking Start can initiate the first AI turn using the intended template.
-- [ ] Expand the frontend API documentation and examples so Agents can design frontend styles and automatically load character cards.
+- [ ] Expand frontend extension APIs for character works, enabling creation Agents and character cards to support richer interfaces, interactions, and gameplay.
 - [ ] Improve DSH plugin management and MCP integration with unified configuration, permissions, and runtime status.
-- [ ] Support the official APIs of more model providers.
-- [ ] Develop the ElecKoi PC client and gradually bring character creation and roleplay to more platforms.
+- [ ] Continue improving the Windows and Android clients while aligning the core character-creation and roleplay experience across platforms.
 - [ ] Improve image-generation capabilities, including model integrations, parameter controls, editing, and iterative creation workflows.
 
 ## Current Development Challenges
@@ -69,7 +75,7 @@ ElecKoi explores more than AI character conversations. It also covers AI-driven 
 
 ElecKoi aims to provide an open toolset for this work over the long term and to bring together people who believe in the same goal. One person can only do so much. If the project earns revenue in the future, I hope to invite capable developers, designers, and creators to join, compensate them fairly, and build the project better and for longer.
 
-I promise that ElecKoi's official Android client and future PC client will remain free and open source and will not become closed-source products. Official clients will not include paid features or recommend any API relay service. Users choose and configure the model providers they trust.
+I promise that ElecKoi's official Windows and Android clients will remain free and open source and will not become closed-source products. Official clients will not include paid features or recommend any API relay service. Users choose and configure the model providers they trust.
 
 If the project gains sustainable revenue, the current direction is to build a resource and services platform for the AI character-creation ecosystem. It would help creators showcase, publish, and trade character works, original-character commissions, art assets, interface designs, plugins, extensions, and other creative content and services, while continuing to maintain their work. The platform may eventually earn revenue through transparent service fees, sponsorships, or donations. That revenue would support infrastructure, compensate collaborators, build a professional team, and fund long-term maintenance. Specific rules will be published before any related service launches.
 
@@ -107,7 +113,7 @@ If you also want AI character-card design to become a fuller, more compliant, an
 
 ## Project Direction and Contribution Terms
 
-ElecKoi's official Android client and future PC client will remain free and open source. The project may eventually be connected to an independent resource and services platform for AI character creation. That platform would support long-term development and fair compensation for collaborators through services, sponsorships, or donations; fulfilling those commitments is an obligation and responsibility.
+ElecKoi's official Windows and Android clients will remain free and open source. The project may eventually be connected to an independent resource and services platform for AI character creation. That platform would support long-term development and fair compensation for collaborators through services, sponsorships, or donations; fulfilling those commitments is an obligation and responsibility.
 
 ### Shared Understanding of the Project Direction
 
