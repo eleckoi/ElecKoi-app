@@ -341,6 +341,8 @@ internal val RoleplayTranscriptStyles = """
     }
     .native-part > .content-part + .content-part { margin-top: 10px; }
     .native-part p { margin: 0 0 var(--paragraph-gap); }
+    body[data-layout="agent"] .native-part > .content-text-part > .stream-block > p,
+    body[data-layout="social"] .native-part > .content-text-part > .stream-block > p { text-spacing-trim: trim-start; }
     .native-part > .content-text-part > .stream-block:last-child > p:last-child { margin-bottom: 0; }
     .native-part h1, .native-part h2, .native-part h3, .native-part h4, .native-part h5, .native-part h6 {
       margin: calc(var(--paragraph-gap) * 1.5) 0 var(--paragraph-gap); line-height: 1.3;

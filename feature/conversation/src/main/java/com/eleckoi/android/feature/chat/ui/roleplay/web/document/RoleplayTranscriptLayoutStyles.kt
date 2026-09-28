@@ -35,6 +35,7 @@ internal val RoleplayTranscriptLayoutStyles = """
       display: flex;
       align-items: center;
     }
+    body[data-layout="agent"] .author-line { width: 100%; min-width: 0; }
     body[data-layout="agent"] .name {
       padding: 0;
       transition: none;
