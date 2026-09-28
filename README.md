@@ -30,12 +30,12 @@
       <br><sub>会话主页</sub>
     </td>
     <td align="center" valign="top">
-      <img src="docs/screenshots/roleplay-chat.png" alt="角色扮演布局" width="220">
-      <br><sub>角色扮演布局</sub>
+      <img src="docs/screenshots/roleplay-chat.png" alt="Agent 对话布局" width="220">
+      <br><sub>Agent 对话布局</sub>
     </td>
     <td align="center" valign="top">
-      <img src="docs/screenshots/agent-chat.png" alt="Agent 对话布局" width="220">
-      <br><sub>Agent 对话布局</sub>
+      <img src="docs/screenshots/agent-chat.png" alt="角色扮演布局" width="220">
+      <br><sub>角色扮演布局</sub>
     </td>
     <td align="center" valign="top">
       <img src="docs/screenshots/agent-details.png" alt="Agent 执行详情界面" width="220">
