@@ -53,7 +53,7 @@ object AuthorApiCatalog {
         definition("input.clear", "input", "清空当前聊天输入框", AuthorApiPermission.InputWrite),
         definition("input.send", "input", "发送当前输入框内容", AuthorApiPermission.ChatWrite),
         definition("events.list", "events", "读取作者前端可订阅的事件名称", AuthorApiPermission.EventsRead),
-    )
+    ) + com.eleckoi.android.sdk.author.plugins.PluginAuthorApi.definitions
 
     private val definitionsByMethod = definitions.associateBy(AuthorApiDefinition::method)
 

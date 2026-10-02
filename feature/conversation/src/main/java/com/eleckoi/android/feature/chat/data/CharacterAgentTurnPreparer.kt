@@ -119,7 +119,8 @@ internal class CharacterAgentTurnPreparer(
             .resolveCharacterCardMacros(macroValues)
             .resolveDynamicEntries(
                 messages = roomHistory,
-                keywordMessages = promptHistory,
+                keywordMessages = promptHistory + com.eleckoi.android.engine.creator.plugins.PluginPromptPipeline.scanText(session.id)
+                    .takeIf { it.isNotEmpty() }?.let { listOf(com.eleckoi.android.feature.chat.model.ChatMessage("plugin-scan", MessageRole.System, it)) }.orEmpty(),
                 stateJson = variableTurnState?.stateJson.orEmpty(),
                 runtime = variableRuntime,
             )
@@ -172,6 +173,7 @@ internal class CharacterAgentTurnPreparer(
         )
         val protocolInstructions = ""
         val contextInjections = buildList {
+            addAll(com.eleckoi.android.engine.creator.plugins.PluginPromptPipeline.snapshot(session.id))
             addAll(CharacterSettingContextResolver.resolve(
                 library = storyLibrary,
                 messages = roomHistory,

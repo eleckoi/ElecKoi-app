@@ -41,6 +41,7 @@ internal object AuthorCapabilityRegistry {
                 SettingLibraryAuthorApi.routes,
                 InputAuthorApi.routes,
                 AuthorEventApi.routes,
+                com.eleckoi.android.sdk.author.plugins.PluginAuthorApi.routes,
             ).flatten(),
         )
     }

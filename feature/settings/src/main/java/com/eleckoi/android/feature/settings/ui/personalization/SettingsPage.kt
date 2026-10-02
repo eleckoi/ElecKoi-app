@@ -20,6 +20,7 @@ import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.SystemUpdate
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -43,6 +44,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.eleckoi.android.foundation.design.AppearanceTheme
 import com.eleckoi.android.foundation.design.PhosphorRegular
 import com.eleckoi.android.feature.preferences.ListCharacterArtwork
+
+data class PluginSettingsEntry(val id: String, val title: String, val onOpen: () -> Unit)
 
 @Composable
 fun SettingsPage(
@@ -73,6 +76,7 @@ fun SettingsPage(
     onExportBackup: () -> Unit = {},
     onImportBackup: () -> Unit = {},
     onCancelBackup: () -> Unit = {},
+    pluginSettings: List<PluginSettingsEntry> = emptyList(),
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -119,6 +123,12 @@ fun SettingsPage(
         appearance = appearance,
         onBack = onBack,
     ) {
+        if (pluginSettings.isNotEmpty()) SettingsSection(label = "插件", appearance = appearance) {
+            pluginSettings.forEachIndexed { index, entry ->
+                if (index > 0) SettingsDivider(appearance, startIndent = SettingsRowTextStart)
+                SettingsDestinationRow(icon = Icons.Rounded.Settings, title = entry.title, appearance = appearance, onClick = entry.onOpen)
+            }
+        }
         SettingsSection(label = "个性化", appearance = appearance) {
             SettingsDestinationRow(
                 iconPath = PhosphorRegular.UserCircle,

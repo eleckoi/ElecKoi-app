@@ -13,7 +13,7 @@ private val CharacterCardMacroPattern = Regex(
 internal fun String.resolveCharacterCardMacros(values: CharacterCardMacroValues): String {
     if (isEmpty()) return this
     val matches = CharacterCardMacroPattern.findAll(this).toList()
-    if (matches.isEmpty()) return this
+    if (matches.isEmpty()) return com.eleckoi.android.engine.creator.plugins.PluginPromptPipeline.expand(this)
     val resolved = StringBuilder(length)
     var sourceIndex = 0
     matches.forEach { match ->
@@ -36,7 +36,7 @@ internal fun String.resolveCharacterCardMacros(values: CharacterCardMacroValues)
         }
     }
     resolved.append(this, sourceIndex, length)
-    return resolved.toString()
+    return com.eleckoi.android.engine.creator.plugins.PluginPromptPipeline.expand(resolved.toString())
 }
 
 private fun StringBuilder.trimCjkBoundarySpacing() {

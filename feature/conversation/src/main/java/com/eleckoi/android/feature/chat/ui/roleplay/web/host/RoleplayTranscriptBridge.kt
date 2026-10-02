@@ -23,6 +23,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import org.json.JSONObject
 import org.json.JSONTokener
 
@@ -30,6 +32,7 @@ internal class RoleplayTranscriptBridge(
     private val appContext: Context,
     private val messageProvider: (String) -> ChatMessage?,
     private val messageGatewayProvider: () -> AuthorChatGateway?,
+    private val chatAuthorRouter: AuthorApiRouter,
     private val callbacksProvider: () -> RoleplayWebChatCallbacks,
     private val onReady: (Long, String) -> Unit,
     private val onTransactionCommitted: (Long, String) -> Unit,
@@ -108,6 +111,21 @@ internal class RoleplayTranscriptBridge(
                     val source = messageProvider(value.optString("messageId")) ?: return@addWebMessageListener
                     callbacksProvider().onMessageAction(value.optString("action"), source)
                 }
+                "pluginAction" -> {
+                    val owner = value.getString("pluginId")
+                    val id = value.getString("id")
+                    val entry = com.eleckoi.android.sdk.author.plugins.PluginUiRegistry.items.value.first {
+                        it["pluginId"]?.toString() == JSONObject.quote(owner) && it["id"]?.toString() == JSONObject.quote(id)
+                    }
+                    if (entry["html"]?.jsonPrimitive?.contentOrNull?.isNotBlank() == true) com.eleckoi.android.sdk.author.plugins.PluginUiRegistry.open(owner, id)
+                    scope.launch {
+                        checkNotNull(messageGatewayProvider()).invokeExtension("plugins.emitEvent", kotlinx.serialization.json.buildJsonObject {
+                            put("pluginId", kotlinx.serialization.json.JsonPrimitive(owner))
+                            put("event", kotlinx.serialization.json.JsonPrimitive("plugin:$owner:button:$id"))
+                            put("payload", kotlinx.serialization.json.buildJsonObject { put("messageId", kotlinx.serialization.json.JsonPrimitive(value.getString("messageId"))) })
+                        })
+                    }
+                }
                 "imageAction" -> {
                     val source = messageProvider(value.optString("messageId")) ?: return@addWebMessageListener
                     val attachmentId = value.optString("attachmentId")
@@ -121,16 +139,24 @@ internal class RoleplayTranscriptBridge(
                 }
                 "openLink" -> openExternal(value.optString("url"))
                 "author" -> {
-                    val source = messageProvider(value.optString("messageId")) ?: return@addWebMessageListener
                     val request = value.optString("request")
                     if (request.isBlank()) return@addWebMessageListener
+                    val messageId = value.optString("messageId")
+                    val source = messageProvider(messageId)
                     scope.launch {
-                        val environment = AuthorApiEnvironment.forInlineMessage(
-                            appContext = appContext,
-                            message = source.toAuthorSnapshot(),
-                            messageGateway = messageGatewayProvider(),
-                        )
-                        val response = AuthorApiRouter(environment).route(request)
+                        val response = when {
+                            messageId.isBlank() -> chatAuthorRouter.route(request)
+                            source != null -> AuthorApiRouter(AuthorApiEnvironment.forInlineMessage(
+                                appContext = appContext,
+                                message = source.toAuthorSnapshot(),
+                                messageGateway = messageGatewayProvider(),
+                            )).route(request)
+                            else -> JSONObject()
+                                .put("id", runCatching { JSONObject(request).optString("id") }.getOrDefault(""))
+                                .put("ok", false)
+                                .put("error", JSONObject().put("code", "NOT_FOUND").put("message", "消息不存在：$messageId"))
+                                .toString()
+                        }
                         replyProxy.postMessage(
                             JSONObject()
                                 .put("type", "authorResult")

@@ -2,6 +2,8 @@ package com.eleckoi.android.app.shell
 
 import com.eleckoi.android.foundation.design.components.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import kotlinx.serialization.json.jsonPrimitive
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -59,6 +61,7 @@ internal fun mobileSettingsRouteEntry(
                 )
         }
         MobileRoute.Settings -> NavEntry(currentRoute) {
+                val pluginItems by com.eleckoi.android.sdk.author.plugins.PluginUiRegistry.items.collectAsState()
                 val pageAppearance = currentThemeState.value.appearance
                 val backupProgress = dataBackupActions.progress.value
                 var communityDialogOpen by rememberSaveable { mutableStateOf(false) }
@@ -95,7 +98,13 @@ internal fun mobileSettingsRouteEntry(
                     onExportBackup = dataBackupActions.export,
                     onImportBackup = dataBackupActions.import,
                     onCancelBackup = dataBackupActions.cancel,
+                    pluginSettings = pluginItems.filter { it["kind"]?.jsonPrimitive?.content == "settings" }.map { item ->
+                        com.eleckoi.android.feature.settings.ui.personalization.PluginSettingsEntry(
+                            item.getValue("id").jsonPrimitive.content, item.getValue("label").jsonPrimitive.content,
+                        ) { com.eleckoi.android.sdk.author.plugins.PluginUiRegistry.open(item.getValue("pluginId").jsonPrimitive.content, item.getValue("id").jsonPrimitive.content) }
+                    },
                 )
+                com.eleckoi.android.feature.chat.ui.plugins.PluginUiHost(chatViewModel)
                 if (communityDialogOpen) {
                     MobileCommunityDialog(
                         appearance = pageAppearance,

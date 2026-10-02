@@ -59,6 +59,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
 internal class ChatServiceImpl(
+    appContext: android.content.Context,
+    agentPresets: com.eleckoi.android.feature.characters.presets.data.AgentPresetRepository,
+    userProfiles: com.eleckoi.android.feature.characters.data.UserProfileRepository,
     private val characters: CharacterRepository,
     private val sessions: ChatSessionStore,
     private val settings: ModelConfigRepository,
@@ -78,6 +81,11 @@ internal class ChatServiceImpl(
     private val activeAgentPreset: suspend () -> AgentPreset,
     private val captureProviderRequests: Boolean,
 ) : ChatService {
+    private val authorPlugins by lazy { AuthorPluginService(appContext, sessions, characters, settings, settingLibrary, agentPresets, regexRules, userProfiles, variableConfig, variableRuntime) { deleteObsoleteRuntimeSessions(it) } }
+    override val authorPluginEvents get() = authorPlugins.events
+    override fun attachAuthorPlugins(gateway: com.eleckoi.android.sdk.author.AuthorChatGateway) = authorPlugins.attach(gateway)
+    override fun detachAuthorPlugins(gateway: com.eleckoi.android.sdk.author.AuthorChatGateway) = authorPlugins.detach(gateway)
+    override suspend fun invokeAuthorExtension(method: String, params: kotlinx.serialization.json.JsonObject) = authorPlugins.invoke(method, params)
     @Volatile
     private var characterAgentGeneration: CharacterAgentGenerationService? = null
     @Volatile

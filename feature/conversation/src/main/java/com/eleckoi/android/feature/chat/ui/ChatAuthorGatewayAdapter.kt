@@ -316,6 +316,9 @@ internal class ChatAuthorEventPublisher(
     private fun publishChanges(previous: ChatUiState, current: ChatUiState) {
         val currentSession = current.draft?.session
         val conversationId = currentSession?.id.orEmpty()
+        if (conversationId.isNotBlank() && previous.draft?.session?.id != conversationId) {
+            emit("chat.changed", buildJsonObject { put("conversationId", conversationId) })
+        }
         if (conversationId.isBlank()) return
         val currentMessages = currentSession?.messages.orEmpty()
         val previousAssistant = previous.activeAuthorAssistant()

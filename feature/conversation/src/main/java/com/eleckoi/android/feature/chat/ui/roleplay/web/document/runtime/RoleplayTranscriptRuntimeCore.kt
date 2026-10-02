@@ -230,7 +230,6 @@ internal val RoleplayTranscriptRuntimeCore = """
       onmessage: null,
       postMessage(request) {
         const messageId = state.activeAuthorMessageId;
-        if (!messageId) return;
         post({ type: 'author', messageId, request: String(request || '') });
       },
     };

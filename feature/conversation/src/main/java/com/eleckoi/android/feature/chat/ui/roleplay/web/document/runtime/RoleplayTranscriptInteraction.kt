@@ -102,6 +102,10 @@ internal val RoleplayTranscriptInteraction = """    const onViewportResize = () 
       }
       const turn = target.closest('.turn'), message = turn ? state.byId.get(turn.dataset.id) : null; if (!message) return;
       const action = target.dataset.action;
+      if (action === 'plugin') {
+        post({ type: 'pluginAction', pluginId: target.dataset.plugin, id: target.dataset.pluginAction, messageId: message.id });
+        return;
+      }
       if (action === 'delete-select') {
         if (!message.pending && message.role !== 'system') {
           post({ type: 'deleteSelect', messageId: message.id });

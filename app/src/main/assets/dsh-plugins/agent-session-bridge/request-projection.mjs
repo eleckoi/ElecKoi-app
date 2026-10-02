@@ -31,7 +31,19 @@ export function projectRequestMessages(messages, plan = projectionPlanFromMessag
   const dialogue = visible.filter(message => message?.role !== 'system')
   const latestUserIndex = dialogue.findLastIndex(isDirectUserMessage)
   const currentTurnMessages = latestUserIndex < 0 ? dialogue : dialogue.slice(latestUserIndex)
-  const active = plan.filter(entry => injectionActive(entry, currentTurnMessages))
+  const eligible = plan.filter(entry => injectionActive(entry, currentTurnMessages))
+  const positioned = eligible.filter(entry => Number.isInteger(entry.depth))
+  const active = eligible.filter(entry => !Number.isInteger(entry.depth))
+  const withDepth = result => {
+    for (const entry of positioned) {
+      if (entry.depth < 0) throw new RangeError(`Prompt depth must be non-negative: ${entry.depth}`)
+      const index = Math.max(0, (latestUserIndex < 0 ? dialogue.length : latestUserIndex + 1) - entry.depth)
+      const target = dialogue[index]
+      const insertAt = target ? result.indexOf(target) : result.length
+      result.splice(insertAt < 0 ? result.length : insertAt, 0, projectionMessage(entry))
+    }
+    return result
+  }
   const projectedSystem = active
     .filter(entry => entry.role === 'system')
     .map(projectionMessage)
@@ -43,7 +55,7 @@ export function projectRequestMessages(messages, plan = projectionPlanFromMessag
   const afterLatestUser = grouped(['afterLatestUserInput', 'beforeToolFlow'])
   const afterToolFlow = grouped(['afterToolFlow'])
   if (latestUserIndex < 0) {
-    return [
+    return withDepth([
       ...system,
       ...projectedSystem,
       ...beforeHistory,
@@ -51,9 +63,9 @@ export function projectRequestMessages(messages, plan = projectionPlanFromMessag
       ...beforeLatestUser,
       ...afterLatestUser,
       ...afterToolFlow,
-    ]
+    ])
   }
-  return [
+  return withDepth([
     ...system,
     ...projectedSystem,
     ...beforeHistory,
@@ -63,7 +75,7 @@ export function projectRequestMessages(messages, plan = projectionPlanFromMessag
     ...afterLatestUser,
     ...dialogue.slice(latestUserIndex + 1),
     ...afterToolFlow,
-  ]
+  ])
 }
 
 /**
