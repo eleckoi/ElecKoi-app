@@ -49,6 +49,7 @@ internal val RoleplayTranscriptUpdates = """    const authorApiIdle = () => {
       captureGeometryIntent(followEnd);
       if (needsInitialPresentation) beginInitialPresentation(payload);
       if (!sameSession) {
+        state.activeAuthorMessageId = '';
         resetRichViewport();
         releaseRichWithin(turns);
         turns.replaceChildren();

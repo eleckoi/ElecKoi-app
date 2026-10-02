@@ -15,6 +15,7 @@ object AuthorFrontendSdk {
                 .open(AssetPath)
                 .bufferedReader(Charsets.UTF_8)
                 .use { it.readText() }
+                .let { source -> source + "\n" + context.applicationContext.assets.open("frontend/preview/tavern-compat.js").bufferedReader(Charsets.UTF_8).use { it.readText() } }
                 .also { source ->
                     require(source.isNotBlank()) { "ElecKoi 作者前端 SDK 为空" }
                     cachedSource = source
@@ -38,7 +39,7 @@ object AuthorFrontendSdk {
             return WebResourceResponse(
                 "application/javascript",
                 "UTF-8",
-                context.applicationContext.assets.open(AssetPath),
+                java.io.ByteArrayInputStream(source(context).toByteArray(Charsets.UTF_8)),
             )
         }
         if (!path.startsWith(LibraryRuntimePrefix)) return null

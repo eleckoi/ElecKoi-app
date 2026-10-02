@@ -1,0 +1,8 @@
+{
+  "id": "eleckoi-memory-contract-test",
+  "name": "记忆数据库接口测试",
+  "version": "0.1.0",
+  "entry": "plugin.js",
+  "enabled": true,
+  "description": "仅用于验证宿主接口；不是 Shujuku 移植或完整记忆插件。"
+}

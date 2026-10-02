@@ -99,6 +99,7 @@ internal class DshSessionSnapshotMaterializer private constructor(
         put("content", injection.content)
         put("order", injection.order)
         put("traceTitle", injection.traceTitle)
+        injection.historyDepth?.let { put("depth", it) }
         put("traceSource", injection.traceSource)
         put("activation", buildJsonObject {
             when (val activation = injection.activation) {

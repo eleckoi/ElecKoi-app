@@ -68,6 +68,7 @@ fun ChatScreen(
     onNewCharacterBackgroundChange: (NewCharacterBackground) -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    com.eleckoi.android.feature.chat.ui.plugins.PluginUiHost(viewModel)
     val context = LocalContext.current
     val imagePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(MaxChatInputImages),

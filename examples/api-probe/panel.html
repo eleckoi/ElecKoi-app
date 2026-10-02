@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ElecKoi API 逐项测试</title><link rel="stylesheet" href="panel.css"></head><body>
+<main>
+  <header><h1>API 逐项测试 <span id="busy"></span></h1><p id="viewport"></p></header>
+  <p class="hint">通过 = 返回值或行为断言通过；已调用 ≠ 通过；未测会一直保留。旧接口的读取组只做结构检查。关闭面板后，测试仍继续。</p>
+  <div class="actions"><button data-action="prepare">① 创建独立测试会话</button><button id="refresh">刷新报告</button><button id="export">导出 JSON</button><button data-action="clear" class="quiet">清空结果</button></div>
+  <p id="workspace">尚未创建测试会话</p><p id="error" role="alert"></p><p id="command-state" aria-live="polite"></p>
+  <section><h2>② 运行测试</h2><div class="actions">
+    <button data-group="data">数据 / 插件生命周期</button><button data-group="legacy">原有输入 / 消息 / 媒体</button><button data-group="aliases">酒馆助手别名</button><button data-group="context">ST 上下文</button><button data-group="read">原有只读接口</button>
+  </div><p class="hint">数据组临时写入变量、世界书绑定后恢复；消息写入只在测试会话内进行。</p>
+  <div class="actions"><button data-group="shared">角色 / 用户 / 预设 / 正则</button><button data-action="visual">HTML 面板与 vh</button><button data-action="manager">打开插件管理页</button><button data-action="confirm-manager" class="quiet">确认管理页可见</button></div>
+  <p class="hint">角色等测试会临时改名后恢复原值。人工确认按钮只在你确实看到对应页面后点击。</p>
+  <div class="fields"><label>模型配置<select id="config"><option value="">当前模型</option></select></label><label>模型名（可选）<input id="model" placeholder="沿用配置中的模型"></label></div>
+  <div class="actions"><button data-group="model">模型 / 流式 / 取消 / 注入</button></div>
+  <p class="hint">模型组最多发起四次独立请求，会消耗所选 API；不把生成内容保存进聊天。</p>
+  <div class="fields"><label>HTTP URL<input id="network-url" value="https://httpbin.org/get" type="url"></label><label>延迟响应 URL<input id="delay-url" value="https://httpbin.org/delay/10" type="url"></label></div>
+  <div class="actions"><button data-group="network">网络请求与取消</button><button data-action="all">运行以上全部测试组</button></div>
+  </section>
+  <section><h2>接口覆盖 <span id="counts"></span></h2>
+  <div class="fields"><label>入口<select id="surface"><option value="route">宿主路由（含内部握手）</option><option value="helper">TH / 全局函数</option><option value="context">ST getContext 函数</option></select></label>
+  <label>筛选<input id="filter" placeholder="名称、状态、测试项目"></label><label>状态<select id="status"><option value="">全部</option><option value="untested">未测</option><option value="fail">失败</option><option value="pass">通过</option><option value="called">已调用</option><option value="manual">待确认</option><option value="manual-pass">人工通过</option></select></label></div>
+  <div class="scroll"><table><thead><tr><th>接口 / 来源</th><th>状态</th><th>断言 / 操作说明</th></tr></thead><tbody id="routes"></tbody></table></div>
+  <p class="hint">点击接口名会填入下方控制台。不提供自动用例的接口可以手动调用并填写预期 JSON。ST 函数按独立入口记录，不借用 TH 的通过状态。</p></section>
+  <section><h2>手动调用与断言</h2><div class="fields"><label>类型<select id="kind"><option value="route">宿主 route</option><option value="helper">TH / global</option><option value="context">ST context</option></select></label><label>方法<input id="method" value="storage.get"></label></div>
+  <label>参数 JSON（宿主用对象；TH / ST 用参数数组）<textarea id="params" rows="4">{"key":"probe-report"}</textarea></label>
+  <label>预期返回 JSON（留空只记“已调用”）<textarea id="expected" rows="2" placeholder="例如 null、true 或 {&quot;count&quot;:2}"></textarea></label>
+  <button id="invoke">执行</button><pre id="output"></pre></section>
+  <section><h2>测试用例 <span id="test-counts"></span></h2><div id="tests"></div></section>
+  <section><details><summary>RPC 返回值与错误记录</summary><div id="calls"></div></details></section>
+</main><script src="panel.js"></script></body></html>

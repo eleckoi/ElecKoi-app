@@ -108,6 +108,13 @@ class RoomConversationLedger(
         )
     }
 
+    /** Replace the active timeline after a plugin edit and discard stale runtime associations. */
+    fun replaceActiveMessagesInTransaction(conversationId: String, updatedAt: String, messages: List<LedgerMessage>) {
+        requireTransaction()
+        dao.clearRuntimeAssociations(conversationId)
+        replaceTimelineInTransaction(conversationId, updatedAt, messages, replaceAll = true)
+    }
+
     /** Append a new stable turn, or update that exact turn without touching its neighbours. */
     fun upsertTurnInTransaction(
         conversationId: String,
@@ -275,6 +282,7 @@ class RoomConversationLedger(
         sourceMessageId: String,
         content: String,
         updatedAt: String,
+        assistantOnly: Boolean = true,
     ): LedgerMessageEdit {
         requireTransaction()
         val replacement = content.trim()
@@ -296,7 +304,7 @@ class RoomConversationLedger(
         }
         val current = materialize(listOf(ref)).firstOrNull { it.id == sourceMessageId }
             ?: throw IllegalArgumentException("没有找到消息：$sourceMessageId")
-        require(current.role == KindAssistant) { "只能直接修改 AI 消息" }
+        require(!assistantOnly || current.role == KindAssistant) { "只能直接修改 AI 消息" }
         require(!current.pending) { "消息仍在生成中，暂时不能修改" }
 
         val obsoleteRuntimeThreadIds = dao.runtimeThreadIds(conversationId).toSet()

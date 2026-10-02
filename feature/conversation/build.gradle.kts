@@ -6,6 +6,7 @@ plugins {
 
 android {
     namespace = "com.eleckoi.android.feature.conversation"
+    sourceSets.getByName("androidTest").assets.srcDir(rootProject.file("app/src/main/assets"))
 }
 
 dependencies {

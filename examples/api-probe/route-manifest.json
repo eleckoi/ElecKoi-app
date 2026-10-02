@@ -1,0 +1,559 @@
+{
+  "version": "0.1.0",
+  "routes": [
+    {
+      "name": "app.getInfo",
+      "origin": "baseline"
+    },
+    {
+      "name": "app.getCapabilities",
+      "origin": "baseline"
+    },
+    {
+      "name": "context.current",
+      "origin": "baseline"
+    },
+    {
+      "name": "variables.getState",
+      "origin": "baseline"
+    },
+    {
+      "name": "variables.getConfig",
+      "origin": "baseline"
+    },
+    {
+      "name": "variables.setState",
+      "origin": "baseline"
+    },
+    {
+      "name": "variables.merge",
+      "origin": "baseline"
+    },
+    {
+      "name": "variables.applyPatch",
+      "origin": "baseline"
+    },
+    {
+      "name": "variables.reset",
+      "origin": "baseline"
+    },
+    {
+      "name": "openings.list",
+      "origin": "baseline"
+    },
+    {
+      "name": "openings.current",
+      "origin": "baseline"
+    },
+    {
+      "name": "openings.select",
+      "origin": "baseline",
+      "manual": "手动：切换真实存在的开场白，确认原生选中状态"
+    },
+    {
+      "name": "messages.list",
+      "origin": "baseline"
+    },
+    {
+      "name": "messages.get",
+      "origin": "baseline"
+    },
+    {
+      "name": "messages.current",
+      "origin": "baseline"
+    },
+    {
+      "name": "messages.deleteFrom",
+      "origin": "baseline"
+    },
+    {
+      "name": "messages.regenerate",
+      "origin": "baseline",
+      "manual": "手动：测试会话中重新生成 AI 消息，检查轨迹与消息内容"
+    },
+    {
+      "name": "messages.editAndRegenerate",
+      "origin": "baseline",
+      "manual": "手动：修改测试用户消息并重生成，检查后续消息"
+    },
+    {
+      "name": "chat.current",
+      "origin": "baseline"
+    },
+    {
+      "name": "chat.list",
+      "origin": "baseline"
+    },
+    {
+      "name": "chat.getGenerationState",
+      "origin": "baseline"
+    },
+    {
+      "name": "chat.getAgentTrajectory",
+      "origin": "baseline"
+    },
+    {
+      "name": "chat.getModels",
+      "origin": "baseline"
+    },
+    {
+      "name": "chat.send",
+      "origin": "baseline",
+      "manual": "手动：测试会话发送消息，检查模型回复与事件"
+    },
+    {
+      "name": "chat.stopGeneration",
+      "origin": "baseline"
+    },
+    {
+      "name": "chat.create",
+      "origin": "baseline"
+    },
+    {
+      "name": "chat.open",
+      "origin": "baseline",
+      "manual": "手动：指定已存在 sessionId，检查 chat.current.id 切换"
+    },
+    {
+      "name": "chat.delete",
+      "origin": "baseline",
+      "manual": "手动：删除测试会话，检查 chat.list 不再包含它"
+    },
+    {
+      "name": "chat.selectModel",
+      "origin": "baseline",
+      "manual": "手动：选择模型并读回 chat.getModels.current"
+    },
+    {
+      "name": "character.current",
+      "origin": "baseline"
+    },
+    {
+      "name": "settingLibrary.current",
+      "origin": "baseline"
+    },
+    {
+      "name": "settingLibrary.getSummary",
+      "origin": "baseline"
+    },
+    {
+      "name": "media.getMessageAttachments",
+      "origin": "baseline"
+    },
+    {
+      "name": "media.getMessageAttachment",
+      "origin": "baseline"
+    },
+    {
+      "name": "audio.play",
+      "origin": "baseline"
+    },
+    {
+      "name": "audio.pause",
+      "origin": "baseline"
+    },
+    {
+      "name": "audio.resume",
+      "origin": "baseline"
+    },
+    {
+      "name": "audio.stop",
+      "origin": "baseline"
+    },
+    {
+      "name": "audio.seek",
+      "origin": "baseline"
+    },
+    {
+      "name": "audio.getState",
+      "origin": "baseline"
+    },
+    {
+      "name": "audio.getPlaylist",
+      "origin": "baseline"
+    },
+    {
+      "name": "audio.setPlaylist",
+      "origin": "baseline"
+    },
+    {
+      "name": "audio.appendPlaylist",
+      "origin": "baseline"
+    },
+    {
+      "name": "audio.getSettings",
+      "origin": "baseline"
+    },
+    {
+      "name": "audio.setSettings",
+      "origin": "baseline"
+    },
+    {
+      "name": "input.get",
+      "origin": "baseline"
+    },
+    {
+      "name": "input.set",
+      "origin": "baseline"
+    },
+    {
+      "name": "input.append",
+      "origin": "baseline"
+    },
+    {
+      "name": "input.clear",
+      "origin": "baseline"
+    },
+    {
+      "name": "input.send",
+      "origin": "baseline",
+      "manual": "手动：设置测试输入后发送，检查输入清空及消息"
+    },
+    {
+      "name": "events.list",
+      "origin": "baseline"
+    },
+    {
+      "name": "plugins.list",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "plugins.install",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "plugins.remove",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "plugins.setEnabled",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "plugins.bootstrap",
+      "origin": "new",
+      "internal": true
+    },
+    {
+      "name": "plugins.hookResult",
+      "origin": "new",
+      "internal": true
+    },
+    {
+      "name": "plugins.runtimeReady",
+      "origin": "new",
+      "internal": true
+    },
+    {
+      "name": "plugins.openManager",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "plugins.emitEvent",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "storage.get",
+      "origin": "new",
+      "internal": false,
+      "params": {
+        "key": "manual-test"
+      }
+    },
+    {
+      "name": "storage.set",
+      "origin": "new",
+      "internal": false,
+      "params": {
+        "key": "manual-test",
+        "value": {
+          "ok": true
+        }
+      }
+    },
+    {
+      "name": "storage.delete",
+      "origin": "new",
+      "internal": false,
+      "params": {
+        "key": "manual-test"
+      }
+    },
+    {
+      "name": "storage.list",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "storage.sql",
+      "origin": "new",
+      "internal": false,
+      "params": {
+        "database": "api-probe.sqlite",
+        "statements": [
+          {
+            "sql": "SELECT 1 AS value"
+          }
+        ]
+      }
+    },
+    {
+      "name": "storage.transaction",
+      "origin": "new",
+      "internal": false,
+      "params": {
+        "database": "api-probe.sqlite",
+        "statements": [
+          {
+            "sql": "SELECT 1 AS value"
+          }
+        ]
+      }
+    },
+    {
+      "name": "messages.read",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "messages.update",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "messages.insert",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "messages.delete",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "messages.metadata",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "messages.swipes",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "variables.readScope",
+      "origin": "new",
+      "internal": false,
+      "params": {
+        "scope": "script"
+      }
+    },
+    {
+      "name": "variables.writeScope",
+      "origin": "new",
+      "internal": false,
+      "params": {
+        "scope": "script",
+        "value": {
+          "test": 1
+        }
+      }
+    },
+    {
+      "name": "settings.get",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "settings.set",
+      "origin": "new",
+      "internal": false,
+      "params": {
+        "value": {
+          "test": 1
+        }
+      }
+    },
+    {
+      "name": "generation.invoke",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "generation.start",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "generation.get",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "generation.cancel",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "network.request",
+      "origin": "new",
+      "internal": false,
+      "params": {
+        "url": "https://httpbin.org/get"
+      }
+    },
+    {
+      "name": "network.cancel",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "prompts.set",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "prompts.remove",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "worldbooks.list",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "worldbooks.get",
+      "origin": "new",
+      "internal": false,
+      "params": {
+        "name": "测试世界书"
+      }
+    },
+    {
+      "name": "worldbooks.put",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "worldbooks.delete",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "worldbooks.bind",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "worldbooks.bindings",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "characters.list",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "characters.read",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "characters.write",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "personas.get",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "personas.set",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "presets.list",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "presets.get",
+      "origin": "new",
+      "internal": false,
+      "params": {
+        "id": ""
+      }
+    },
+    {
+      "name": "presets.select",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "presets.update",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "regex.get",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "regex.set",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "ui.register",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "ui.unregister",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "ui.list",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "ui.open",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "macros.register",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "macros.unregister",
+      "origin": "new",
+      "internal": false
+    },
+    {
+      "name": "files.saveText",
+      "origin": "new",
+      "internal": false,
+      "manual": "手动：导出 JSON，选择保存位置并检查文件；取消应返回 saved=false；不使用剪贴板",
+      "params": {
+        "name": "api-test.json",
+        "mimeType": "application/json",
+        "text": "{\"ok\":true}"
+      }
+    }
+  ]
+}

@@ -181,6 +181,17 @@ class ChatSessionStore(
         generationStats?.persist(session.id, session.generationStats)
     }
 
+    /** Arbitrary plugin timeline mutation uses the complete branch, never the UI paging window. */
+    fun replaceAuthorMessages(sessionId: String, messages: List<ChatMessage>): Set<String> {
+        val session = load(sessionId, false)
+        val obsolete = database.agentLedgerDao().runtimeThreadIds(sessionId).toSet()
+        attachmentCleanup.discardMessages(sessionId) {
+            ledger.replaceActiveMessagesInTransaction(sessionId, nowIso(), messages.map { it.toLedgerMessage(session) })
+            room.upsertMetadataWithHistoryInTransaction(session.copy(updatedAt = nowIso()), messages.lastOrNull()?.content.orEmpty(), true)
+        }
+        return obsolete
+    }
+
     /** Normal send path: append exactly one user turn without rewriting the loaded window. */
     fun appendUserTurn(session: ChatSession, message: ChatMessage) {
         database.runInTransaction {
@@ -247,12 +258,13 @@ class ChatSessionStore(
     }
 
     /** Direct assistant edit; the surrounding Paging-owned transcript is never loaded or copied. */
-    fun editAssistantMessage(sessionId: String, messageId: String, content: String): Set<String> {
+    fun editAssistantMessage(sessionId: String, messageId: String, content: String, assistantOnly: Boolean = true): Set<String> {
         val existing = load(sessionId, touch = false)
         val updatedAt = nowIso()
         var obsoleteRuntimeThreadIds: Set<String> = emptySet()
         database.runInTransaction {
             val edited = ledger.editAssistantMessageInTransaction(
+                assistantOnly = assistantOnly,
                 conversationId = sessionId,
                 sourceMessageId = messageId,
                 content = content,

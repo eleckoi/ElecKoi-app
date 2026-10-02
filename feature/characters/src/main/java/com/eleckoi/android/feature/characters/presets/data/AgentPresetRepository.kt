@@ -179,6 +179,26 @@ class AgentPresetRepository(
 
     suspend fun update(preset: AgentPreset) = update(previous = null, preset = preset)
 
+    /** Apply an author SDK edit using the same full codec as native preset imports. */
+    suspend fun updateAuthorJson(id: String, json: String): AgentPreset {
+        val previous = requireNotNull(preset(id)) { "预设不存在：$id" }
+        val document = JSONObject(AgentPresetImportCodec.encodeElecKoi(previous))
+        val data = document.getJSONObject("preset")
+        val patch = JSONObject(json)
+        patch.keys().forEach { key ->
+            if (key != "id") {
+                require(data.has(key)) { "预设不支持字段：$key" }
+                data.put(key, patch.get(key))
+            }
+        }
+        val converted = AgentPresetImportCodec.decode(AgentPresetImportDocument("author.json", document.toString()), AgentPresetImportSource.ElecKoi).preset
+        val updated = converted.copy(id = id, libraryGroupId = previous.libraryGroupId,
+            activeVersionId = previous.activeVersionId, activeVersionNumber = previous.activeVersionNumber,
+            profile = converted.profile.copy(authorAvatarPath = previous.profile.authorAvatarPath))
+        update(previous, updated)
+        return requireNotNull(preset(id))
+    }
+
     suspend fun update(previous: AgentPreset?, preset: AgentPreset) {
         ensureInitialized()
         val sortIndex = dao.presetSortIndex(preset.id) ?: return

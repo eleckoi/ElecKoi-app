@@ -6,10 +6,13 @@ import org.junit.Test
 
 class AuthorApiCatalogContractTest {
     @Test
-    fun `desktop aligned public catalog exposes all 51 methods`() {
+    fun `public catalog preserves baseline methods and adds plugin capabilities without duplicates`() {
         val methods = AuthorApiCatalog.definitions.map(AuthorApiDefinition::method)
 
-        assertEquals(51, methods.size)
+        assertTrue(methods.size > 51)
+        assertTrue("storage.transaction" in methods)
+        assertTrue("generation.invoke" in methods)
+        assertTrue("worldbooks.bind" in methods)
         assertEquals(methods.size, methods.distinct().size)
         assertTrue("chat.getAgentTrajectory" in methods)
         assertTrue("settingLibrary.current" in methods)

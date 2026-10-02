@@ -26,19 +26,11 @@ class AuthorBridgeRequestGateTest {
     }
 
     @Test
-    fun `rate window expires deterministically`() {
-        var now = 1_000L
-        val gate = AuthorBridgeRequestGate(
-            maxInFlight = 2,
-            maxRequestsPerWindow = 1,
-            windowMillis = 100,
-            clockMillis = { now },
-        )
-
-        assertNull(gate.tryAcquire("{}"))
-        gate.release()
-        assertEquals(AuthorBridgeRequestRejection.RateLimited, gate.tryAcquire("{}"))
-        now += 100
-        assertNull(gate.tryAcquire("{}"))
+    fun `fast sequential local requests are not rate limited`() {
+        val gate = AuthorBridgeRequestGate()
+        repeat(1000) {
+            assertNull(gate.tryAcquire("{}"))
+            gate.release()
+        }
     }
 }

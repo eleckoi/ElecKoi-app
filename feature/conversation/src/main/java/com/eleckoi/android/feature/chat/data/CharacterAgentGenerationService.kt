@@ -6,6 +6,7 @@ import com.eleckoi.android.engine.agent.api.AgentSession
 import com.eleckoi.android.engine.agent.api.AgentSessionFactory
 import com.eleckoi.android.engine.agent.api.AgentVirtualFileSearch
 import com.eleckoi.android.engine.agent.tools.AgentToolContextSnapshot
+import com.eleckoi.android.engine.creator.plugins.PluginPromptPipeline
 import com.eleckoi.android.engine.generation.config.ModelConfigRepository
 import com.eleckoi.android.engine.generation.image.ReplyImageGenerator
 import com.eleckoi.android.engine.generation.model.ModelConfig
@@ -136,9 +137,11 @@ class CharacterAgentGenerationService(
         sessions.appendUserTurn(session, userMessage)
         onUserTurnPersisted(draft.copy(session = session), userMessage.id)
         sessions.applyHistorySavePolicy(session.characterId)
+        // Hooks and keyword activation must see this turn's durably stored user input.
+        PluginPromptPipeline.beforeGeneration?.invoke(session.id, "chat", emptyList())
         return turnRunner.run(
             runId = runId,
-            session = session,
+            session = session.copy(messages = sessions.activeMessages(session.id)),
             userMessageId = userMessage.id,
             prompt = AgentPrompt(
                 text = RegexRuleProcessor.transform(
@@ -255,9 +258,10 @@ class CharacterAgentGenerationService(
         prepared: PreparedChatRegeneration,
         onDelta: (ChatDraft) -> Unit,
     ): ChatSendResult {
+        PluginPromptPipeline.beforeGeneration?.invoke(prepared.session.id, "regenerate", emptyList())
         return turnRunner.run(
             runId = runId,
-            session = prepared.session,
+            session = prepared.session.copy(messages = sessions.activeMessages(prepared.session.id)),
             userMessageId = prepared.userMessageId,
             prompt = AgentPrompt(
                 text = prepared.prompt,

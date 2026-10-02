@@ -71,12 +71,14 @@ internal class RoleplayWebChatHost(
                 characterName = messageGateway.snapshot().draft?.session?.characterName.orEmpty(),
             ),
             gateway = messageGateway,
+            permissions = com.eleckoi.android.sdk.author.AuthorApiPermission.previewLocalFull,
         ),
     )
     private val bridge = RoleplayTranscriptBridge(
         appContext = appContext,
         messageProvider = { id -> latestModel?.messages?.firstOrNull { it.source.id == id }?.source },
         messageGatewayProvider = { messageGateway },
+        chatAuthorRouter = authorRuntimeRouter,
         callbacksProvider = { callbacks },
         onReady = ::onPresentationReady,
         onTransactionCommitted = ::onTransactionCommitted,
@@ -177,6 +179,7 @@ internal class RoleplayWebChatHost(
                 pendingPresentationReady = null
                 visualStateRequestId += 1
                 pageReady = true
+                syncPluginButtons()
                 if (!updatesPaused) {
                     latestModel?.let { model ->
                         if (ensureRichHeightsReady(model.sessionId)) submitFull(model)
@@ -261,6 +264,14 @@ internal class RoleplayWebChatHost(
         )
     }
 
+    init {
+        hostScope.launch {
+            com.eleckoi.android.sdk.author.plugins.PluginUiRegistry.items.collect {
+                if (pageReady) syncPluginButtons()
+            }
+        }
+    }
+
     private fun webViewDiagnosticContext(): Map<String, String> {
         val packageInfo = androidx.webkit.WebViewCompat.getCurrentWebViewPackage(appContext)
         return buildMap {
@@ -327,6 +338,13 @@ internal class RoleplayWebChatHost(
         webView.stopLoading()
         webView.webViewClient = WebViewClient()
         webView.destroy()
+    }
+
+    private fun syncPluginButtons() {
+        val buttons = com.eleckoi.android.sdk.author.plugins.PluginUiRegistry.items.value.filter {
+            it["kind"]?.toString() == "\"message-button\""
+        }
+        webView.evaluateJavascript("window.ElecKoiSetPluginButtons?.(${kotlinx.serialization.json.JsonArray(buttons)})", null)
     }
 
     private fun submitFull(model: RoleplayTranscriptModel) {
