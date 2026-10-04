@@ -94,7 +94,6 @@
 - 特别感谢 [DeepSeek Harness（DSH）](https://github.com/deepseek-ai/deepseek-harness) 提供 Agent 执行框架。电子爱基于 DSH 构建 Agent 运行时，并在其上连接角色会话、创作工具、权限审批、子 Agent 与 Android 运行环境。DSH 及其上游代码继续遵守 MIT 许可证和各自的第三方许可。
 - 感谢 [SillyTavern](https://github.com/SillyTavern/SillyTavern) 推动角色卡、预设、世界书、正则和富内容创作生态的发展。电子爱对其中部分内容格式和创作习惯提供选择性兼容，但不以复刻其前端、扩展运行环境或全部体系行为为目标。
 - 感谢 [Tavern-Helper](https://github.com/N0VI028/JS-Slash-Runner) 及 MVU 内容生态推动变量驱动角色扮演的实践。电子爱延续了“状态能够参与叙事”的创作方向，并以自己的层级数据模型、Agent 工具、补丁协议、Zod 校验、消息快照和事务提交机制实现。
-- 感谢 [TauriTavern](https://github.com/Darkatse/TauriTavern) 对移动端长聊天与富内容运行问题的公开探索，为电子爱调研这类工程问题提供了可供比较的实践。
 - 感谢 [EJS](https://github.com/mde/ejs) 建立的模板语法与创作生态。电子爱独立实现了对部分 EJS 模板语法的兼容，未内置 EJS 上游运行库。
 
 实际随包分发的第三方代码、二进制文件和素材及其许可证，以 `NOTICE` 和各级许可文件中的记录为准。
