@@ -193,6 +193,8 @@ data class AgentContextInjection(
     /** Human-readable provenance used by diagnostics; never changes provider semantics. */
     val traceTitle: String = "",
     val traceSource: String = "",
+    /** Count backwards from the latest dialogue message; null uses the named anchor. */
+    val historyDepth: Int? = null,
 )
 
 sealed interface AgentContextActivation {

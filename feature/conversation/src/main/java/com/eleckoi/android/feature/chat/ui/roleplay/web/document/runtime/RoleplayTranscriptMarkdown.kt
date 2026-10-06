@@ -332,7 +332,16 @@ internal val RoleplayTranscriptMarkdown = """    const markdownConverter = new w
         actions += toolButton('regenerate', '重新生成', 'refresh', 19, !message.regenerateEnabled);
       }
       actions += toolButton('copy', '复制', 'copy');
-      return actions + edit;
+      const pluginButtons = (window.__ElecKoiPluginButtons || []).map(item =>
+        `<button class="tool-slot" data-action="plugin" data-plugin="${'$'}{escapeHtml(item.pluginId)}" data-plugin-action="${'$'}{escapeHtml(item.id)}" aria-label="${'$'}{escapeHtml(item.label || item.id)}">${'$'}{escapeHtml(item.label || item.id)}</button>`).join('');
+      return actions + pluginButtons + edit;
+    };
+    window.ElecKoiSetPluginButtons = items => {
+      window.__ElecKoiPluginButtons = items;
+      turns.querySelectorAll('.turn').forEach(turn => {
+        const message = state.byId.get(turn.dataset.id), strip = turn.querySelector('.tool-strip');
+        if (message && strip) strip.innerHTML = toolbarContent(message, state.expandedToolbarId === message.id);
+      });
     };
     const agentActionButton = (action, label, icon, disabled = false) =>
       `<button class="agent-action" data-action="${'$'}{action}" aria-label="${'$'}{label}" ${'$'}{disabled ? 'disabled' : ''}>${'$'}{svgIcon(icon, 20, 1.85)}</button>`;

@@ -1,0 +1,8 @@
+{
+  "id": "eleckoi-api-probe",
+  "name": "ElecKoi API 逐项测试",
+  "version": "0.1.3",
+  "entry": "plugin.js",
+  "enabled": true,
+  "description": "逐项断言新增宿主 API、酒馆兼容入口；显示失败、未测和待人工确认，支持导出报告。"
+}

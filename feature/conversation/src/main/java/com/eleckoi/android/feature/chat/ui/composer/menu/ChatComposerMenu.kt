@@ -108,6 +108,13 @@ internal fun ChatComposerMenu(
                     filled = true,
                     onClick = onOpenVariableViewer,
                 )
+                RoleplayMenuAction(
+                    label = "插件",
+                    paths = DshIconPaths.Data,
+                    appearance = appearance,
+                    onDismiss = onDismiss,
+                    onClick = { com.eleckoi.android.sdk.author.plugins.PluginUiRegistry.managerOpen.value = true },
+                )
                 if (onOpenDynamicSettings != null) {
                     HorizontalDivider(color = appearance.mobileLine)
                     RoleplayMenuAction(

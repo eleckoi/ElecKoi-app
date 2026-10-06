@@ -189,9 +189,18 @@ class ChatViewModel(
         ),
         publisher = authorEventPublisher,
     )
-    override val authorEvents = authorGateway.authorEvents
+    override val authorEvents = kotlinx.coroutines.flow.merge(authorGateway.authorEvents, chatService.authorPluginEvents)
+
+    override suspend fun invokeExtension(method: String, params: kotlinx.serialization.json.JsonObject): kotlinx.serialization.json.JsonElement =
+        chatService.invokeAuthorExtension(method, params)
+
+    override fun onCleared() {
+        chatService.detachAuthorPlugins(this)
+        super.onCleared()
+    }
 
     init {
+        chatService.attachAuthorPlugins(this)
         viewModelScope.launch {
             chatService.uiPreferencesFlow.collectLatest { preferences ->
                 _uiState.update {

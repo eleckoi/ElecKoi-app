@@ -23,6 +23,11 @@ import kotlinx.coroutines.flow.Flow
 
 /** Operations owned by the chat feature and implemented by the application composition layer. */
 interface ChatService {
+    val authorPluginEvents: Flow<com.eleckoi.android.sdk.author.AuthorApiEvent> get() = kotlinx.coroutines.flow.emptyFlow()
+    suspend fun invokeAuthorExtension(method: String, params: kotlinx.serialization.json.JsonObject): kotlinx.serialization.json.JsonElement =
+        throw UnsupportedOperationException("宿主尚未实现 $method")
+    fun attachAuthorPlugins(gateway: com.eleckoi.android.sdk.author.AuthorChatGateway) {}
+    fun detachAuthorPlugins(gateway: com.eleckoi.android.sdk.author.AuthorChatGateway) {}
     val uiPreferencesFlow: Flow<UiPreferences>
     val chatListFlow: Flow<List<ChatListItem>>
     val modelCollectionFlow: Flow<ModelConfigCollection>

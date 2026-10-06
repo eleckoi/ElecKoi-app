@@ -232,6 +232,9 @@ internal class ElecKoiServiceGraph(
         },
     )
     val chatService: ChatServiceImpl = ChatServiceImpl(
+        appContext = context.applicationContext,
+        agentPresets = agentPresets,
+        userProfiles = profile,
         characters = characters,
         sessions = sessions,
         settings = settings,

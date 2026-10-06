@@ -39,7 +39,7 @@
 
     const id = `author-${Date.now()}-${++requestSequence}`;
     return new Promise((resolve, reject) => {
-      const timeoutId = global.setTimeout(() => {
+      const timeoutId = ['generation.invoke', 'network.request', 'files.saveText'].includes(method) ? null : global.setTimeout(() => {
         pending.delete(id);
         notifyPresentationPendingChanged();
         reject(makeError("REQUEST_TIMEOUT", `API 调用超时：${method}`));
@@ -53,7 +53,12 @@
   function dispatchEvent(message) {
     const listeners = eventListeners.get(message.event);
     if (!listeners) return;
-    listeners.forEach((listener) => listener(message.payload));
+    listeners.forEach((listener) => {
+      Promise.resolve().then(() => listener(message.payload)).catch(error => {
+        console.error(`ElecKoi event listener failed: ${message.event}`, error);
+        global.dispatchEvent(new CustomEvent('eleckoi:plugin-error', { detail: { event: message.event, error } }));
+      });
+    });
   }
 
   if (global.ElecKoiNative) {
@@ -61,7 +66,8 @@
       let message;
       try {
         message = JSON.parse(event.data);
-      } catch (_) {
+      } catch (error) {
+        console.error('Invalid ElecKoi bridge response', error, event.data);
         return;
       }
       if (message.type === "event") {
@@ -90,7 +96,8 @@
       eventChannelStarted = true;
       // The native bridge obtains its reply channel from the first request. Establish it here so
       // a frontend that only subscribes to events still receives unsolicited state updates.
-      call("events.list").catch(() => {
+      call("events.list").catch((error) => {
+        console.error('ElecKoi event subscription failed', error);
         eventChannelStarted = false;
       });
     }

@@ -1,0 +1,12 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="panel.css"><title>面板显示测试</title></head><body><main>
+<h1>HTML 面板显示测试</h1><section><p>如果你能看到这段文字、输入框和按钮，点击下方确认。按钮将回到接口报告。</p>
+<p id="metrics"></p><label>可交互输入<input placeholder="试着输入几个字"></label><button id="visible">看得见，回到报告</button><p id="error"></p></section>
+</main><script>
+ElecKoi.ready().then(()=>{
+  const probe=document.createElement('div');probe.style.cssText='position:fixed;top:0;left:0;width:1px;height:100vh;visibility:hidden';document.documentElement.append(probe);
+  const metrics={vh:probe.getBoundingClientRect().height,innerHeight,clientHeight:document.documentElement.clientHeight};probe.remove();
+  document.getElementById('metrics').textContent=JSON.stringify(metrics);
+  document.getElementById('visible').onclick=async()=>{try{await ElecKoi.ui.emit('probe-visual-visible',metrics);}catch(error){document.getElementById('error').textContent=String(error);console.error(error);}};
+}).catch(error=>{document.getElementById('error').textContent=String(error);console.error(error);});
+</script></body></html>

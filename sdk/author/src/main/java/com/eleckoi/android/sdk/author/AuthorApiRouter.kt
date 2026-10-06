@@ -83,12 +83,13 @@ class AuthorApiRouter(
             errorResponse(requestId, error.code, error.message)
         } catch (_: SerializationException) {
             errorResponse(requestId, AuthorApiErrorCode.InvalidRequest, "请求不是有效的作者 API JSON")
-        } catch (_: IllegalArgumentException) {
-            errorResponse(requestId, AuthorApiErrorCode.InvalidRequest, "请求格式不正确")
+        } catch (error: IllegalArgumentException) {
+            errorResponse(requestId, AuthorApiErrorCode.InvalidParams, error.message ?: error.toString())
         } catch (error: CancellationException) {
             throw error
-        } catch (_: Throwable) {
-            errorResponse(requestId, AuthorApiErrorCode.InternalError, "原生 API 调用失败")
+        } catch (error: Throwable) {
+            android.util.Log.e("AuthorApi", "作者 API 请求失败：$requestId", error)
+            errorResponse(requestId, AuthorApiErrorCode.InternalError, error.message ?: error.toString())
         }
     }
 
@@ -125,6 +126,12 @@ private const val AuthorMediaRuntimePrefix = "author-media/"
 internal object AuthorApiEventAccess {
     private val eventPermissions = listOf(
         "messages.changed" to AuthorApiPermission.MessagesRead,
+        "chat.changed" to AuthorApiPermission.ChatRead,
+        "plugin.event" to AuthorApiPermission.ChatRead,
+        "generation.started" to AuthorApiPermission.ChatRead,
+        "generation.delta" to AuthorApiPermission.ChatRead,
+        "generation.finished" to AuthorApiPermission.ChatRead,
+        "generation.failed" to AuthorApiPermission.ChatRead,
         "agent.output.delta" to AuthorApiPermission.ChatRead,
         "agent.run.finished" to AuthorApiPermission.ChatRead,
         "agent.run.failed" to AuthorApiPermission.ChatRead,

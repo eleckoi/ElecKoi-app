@@ -104,7 +104,8 @@ internal val RoleplayTranscriptBootstrap = """
           requestInitialPresentationCheck();
           return;
         }
-        if (!isAtPhysicalEnd()) {
+        // Empty conversations have no message tail to scroll to.
+        if (state.messages.length > 0 && !isAtPhysicalEnd()) {
           state.forceTail = state.messages.length > 0;
           requestGeometryCommit({ renderRange: true, forceRender: true });
           return;

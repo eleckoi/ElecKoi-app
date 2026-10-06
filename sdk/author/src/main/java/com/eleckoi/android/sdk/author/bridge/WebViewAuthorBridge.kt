@@ -92,17 +92,12 @@ class WebViewAuthorBridge(
 internal enum class AuthorBridgeRequestRejection(val code: String, val message: String) {
     RequestTooLarge("BRIDGE_REQUEST_TOO_LARGE", "作者 API 请求超过本地桥接大小限制"),
     TooManyInFlight("BRIDGE_BUSY", "作者 API 同时请求过多，请稍后重试"),
-    RateLimited("BRIDGE_RATE_LIMITED", "作者 API 请求过于频繁，请稍后重试"),
 }
 
 internal class AuthorBridgeRequestGate(
     private val maxRequestBytes: Int = 32 * 1024 * 1024,
     private val maxInFlight: Int = 8,
-    private val maxRequestsPerWindow: Int = 120,
-    private val windowMillis: Long = 10_000L,
-    private val clockMillis: () -> Long = { System.nanoTime() / 1_000_000L },
 ) {
-    private val acceptedAt = ArrayDeque<Long>()
     private var inFlight = 0
 
     @Synchronized
@@ -113,17 +108,9 @@ internal class AuthorBridgeRequestGate(
         ) {
             return AuthorBridgeRequestRejection.RequestTooLarge
         }
-        val now = clockMillis()
-        while (acceptedAt.firstOrNull()?.let { now - it >= windowMillis } == true) {
-            acceptedAt.removeFirst()
-        }
-        if (acceptedAt.size >= maxRequestsPerWindow) {
-            return AuthorBridgeRequestRejection.RateLimited
-        }
         if (inFlight >= maxInFlight) {
             return AuthorBridgeRequestRejection.TooManyInFlight
         }
-        acceptedAt.addLast(now)
         inFlight += 1
         return null
     }

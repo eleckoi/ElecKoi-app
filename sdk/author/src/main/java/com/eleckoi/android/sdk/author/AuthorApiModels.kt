@@ -296,6 +296,8 @@ interface AuthorMessageSendGateway {
 interface AuthorInlineMessageGateway : AuthorOpeningGateway, AuthorMessageSendGateway
 
 interface AuthorChatGateway : AuthorInlineMessageGateway {
+    suspend fun invokeExtension(method: String, params: JsonObject): JsonElement =
+        throw UnsupportedOperationException("宿主尚未实现 $method")
     val authorEvents: Flow<AuthorApiEvent>
 
     fun snapshot(): AuthorChatSnapshot
